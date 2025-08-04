@@ -1,0 +1,74 @@
+import { View, Text, TextInput, TouchableOpacity, Image } from "react-native";
+import { useState } from "react";
+import { icons } from "../constant";
+
+interface InputFieldProps {
+  title: string;
+  value: string;
+  placeholder: string;
+  handleChangeText: (text: string) => void;
+  otherStyles?: string;
+  [key: string]: any;
+}
+
+const InputField = ({
+  title,
+  value,
+  placeholder,
+  handleChangeText,
+  otherStyles,
+  ...props
+}: InputFieldProps) => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
+  return (
+    <View className={`space-y-2 ${otherStyles}`}>
+      <Text className="text-xl text-secondary-300 font-psemibold m-2">
+        {title}
+      </Text>
+      <View
+        className="w-full h-16 px-4 bg-black-100 rounded-xl border-2 border-secondary-300  flex flex-row items-center"
+        style={[
+          isFocused && { borderColor: "#4BD07F" }, // Apply focus styles to parent
+        ]}
+      >
+        <TextInput
+          className="flex-1 text-secondary-300 font-psemibold text-base "
+          value={value}
+          placeholder={placeholder}
+          placeholderTextColor="#6C9082"
+          onChangeText={handleChangeText}
+          secureTextEntry={
+            (title === "Password" || title === "Confirm Password") &&
+            !showPassword
+          }
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          {...props}
+        />
+        {title === "Password" && (
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Image
+              source={!showPassword ? icons.eyeHide : icons.eye}
+              className="w-6 h-6"
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        )}
+
+        {title === "Confirm Password" && (
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Image
+              source={!showPassword ? icons.eyeHide : icons.eye}
+              className="w-6 h-6"
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
+
+export default InputField;
