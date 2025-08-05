@@ -1,28 +1,68 @@
-// components/NotificationCard.js or components/notifications/NotificationCard.js
-
-import { View, Text, TouchableOpacity } from "react-native";
-import { NOTIFICATION_TYPES, PRIORITY_LEVELS } from "@/lib/notifications";
+import { View, Text, TouchableOpacity, Image } from "react-native";
+import { router } from "expo-router";
+import { FirestoreNotification } from "@/types/notification";
+import { icons } from "@/constant";
 
 interface NotificationCardProps {
-  notification: Notification; // Use the same interface from NotificationProvider
+  notification: FirestoreNotification;
   onPress: () => void;
-  showActions?: boolean;
-  onDelete?: () => void;
+  onDelete: () => void;
 }
 
 const NotificationCard = ({
   notification,
   onPress,
-  showActions = false,
   onDelete,
 }: NotificationCardProps) => {
-  const typeConfig = NOTIFICATION_TYPES[notification.type];
-  const priorityConfig = PRIORITY_LEVELS[notification.priority];
+  const getNotificationConfig = (type: string) => {
+    switch (type) {
+      case "RENT_REQUEST":
+        return {
+          icon: icons.about,
+          bgColor: "bg-blue-100",
+          iconColor: "#3B82F6",
+        };
+      case "RENT_ACCEPTED":
+        return {
+          icon: icons.check,
+          bgColor: "bg-green-100",
+          iconColor: "#22C55E",
+        };
+      case "RENT_REJECTED":
+        return {
+          icon: icons.close,
+          bgColor: "bg-red-100",
+          iconColor: "#EF4444",
+        };
+      case "MESSAGE_RECEIVED":
+        return {
+          icon: icons.envelope,
+          bgColor: "bg-purple-100",
+          iconColor: "#9333EA",
+        };
+      case "WELCOME":
+        return {
+          icon: icons.box,
+          bgColor: "bg-amber-100",
+          iconColor: "#F59E0B",
+        };
+      default:
+        return {
+          icon: icons.notificationOff,
+          bgColor: "bg-gray-100",
+          iconColor: "#6B7280",
+        };
+    }
+  };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return "";
+
+    const date = timestamp.toDate();
     const now = new Date();
-    const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
+    const diffHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+    );
 
     if (diffHours < 1) return "Just now";
     if (diffHours < 24) return `${diffHours}h ago`;
@@ -30,74 +70,19 @@ const NotificationCard = ({
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const renderAdditionalInfo = () => {
-    switch (notification.type) {
-      case "PRICE_NEGOTIATION":
-        return (
-          notification.originalPrice &&
-          notification.proposedPrice && (
-            <View className="flex-row items-center mt-1">
-              <Text className="text-sm text-gray-600">
-                ${notification.originalPrice} →
-              </Text>
-              <Text className="text-sm font-semibold text-green-600 ml-1">
-                ${notification.proposedPrice}
-              </Text>
-            </View>
-          )
-        );
+  const config = getNotificationConfig(notification.type);
 
-      case "PAYMENT_RECEIVED":
-      case "PAYMENT_SENT":
-        return (
-          notification.amount && (
-            <View className="flex-row items-center mt-1">
-              <Text className="text-sm font-semibold text-green-600">
-                ${notification.amount}
-              </Text>
-              {notification.paymentMethod && (
-                <Text className="text-sm text-gray-500 ml-2">
-                  via {notification.paymentMethod}
-                </Text>
-              )}
-            </View>
-          )
-        );
+  const handlePress = () => {
+    onPress(); // This will open the modal now instead of navigating
+  };
 
-      case "BULK_INQUIRY":
-        return (
-          notification.requestedItems && (
-            <Text className="text-sm text-blue-600 mt-1">
-              {notification.requestedItems.join(", ")} • {notification.duration}
-            </Text>
-          )
-        );
-
-      case "DELIVERY_REQUEST":
-        return (
-          notification.deliveryAddress && (
-            <Text className="text-sm text-gray-600 mt-1">
-              📍 {notification.deliveryAddress}
-            </Text>
-          )
-        );
-
-      case "RETURN_REMINDER":
-        return (
-          notification.lateFeePenalty && (
-            <Text className="text-sm text-red-600 mt-1">
-              Late fee: ${notification.lateFeePenalty}/day
-            </Text>
-          )
-        );
-
-      default:
-        return null;
-    }
+  const handleDelete = (e: any) => {
+    e.stopPropagation(); // Prevent triggering the parent's onPress
+    onDelete();
   };
 
   return (
-    <TouchableOpacity onPress={onPress} className="w-full mb-2">
+    <TouchableOpacity onPress={handlePress} className="w-full mb-2">
       <View
         className={`p-4 rounded-lg border ${
           !notification.isRead
@@ -108,58 +93,36 @@ const NotificationCard = ({
         <View className="flex-row items-start gap-3">
           {/* Type Indicator */}
           <View
-            className="w-10 h-10 rounded-full items-center justify-center"
-            style={{ backgroundColor: typeConfig?.bgColor }}
+            className={`w-10 h-10 rounded-full items-center justify-center ${config.bgColor}`}
           >
-            <Text className="text-lg">{typeConfig?.icon}</Text>
+            <Image
+              source={config.icon}
+              className="w-5 h-5"
+              tintColor={config.iconColor}
+            />
           </View>
 
           {/* Content */}
           <View className="flex-1">
             {/* Header */}
-            <View className="flex-row justify-between items-start mb-1">
-              <View className="flex-1">
-                <Text
-                  className={`text-base ${
-                    !notification.isRead
-                      ? "font-bold text-gray-900"
-                      : "font-medium text-gray-700"
-                  }`}
-                >
-                  {notification.title}
-                </Text>
-                {notification.senderName &&
-                  notification.senderName !== "System" && (
-                    <Text className="text-sm text-gray-500">
-                      from {notification.senderName}
-                    </Text>
-                  )}
-              </View>
-
-              <View className="items-end">
-                <Text className="text-xs text-gray-500">
-                  {formatDate(notification.dateReceived)}
-                </Text>
-                {notification.priority === "urgent" && (
-                  <View className="mt-1 px-2 py-0.5 bg-red-100 rounded-full">
-                    <Text className="text-xs text-red-600 font-medium">
-                      URGENT
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
-            {/* Item name if present */}
-            {notification.itemName && (
-              <Text className="text-sm text-blue-600 font-medium mb-1">
-                📦 {notification.itemName}
+            <View className="flex-row justify-between items-start">
+              <Text
+                className={`text-base flex-1 ${
+                  !notification.isRead
+                    ? "font-pbold text-gray-900"
+                    : "font-pmedium text-gray-700"
+                }`}
+              >
+                {notification.title}
               </Text>
-            )}
+              <Text className="text-xs text-gray-500 ml-2">
+                {formatDate(notification.createdAt)}
+              </Text>
+            </View>
 
             {/* Message */}
             <Text
-              className={`text-sm ${
+              className={`text-sm mt-1 ${
                 !notification.isRead ? "text-gray-800" : "text-gray-600"
               }`}
               numberOfLines={2}
@@ -167,52 +130,21 @@ const NotificationCard = ({
               {notification.message}
             </Text>
 
-            {/* Additional type-specific info */}
-            {renderAdditionalInfo()}
-
-            {/* Action buttons if needed */}
-            {showActions &&
-              notification.actionRequired &&
-              !notification.isRead && (
-                <View className="flex-row gap-2 mt-3">
-                  <TouchableOpacity
-                    className="px-3 py-1 bg-blue-100 rounded-full"
-                    onPress={onPress}
-                  >
-                    <Text className="text-xs text-blue-600 font-medium">
-                      {typeConfig?.actionText || "View"}
-                    </Text>
-                  </TouchableOpacity>
-                  {onDelete && (
-                    <TouchableOpacity
-                      className="px-3 py-1 bg-gray-100 rounded-full"
-                      onPress={onDelete}
-                    >
-                      <Text className="text-xs text-gray-600 font-medium">
-                        Dismiss
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              )}
+            {/* Delete Action */}
+            <TouchableOpacity
+              className="self-end mt-2 px-3 py-1 bg-gray-100 rounded-full"
+              onPress={handleDelete}
+            >
+              <Text className="text-xs text-gray-600 font-pmedium">
+                Dismiss
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          {/* Status indicators */}
-          <View className="items-center gap-2">
-            {/* Unread indicator */}
-            {!notification.isRead && (
-              <View className="w-3 h-3 bg-blue-500 rounded-full" />
-            )}
-
-            {/* Action required indicator */}
-            {notification.actionRequired && !notification.isRead && (
-              <View className="px-2 py-1 bg-orange-100 rounded-full">
-                <Text className="text-xs text-orange-600 font-medium">
-                  ACTION
-                </Text>
-              </View>
-            )}
-          </View>
+          {/* Unread indicator */}
+          {!notification.isRead && (
+            <View className="w-2 h-2 bg-blue-500 rounded-full" />
+          )}
         </View>
       </View>
     </TouchableOpacity>

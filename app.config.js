@@ -17,7 +17,7 @@
         'READ_EXTERNAL_STORAGE',
         'MEDIA_LIBRARY',
       ],
-      googleServicesFile: "./path/to/google-services.json",
+      googleServicesFile: "./google-services.json",
     },
     web: {
       output: 'static',

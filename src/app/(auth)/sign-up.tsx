@@ -25,7 +25,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { createUserWithEmailAndPassword } from "@firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const SignUp = () => {
   const insets = useSafeAreaInsets();
@@ -191,6 +198,34 @@ const SignUp = () => {
     }
   };
 
+  const createWelcomeNotification = async (userId: string) => {
+    try {
+      // Create a reference to the user's notifications subcollection
+      const userNotificationsRef = collection(
+        db,
+        `users/${userId}/notifications`
+      );
+
+      await addDoc(userNotificationsRef, {
+        type: "WELCOME",
+        title: "Welcome to Rent2Reuse! 👋",
+        message:
+          "Start your journey by completing your profile and exploring available items. Need help? Check out our quick start guide.",
+        isRead: false,
+        createdAt: serverTimestamp(),
+        data: {
+          route: "/profile",
+          params: {
+            setup: "true",
+            source: "welcome",
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error creating welcome notification:", error);
+    }
+  };
+
   // Update the submit function
   const submit = async () => {
     Keyboard.dismiss();
@@ -228,6 +263,8 @@ const SignUp = () => {
         status: "Pending",
         createdAt: new Date().toISOString(),
       });
+
+      await createWelcomeNotification(uid);
 
       // 3. Sign out and show success dialog
       await new Promise((resolve) => {

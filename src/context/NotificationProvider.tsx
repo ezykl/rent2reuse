@@ -1,168 +1,133 @@
 // context/NotificationProvider.js or providers/NotificationProvider.js
 
-import { createContext, useContext, useState, ReactNode } from "react";
-import { notificationMessages } from "@/lib/notifications";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+} from "firebase/firestore";
+import { auth, db } from "@/lib/firebaseConfig";
+import { useAuth } from "@/context/AuthContext";
 
-// Define interfaces
-export interface AppNotification {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  priority: "urgent" | "high" | "normal" | "low";
-  isRead: boolean;
-  actionRequired?: boolean;
-  dateReceived: string;
-  senderName?: string;
-  itemName?: string;
-  // Add other optional properties as needed
-}
+import { FirestoreNotification } from "@/types/notification";
+import {
+  getUserNotifications,
+  markNotificationAsRead,
+  deleteNotification, // Update this import
+} from "@/lib/notifications";
 
 interface NotificationContextType {
-  notifications: AppNotification[];
-  markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
-  getNotificationsByType: (type: string) => AppNotification[];
+  notifications: FirestoreNotification[];
+  isLoading: boolean;
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
   getUnreadCount: () => number;
-  getUnreadCountByType: (type: string) => number;
-  filterByPriority: (
-    priority: "urgent" | "high" | "normal" | "low"
-  ) => AppNotification[];
-  getActionRequiredNotifications: () => AppNotification[];
-  deleteNotification: (id: string) => void;
-  addNotification: (notification: Partial<AppNotification>) => void;
-  getSortedNotifications: (
-    sortBy?: "date" | "priority" | "unread" | "type"
-  ) => AppNotification[];
-  getNotificationStats: () => {
-    total: number;
-    unread: number;
-    actionRequired: number;
-    urgent: number;
-  };
 }
 
 const NotificationContext = createContext<NotificationContextType | null>(null);
 
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
-  const [notifications, setNotifications] = useState<AppNotification[]>(
-    notificationMessages as AppNotification[]
+  // Change this to use useAuth hook
+  const { user } = useAuth(); // Add this import at the top
+  const [notifications, setNotifications] = useState<FirestoreNotification[]>(
+    []
   );
+  const [isLoading, setIsLoading] = useState(true);
 
-  const markAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((notif) =>
-        notif.id === id ? { ...notif, isRead: true } : notif
-      )
+  // Subscribe to notifications
+  useEffect(() => {
+    if (!user?.uid) {
+      setNotifications([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+
+    // Update the reference path to match your Firestore structure
+    const userNotificationsRef = collection(
+      db,
+      "users",
+      user.uid,
+      "notifications"
     );
+    const q = query(userNotificationsRef, orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notificationData = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as FirestoreNotification[];
+
+      console.log("Fetched notifications:", notificationData); // Debug log
+      setNotifications(notificationData);
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      if (!user?.uid) return;
+      await markNotificationAsRead(user.uid, id);
+      setNotifications((prev) =>
+        prev.map((notif) =>
+          notif.id === id ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
   };
 
-  const markAllAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((notification) => ({ ...notification, isRead: true }))
-    );
+  const markAllAsRead = async () => {
+    try {
+      if (!user?.uid) return;
+      const unreadNotifications = notifications.filter((n) => !n.isRead);
+      await Promise.all(
+        unreadNotifications.map((n) => markNotificationAsRead(user.uid, n.id))
+      );
+
+      setNotifications((prev) =>
+        prev.map((notification) => ({ ...notification, isRead: true }))
+      );
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+    }
   };
 
-  const getNotificationsByType = (type: string) => {
-    return notifications.filter((notif) => notif.type === type);
+  // Update other functions to use proper user reference
+  const deleteNotification = async (id: string) => {
+    try {
+      if (!user?.uid) return;
+      await deleteNotification(id);
+      setNotifications((prev) => prev.filter((notif) => notif.id !== id));
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+    }
   };
 
   const getUnreadCount = () => {
     return notifications.filter((notif) => !notif.isRead).length;
   };
 
-  const getUnreadCountByType = (type: string) => {
-    return notifications.filter((notif) => notif.type === type && !notif.isRead)
-      .length;
-  };
-
-  const filterByPriority = (priority: string) => {
-    return notifications.filter((notif) => notif.priority === priority);
-  };
-
-  const getActionRequiredNotifications = () => {
-    return notifications.filter(
-      (notif) => notif.actionRequired && !notif.isRead
-    );
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((notif) => notif.id !== id));
-  };
-
-  const addNotification = (notification: Partial<AppNotification>) => {
-    const newNotification: AppNotification = {
-      ...notification,
-      id: Date.now().toString(),
-      dateReceived: new Date().toISOString(),
-      isRead: false,
-      type: notification.type || "general",
-      title: notification.title || "",
-      message: notification.message || "",
-      priority: notification.priority || "normal",
-    };
-    setNotifications((prev) => [newNotification, ...prev]);
-  };
-
-  const getSortedNotifications = (
-    sortBy: "date" | "priority" | "unread" | "type" = "date"
-  ) => {
-    const sorted = [...notifications];
-
-    switch (sortBy) {
-      case "date":
-        return sorted.sort(
-          (a, b) =>
-            new Date(b.dateReceived).getTime() -
-            new Date(a.dateReceived).getTime()
-        );
-      case "priority":
-        const priorityOrder: Record<string, number> = {
-          urgent: 0,
-          high: 1,
-          normal: 2,
-          low: 3,
-        };
-        return sorted.sort(
-          (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]
-        );
-      case "unread":
-        return sorted.sort((a, b) =>
-          a.isRead === b.isRead ? 0 : a.isRead ? 1 : -1
-        );
-      case "type":
-        return sorted.sort((a, b) => a.type.localeCompare(b.type));
-      default:
-        return sorted;
-    }
-  };
-
-  const getNotificationStats = () => {
-    const total = notifications.length;
-    const unread = notifications.filter((n) => !n.isRead).length;
-    const actionRequired = notifications.filter(
-      (n) => n.actionRequired && !n.isRead
-    ).length;
-    const urgent = notifications.filter(
-      (n) => n.priority === "urgent" && !n.isRead
-    ).length;
-
-    return { total, unread, actionRequired, urgent };
-  };
-
   const value: NotificationContextType = {
     notifications,
+    isLoading,
     markAsRead,
     markAllAsRead,
-    getNotificationsByType,
-    getUnreadCount,
-    getUnreadCountByType,
-    filterByPriority,
-    getActionRequiredNotifications,
     deleteNotification,
-    addNotification,
-    getSortedNotifications,
-    getNotificationStats,
+    getUnreadCount,
   };
 
   return (

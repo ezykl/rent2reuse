@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,36 +7,62 @@ import {
   FlatList,
   Modal,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
 import { icons } from "@/constant";
 import NotificationCard from "@/components/NotificationCard";
 import { useNotifications } from "@/context/NotificationProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { AppNotification } from "@/context/NotificationProvider";
+import type { FirestoreNotification } from "@/types/notification";
 
 const NotificationScreen = () => {
   const insets = useSafeAreaInsets();
-  const { notifications, markAsRead, markAllAsRead, deleteNotification } =
-    useNotifications();
+  const {
+    notifications,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    isLoading,
+  } = useNotifications();
   const [selectedNotification, setSelectedNotification] =
-    useState<AppNotification | null>(null);
+    useState<FirestoreNotification | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const handleNotificationPress = (notification: AppNotification) => {
+  const handleNotificationPress = (notification: FirestoreNotification) => {
     markAsRead(notification.id);
     setSelectedNotification(notification);
     setModalVisible(true);
   };
 
-  const renderItem = ({ item }: { item: AppNotification }) => (
+  const handleNavigate = (notification: FirestoreNotification) => {
+    setModalVisible(false); // Close modal first
+    if (notification.data?.route) {
+      router.push({
+        pathname: notification.data.route as any,
+        params: notification.data.params,
+      });
+    }
+  };
+
+  const renderItem = ({ item }: { item: FirestoreNotification }) => (
     <NotificationCard
       notification={item}
       onPress={() => handleNotificationPress(item)}
-      showActions={true}
       onDelete={() => deleteNotification(item.id)}
     />
   );
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        className="flex-1 bg-white justify-center items-center"
+        style={{ paddingTop: insets.top }}
+      >
+        <ActivityIndicator size="large" color="#2563EB" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -57,7 +83,7 @@ const NotificationScreen = () => {
           Notifications
         </Text>
 
-        {notifications.some((n) => !n.isRead) && (
+        {notifications?.some((n) => !n.isRead) && (
           <TouchableOpacity onPress={markAllAsRead}>
             <Text className="text-primary font-pmedium">Mark all as read</Text>
           </TouchableOpacity>
@@ -65,7 +91,7 @@ const NotificationScreen = () => {
       </View>
 
       <FlatList
-        data={notifications}
+        data={notifications || []}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: insets.bottom }}
@@ -110,17 +136,29 @@ const NotificationScreen = () => {
                   {selectedNotification.message}
                 </Text>
 
-                <Text className="text-sm text-gray-500">
-                  {new Date(
-                    selectedNotification.dateReceived
-                  ).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                <Text className="text-sm text-gray-500 mb-4">
+                  {selectedNotification.createdAt
+                    ?.toDate()
+                    .toLocaleDateString("en-US", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                 </Text>
+
+                {/* Add Navigation Button if route exists */}
+                {selectedNotification.data?.route && (
+                  <TouchableOpacity
+                    onPress={() => handleNavigate(selectedNotification)}
+                    className="bg-primary py-3 rounded-lg mt-2"
+                  >
+                    <Text className="text-white text-center font-psemibold">
+                      View Details
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>

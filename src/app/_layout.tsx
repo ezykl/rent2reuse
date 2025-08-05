@@ -12,10 +12,15 @@ import "react-native-gesture-handler";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAccountStatus } from "@/hooks/useAccountStatus";
 import { SearchTransitionProvider } from "@/context/SearchTransitionContext";
+import { usePushNotifications } from "@/utils/userPushNotifications";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutContent() {
+  const { expoPushToken, notification } = usePushNotifications();
+  const data = JSON.stringify(notification, undefined, 2);
+  console.log("Push Notification Data:", data);
+  console.log("Expo Push Token:", expoPushToken);
   // Monitor account status
   useAccountStatus();
   return (
