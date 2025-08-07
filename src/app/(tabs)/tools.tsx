@@ -72,6 +72,8 @@ const Tools = () => {
   const [isPlanLoading, setIsPlanLoading] = useState(true);
   const [isDataReady, setIsDataReady] = useState(false);
   const [isRequestsLoading, setIsRequestsLoading] = useState(false); // Add this
+  // Add a state for incoming requests count
+  const [incomingRequestsCount, setIncomingRequestsCount] = useState(0);
 
   const params = useLocalSearchParams();
   useEffect(() => {
@@ -126,7 +128,7 @@ const Tools = () => {
       const q = query(itemsRef, where("owner.id", "==", auth.currentUser.uid));
 
       const querySnapshot = await getDocs(q);
-      console.log(`📋 Debug: Found ${querySnapshot.size} listings`);
+      let totalIncomingRequests = 0; // Counter for all incoming requests
 
       const listings = await Promise.all(
         querySnapshot.docs.map(async (doc) => {
@@ -147,16 +149,7 @@ const Tools = () => {
 
           console.log("🔄 Debug: Fetching requests for item:", doc.id);
           const requestsSnap = await getDocs(requestsQuery);
-          console.log(`✉️ Debug: Found ${requestsSnap.size} pending requests`);
-
-          // Log each request for verification
-          requestsSnap.forEach((req) => {
-            console.log("Request data:", {
-              requestId: req.id,
-              status: req.data().status,
-              itemId: req.data().itemId,
-            });
-          });
+          totalIncomingRequests += requestsSnap.size; // Add to total count
 
           const listingData = {
             id: doc.id,
@@ -184,15 +177,7 @@ const Tools = () => {
         })
       );
 
-      console.log(
-        "\n🏁 Debug: All listings processed:",
-        listings.map((l) => ({
-          id: l.id,
-          name: l.itemName,
-          requestCount: l.requestCount,
-        }))
-      );
-
+      setIncomingRequestsCount(totalIncomingRequests);
       setMyListings(listings);
     } catch (error) {
       console.error("❌ Error fetching listings:", error);
@@ -843,11 +828,7 @@ const Tools = () => {
                               : "text-gray-600"
                           }`}
                         >
-                          {
-                            rentRequests.filter(
-                              (req) => req.type === "incoming"
-                            ).length
-                          }
+                          {incomingRequestsCount}
                         </Text>
                       </View>
                     </View>
@@ -948,12 +929,10 @@ const Tools = () => {
                       >
                         <Image
                           source={icons.plus}
-                          className="w-3 h-3 mr-1"
+                          className="w-6 h-6"
                           tintColor="white"
+                          resizeMode="cover"
                         />
-                        <Text className="text-white text-sm font-psemibold">
-                          Add Tool
-                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
