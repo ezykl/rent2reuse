@@ -18,6 +18,7 @@ import { icons, images } from "../../constant";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
 import thumbnail from "@/constant/images";
+import useProfileCompletion from "@/hooks/useProfileCompletion";
 
 import {
   collection,
@@ -52,6 +53,8 @@ const Tools = () => {
   const insets = useSafeAreaInsets();
   const { canList, listUsed, listLimit, updateListUsage, fetchUserLimits } =
     useUserLimits();
+
+  const { completionPercentage } = useProfileCompletion();
   const [activeTab, setActiveTab] = useState("listings");
   const [myListings, setMyListings] = useState<ListingItemType[]>([]);
   const [rentedTools, setRentedTools] = useState<RentedItem[]>([]);
@@ -300,15 +303,25 @@ const Tools = () => {
   }, []);
 
   const handleAddListing = () => {
+    if (completionPercentage < 100) {
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Complete Your Profile",
+        textBody: `Your profile is ${completionPercentage}% complete. Please complete your profile before listing items.`,
+      });
+      router.push("/profile");
+      return;
+    }
+
     if (!canList) {
       Toast.show({
         type: ALERT_TYPE.INFO,
         title: "Listing Limit Reached",
         textBody: "Please upgrade your plan to add more items.",
       });
-
       return;
     }
+
     router.push("/add-listing");
   };
 
@@ -928,31 +941,38 @@ const Tools = () => {
                     <Text className="text-lg font-pbold text-gray-800">
                       My Listed Tools
                     </Text>
-                    <TouchableOpacity
-                      onPress={handleAddListing}
-                      className="bg-primary px-3 py-1.5 rounded-lg flex-row items-center"
-                    >
-                      <Image
-                        source={icons.plus}
-                        className="w-3 h-3 mr-1"
-                        tintColor="white"
-                      />
-                      <Text className="text-white text-sm font-psemibold">
-                        Add Tool
-                      </Text>
-                    </TouchableOpacity>
+                    {myListings.length !== 0 && (
+                      <TouchableOpacity
+                        onPress={handleAddListing}
+                        className="bg-primary px-3 py-1.5 rounded-lg flex-row items-center"
+                      >
+                        <Image
+                          source={icons.plus}
+                          className="w-3 h-3 mr-1"
+                          tintColor="white"
+                        />
+                        <Text className="text-white text-sm font-psemibold">
+                          Add Tool
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {isLoading ? (
                     <ActivityIndicator size="large" color="#5C6EF6" />
                   ) : myListings.length === 0 ? (
                     <View className="py-10 items-center">
-                      <Text className="text-gray-500 mb-4">
-                        No listings yet
-                      </Text>
+                      <View className=" items-center">
+                        <Image
+                          source={icons.about}
+                          className="w-16 h-16 mb-4"
+                          tintColor="#9CA3AF"
+                        />
+                        <Text className="text-gray-500">No listing yet</Text>
+                      </View>
                       <TouchableOpacity
                         onPress={handleAddListing}
-                        className="bg-primary px-6 py-3 rounded-lg"
+                        className="mt-10 bg-primary px-6 py-3 rounded-lg"
                       >
                         <Text className="text-white font-psemibold">
                           Create First Listing
@@ -986,9 +1006,9 @@ const Tools = () => {
                   {rentedTools.length === 0 ? (
                     <View className="py-10 items-center">
                       <Image
-                        source={images.empty}
-                        className="w-40 h-40 opacity-50"
-                        resizeMode="contain"
+                        source={icons.about}
+                        className="w-16 h-16 mb-4"
+                        tintColor="#9CA3AF"
                       />
                       <Text className="text-gray-500">No rented tools yet</Text>
                     </View>
@@ -1007,6 +1027,20 @@ const Tools = () => {
                   <Text className="text-lg font-pbold text-gray-800 mb-4">
                     Tools with Rental Requests
                   </Text>
+
+                  {myListings.length === 0 ? (
+                    <View className="py-10 items-center">
+                      <Image
+                        source={icons.about}
+                        className="w-16 h-16 mb-4"
+                        tintColor="#9CA3AF"
+                      />
+                      <Text className="text-gray-500">
+                        No tools with rental request yet
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {myListings
                     .filter((item) => item.requestCount > 0)
                     .map((item) => (

@@ -564,18 +564,19 @@ const Profile: React.FC = () => {
     return (
       <View className="absolute inset-0 z-60 bg-white">
         {/* Header */}
-        <View className="flex-row items-center justify-between p-4 border-b border-gray-100">
-          <TouchableOpacity onPress={() => setShowProfileCompletion(false)}>
-            <Image source={icons.close} className="w-6 h-6" />
-          </TouchableOpacity>
-          <Text className="text-lg font-pbold">Complete Your Profile</Text>
+        <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
           <Text className="text-primary font-pbold">
             {completionPercentage}%
           </Text>
+
+          <Text className="text-lg font-pbold">Complete Your Profile</Text>
+          <TouchableOpacity onPress={() => setShowProfileCompletion(false)}>
+            <Image source={icons.close} className="w-7 h-7" />
+          </TouchableOpacity>
         </View>
 
         {/* Vertical Steps Layout */}
-        <ScrollView className="flex-1  pt-4">
+        <ScrollView className="flex-1  mt-2 align-center">
           {steps.map((step, index) => (
             <TouchableOpacity
               key={step.id}
@@ -588,7 +589,7 @@ const Profile: React.FC = () => {
               }`}
             >
               <View
-                className={`flex-row items-center p-4 rounded-xl ${
+                className={`flex-row items-center p-2 rounded-xl ${
                   index === currentStepIndex
                     ? "bg-green-50 border-2 border-primary"
                     : index < currentStepIndex
@@ -938,7 +939,7 @@ const Profile: React.FC = () => {
       className="bg-white h-full px-4"
       style={{ paddingBottom: insets.bottom, paddingTop: insets.top }}
     >
-      <Header variant="setting" />
+      {!showProfileCompletion && <Header variant="setting" />}
       <KeyboardAvoidingView
         behavior={Platform.OS === "android" ? "height" : "padding"}
         style={{ flex: 1 }}

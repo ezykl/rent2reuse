@@ -92,13 +92,32 @@ const SignUp = () => {
   };
 
   const validatePassword = (password: string) => {
-    if (!password) return "Password is required";
-    const passwordRegex =
-      /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{6,}$/;
-    if (!passwordRegex.test(password)) {
-      return "Password must have at least 1 uppercase letter, 1 number, 1 special character, and be at least 6 characters long";
+    const errors: string[] = [];
+
+    if (!password) {
+      errors.push("Password is required\n");
+      return errors;
     }
-    return "";
+
+    if (password.length < 6) {
+      errors.push("Must be at least 6 characters\n");
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      errors.push("Must include at least 1 uppercase letter\n");
+    }
+
+    if (!/\d/.test(password)) {
+      errors.push("Must include at least 1 number\n");
+    }
+
+    if (!/[!@#$%^&*()\-_=\+\[\]{};:,.?\/|]/.test(password)) {
+      errors.push(
+        "Must include at least 1 special character (!@#$%^&*()-_=+[]{};:,.?/|)"
+      );
+    }
+
+    return errors;
   };
 
   const validateConfirmPassword = (confirmPass: string, password: string) => {
@@ -126,7 +145,7 @@ const SignUp = () => {
         error = validateEmail(value);
         break;
       case "password":
-        error = validatePassword(value);
+        error = validatePassword(value).join("");
         // Also revalidate confirm password if it exists
         if (form.confirmPass) {
           const confirmError = validateConfirmPassword(form.confirmPass, value);
@@ -179,7 +198,7 @@ const SignUp = () => {
         setErrors({
           ...errors,
           email: validateEmail(form.email),
-          password: validatePassword(form.password),
+          password: validatePassword(form.password).join(""),
           confirmPass: validateConfirmPassword(form.confirmPass, form.password),
         });
       } else if (currentStep === 2) {
@@ -264,10 +283,11 @@ const SignUp = () => {
         createdAt: new Date().toISOString(),
       });
 
-      await createWelcomeNotification(uid);
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // 3. Sign out and show success dialog
       await new Promise((resolve) => {
+        setIsLoading(false);
         // First show the success dialog
         Dialog.show({
           type: ALERT_TYPE.SUCCESS,
@@ -282,6 +302,10 @@ const SignUp = () => {
           closeOnOverlayTap: false,
         });
       });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      await createWelcomeNotification(uid);
 
       // 4. Sign out and redirect
       await auth.signOut();
@@ -501,11 +525,6 @@ const SignUp = () => {
                 {isAtBottom ? "I Agree" : "Please read to the end"}
               </Text>
             </TouchableOpacity>
-            {!isAtBottom && (
-              <Text className="text-center text-gray-500 mt-2 text-sm">
-                Please scroll to the end to accept terms
-              </Text>
-            )}
           </View>
         </SafeAreaView>
       </Modal>

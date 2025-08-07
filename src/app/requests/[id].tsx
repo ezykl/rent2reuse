@@ -23,18 +23,24 @@ import { db } from "@/lib/firebaseConfig";
 import { icons } from "@/constant";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
+import { useTimeConverter } from "@/hooks/useTimeConverter";
 
-// First, update the RentRequestData interface to properly type the Timestamp
+// Update the interfaces to match your current structure
 interface RentRequestData {
-  createdAt: any; // Firestore Timestamp
+  createdAt: any;
   itemId: string;
   itemName: string;
+  itemImage?: string;
   ownerId: string;
-  price: number;
+  ownerName: string;
   requesterId: string;
-  status: string;
-  pickUpDate: Timestamp; // Change this to explicitly be Firestore Timestamp
-  daysRent?: number;
+  requesterName: string;
+  status: "pending" | "approved" | "rejected";
+  startDate: string;
+  endDate: string;
+  pickupTime: number;
+  message: string;
+  totalPrice: number;
 }
 
 interface UserData {
@@ -45,19 +51,10 @@ interface UserData {
   profileImage?: string;
 }
 
-interface RequestType {
+interface RequestType extends Omit<RentRequestData, "createdAt"> {
   id: string;
   createdAt: Date;
-  itemId: string;
-  itemName: string;
-  ownerId: string;
-  price: number;
-  requesterId: string;
-  status: string;
-  pickUpDate?: Date;
-  daysRent?: number;
   requesterData?: UserData;
-  priceSubtotal?: number;
 }
 
 interface ItemDetails {
@@ -72,6 +69,7 @@ const ViewRequests = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [requests, setRequests] = useState<RequestType[]>([]);
   const [itemDetails, setItemDetails] = useState<ItemDetails | null>(null);
+  const { minutesToTime } = useTimeConverter();
 
   useEffect(() => {
     fetchItemAndRequests();
@@ -82,7 +80,7 @@ const ViewRequests = () => {
       setIsLoading(true);
       console.log("🔍 Fetching requests for item:", id);
 
-      // 1. Fetch rent requests for this item
+      // Fetch rent requests for this item
       const requestsRef = collection(db, "rentRequests");
       const q = query(
         requestsRef,
@@ -93,62 +91,33 @@ const ViewRequests = () => {
       const querySnapshot = await getDocs(q);
       console.log(`📋 Found ${querySnapshot.size} requests`);
 
-      querySnapshot.docs.forEach((doc) => {
-        const data = doc.data();
-        console.log("Raw pickUpDate:", {
-          exists: !!data.pickUpDate,
-          type: data.pickUpDate?.constructor.name,
-          value: data.pickUpDate,
-          jsDate: data.pickUpDate?.toDate(),
-        });
-      });
-
-      // 2. Process each request and fetch user data
+      // Process requests
       const requestsData = await Promise.all(
         querySnapshot.docs.map(async (document) => {
           const data = document.data() as RentRequestData;
           console.log("📄 Processing request:", document.id, data);
 
-          // Fetch requester data using requesterId
+          // Fetch requester data
           let requesterData: UserData | undefined;
           try {
             const userDoc = await getDoc(doc(db, "users", data.requesterId));
             if (userDoc.exists()) {
-              const userData = userDoc.data() as UserData;
-              requesterData = {
-                email: userData.email,
-                firstname: userData.firstname,
-                lastname: userData.lastname,
-                middlename: userData.middlename,
-                profileImage: userData.profileImage,
-              };
+              requesterData = userDoc.data() as UserData;
               console.log("👤 Found user data for:", data.requesterId);
             }
           } catch (error) {
             console.log("❌ Error fetching user data:", error);
           }
 
-          // Calculate subtotal if we have both price and daysRent
-          const priceSubtotal = data.daysRent
-            ? data.price * data.daysRent
-            : undefined;
-
-          // Return combined data
           return {
             id: document.id,
             ...data,
             requesterData,
-            priceSubtotal,
-            // Convert Timestamp to Date if it exists
-            pickUpDate: data.pickUpDate ? data.pickUpDate.toDate() : undefined,
             createdAt: data.createdAt?.toDate() || new Date(),
           };
         })
       );
 
-      console.log("✅ Processed all requests:", requestsData.length);
-
-      // Sort by creation date, newest first
       setRequests(
         requestsData.sort(
           (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
@@ -185,11 +154,23 @@ const ViewRequests = () => {
     >
       <View className="flex-1">
         {/* Header */}
-        <View className="flex-row items-center px-4 py-3 border-b border-gray-100">
-          <TouchableOpacity onPress={() => router.back()}>
-            <Image source={icons.leftArrow} className="w-6 h-6" />
+        <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="items-center justify-center"
+          >
+            <Image
+              source={icons.leftArrow}
+              className="w-8 h-8"
+              tintColor="#6B7280"
+            />
           </TouchableOpacity>
-          <Text className="text-xl font-psemibold ml-4">Rental Requests</Text>
+          <View className="flex-1 items-center">
+            <Text className="text-xl font-pbold text-gray-800">
+              Rental Requests
+            </Text>
+          </View>
+          <View className="w-8" />
         </View>
 
         {/* Item Details */}
@@ -243,9 +224,7 @@ const ViewRequests = () => {
                     />
                     <View className="ml-3 flex-1">
                       <Text className="font-psemibold text-secondary-400">
-                        {request.requesterData
-                          ? `${request.requesterData.firstname} ${request.requesterData.lastname}`
-                          : "Anonymous"}
+                        {request.requesterName || "Anonymous"}
                       </Text>
                       <Text className="text-xs font-pregular text-secondary-300">
                         {request.requesterData?.email || "No email provided"}
@@ -258,63 +237,47 @@ const ViewRequests = () => {
                     </View>
                   </View>
 
-                  {/* Rental Details - Show if available */}
+                  {/* Rental Details */}
                   <View className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    {/* Dates */}
                     <View className="flex-row justify-between mb-2">
                       <Text className="text-sm font-pregular text-secondary-300">
-                        Item Price
+                        Rental Period
                       </Text>
                       <Text className="text-sm font-pmedium text-secondary-400">
-                        ₱{request.price.toLocaleString()}/day
+                        {request.startDate} - {request.endDate}
                       </Text>
                     </View>
 
-                    {/* Only show if daysRent exists and is greater than 0 */}
-                    {(request.daysRent ?? 0) > 0 && (
-                      <View className="flex-row justify-between mb-2">
-                        <Text className="text-sm font-pregular text-secondary-300">
-                          Rental Duration
-                        </Text>
-                        <Text className="text-sm font-pmedium text-secondary-400">
-                          {request.daysRent ?? 0} day
-                          {(request.daysRent ?? 0) > 1 ? "s" : ""}
-                        </Text>
-                      </View>
-                    )}
+                    {/* Pickup Time */}
+                    <View className="flex-row justify-between mb-2">
+                      <Text className="text-sm font-pregular text-secondary-300">
+                        Pickup Time
+                      </Text>
+                      <Text className="text-sm font-pmedium text-secondary-400">
+                        {minutesToTime(Number(request.pickupTime))}
+                      </Text>
+                    </View>
 
-                    {/* Only show if pickUpDate exists */}
-                    {request.pickUpDate && (
-                      <View className="flex-row justify-between mb-2">
-                        <Text className="text-sm font-pregular text-secondary-300">
-                          Pick-up Date
-                        </Text>
-                        <Text className="text-sm font-pmedium text-secondary-400">
-                          {request.pickUpDate.toLocaleDateString("en-US", {
-                            weekday: "short",
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </Text>
-                      </View>
-                    )}
+                    {/* Total Price */}
+                    <View className="flex-row justify-between">
+                      <Text className="text-sm font-pregular text-secondary-300">
+                        Total Price
+                      </Text>
+                      <Text className="text-sm font-psemibold text-primary">
+                        ₱{request.totalPrice?.toLocaleString() || 0}
+                      </Text>
+                    </View>
+                  </View>
 
-                    {/* Calculate and show subtotal if we have price and daysRent */}
-                    {request.price && (request.daysRent ?? 0) > 0 && (
-                      <View className="flex-row justify-between">
-                        <Text className="text-sm font-pregular text-secondary-300">
-                          Subtotal
-                        </Text>
-                        <Text className="text-sm font-psemibold text-primary">
-                          ₱
-                          {(
-                            request.price * (request.daysRent ?? 1)
-                          ).toLocaleString()}
-                        </Text>
-                      </View>
-                    )}
+                  {/* Message */}
+                  <View className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    <Text className="text-sm font-pregular text-secondary-300 mb-1">
+                      Message
+                    </Text>
+                    <Text className="text-sm text-secondary-400">
+                      {request.message}
+                    </Text>
                   </View>
 
                   {/* Action Buttons */}
