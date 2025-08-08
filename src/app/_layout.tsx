@@ -6,13 +6,15 @@ import { useFonts } from "expo-font";
 import LoaderProviderWithOverlay from "../context/LoaderContext";
 import { AlertNotificationRoot } from "react-native-alert-notification";
 import { StatusBar } from "expo-status-bar";
-import { AuthProvider } from "@/context/AuthContext";
-import { NotificationProvider } from "@/context/NotificationProvider";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+
 import "react-native-gesture-handler";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useAccountStatus } from "@/hooks/useAccountStatus";
 import { SearchTransitionProvider } from "@/context/SearchTransitionContext";
+import { NotificationProvider } from "@/context/NotificationProvider";
 import { usePushNotifications } from "@/utils/userPushNotifications";
+import { manageUserToken } from "@/utils/tokenManagement";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
@@ -23,6 +25,15 @@ function RootLayoutContent() {
   console.log("Expo Push Token:", expoPushToken);
   // Monitor account status
   useAccountStatus();
+
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user?.uid && expoPushToken?.data) {
+      manageUserToken(user.uid, expoPushToken.data);
+    }
+  }, [user?.uid, expoPushToken?.data]);
+
   return (
     <>
       <StatusBar backgroundColor="#FFFFFF" style="dark" />

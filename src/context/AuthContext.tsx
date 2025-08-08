@@ -8,6 +8,8 @@ import {
   terminateCurrentSession,
 } from "@/lib/firebaseConfig";
 import { ALERT_TYPE, Dialog } from "react-native-alert-notification";
+import { removeUserToken } from "@/utils/tokenManagement";
+import { usePushNotifications } from "@/utils/userPushNotifications";
 
 // Define your custom user data structure
 interface ExtendedUser extends FirebaseUser {
@@ -35,6 +37,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [sessionCheckInterval, setSessionCheckInterval] =
     useState<NodeJS.Timeout | null>(null);
+  const { expoPushToken } = usePushNotifications();
 
   // Function to handle user logout with session cleanup
   const logout = async () => {
@@ -47,6 +50,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Clear any local storage data
       await AsyncStorage.removeItem("currentSessionId");
+
+      // Remove user token from the server
+      const currentUser = auth.currentUser;
+      if (currentUser && expoPushToken?.data) {
+        await removeUserToken(currentUser.uid, expoPushToken.data);
+      }
     } catch (error) {
       console.error("Error during logout:", error);
     }
@@ -117,7 +126,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Listen for session termination (e.g., when logged in on another device)
   useEffect(() => {
-    let unsubscribeSessionListener = null;
+    let unsubscribeSessionListener: any = null;
 
     const setupSessionListener = async () => {
       if (!user) return;
@@ -161,7 +170,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
 
-    const forceLogout = async (message) => {
+    const forceLogout = async (messag: any) => {
       // First clear the listener to prevent multiple calls
       if (unsubscribeSessionListener) {
         unsubscribeSessionListener();

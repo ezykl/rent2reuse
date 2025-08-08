@@ -9,12 +9,14 @@ interface RequestedItemCardProps {
     itemPrice: number;
     images?: string[];
     requestCount: number;
+    newRequestCount: number; // Add this for unread/new requests
     requests: {
       userId: string;
       userName: string;
       status: string;
       startDate: string;
       endDate: string;
+      isNew?: boolean; // Add this to track new requests
     }[];
   };
   onViewRequests: (id: string) => void;
@@ -26,7 +28,7 @@ const RequestedItemCard = ({
 }: RequestedItemCardProps) => {
   return (
     <TouchableOpacity
-      className="w-full bg-white rounded-xl mb-4 shadow-sm border border-gray-100"
+      className="w-full bg-white rounded-xl mb-4 shadow-sm border-l-4 border-l-orange-500"
       onPress={() => onViewRequests(item.id)}
       activeOpacity={0.7}
       style={{ height: 100 }}
@@ -43,6 +45,15 @@ const RequestedItemCard = ({
           className="h-full rounded-l-xl"
         />
 
+        {/* New Request Badge - only show for unread requests */}
+        {item.newRequestCount > 0 && (
+          <View className="absolute top-2 right-2 bg-red-500 w-6 h-6 rounded-full items-center justify-center">
+            <Text className="text-white text-xs font-pbold">
+              {item.newRequestCount}
+            </Text>
+          </View>
+        )}
+
         {/* Content */}
         <View className="flex-1 p-3 justify-between">
           <View>
@@ -52,13 +63,13 @@ const RequestedItemCard = ({
             >
               {item.itemName}
             </Text>
-            <Text className="text-sm font-psemibold text-primary">
+            <Text className="text-base font-psemibold text-primary">
               ₱{item.itemPrice}/day
             </Text>
           </View>
 
-          {/* Request Count Badge */}
-          <View className="flex-row items-center">
+          {/* Request Status - Show total requests */}
+          <View className="flex-row items-center justify-between">
             <View className="bg-orange-100 px-3 py-1.5 rounded-full flex-row items-center">
               <Image
                 source={icons.userRequest}
@@ -66,20 +77,17 @@ const RequestedItemCard = ({
                 tintColor="#F97316"
               />
               <Text className="text-sm font-psemibold text-orange-700">
-                {item.requestCount} new{" "}
+                {item.requestCount}{" "}
                 {item.requestCount === 1 ? "request" : "requests"}
+                {item.newRequestCount > 0 && ` • ${item.newRequestCount} new`}
               </Text>
             </View>
+            <Image
+              source={icons.arrowRight}
+              className="w-5 h-5"
+              tintColor="#6B7280"
+            />
           </View>
-        </View>
-
-        {/* Arrow Icon */}
-        <View className="justify-center pr-4">
-          <Image
-            source={icons.arrowRight}
-            className="w-5 h-5"
-            tintColor="#6B7280"
-          />
         </View>
       </View>
     </TouchableOpacity>

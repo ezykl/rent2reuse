@@ -137,3 +137,57 @@ export const deleteNotification = async (
     throw error;
   }
 };
+
+export const createRentRequestNotification = async (
+  ownerId: string,
+  itemId: string,
+  requestId: string,
+  itemName: string
+) => {
+  try {
+    const userNotificationsRef = collection(
+      db,
+      `users/${ownerId}/notifications`
+    );
+
+    await addDoc(userNotificationsRef, {
+      type: "RENT_REQUEST",
+      title: "New Rental Request",
+      message: `You have a new request for ${itemName}`,
+      isRead: false,
+      createdAt: serverTimestamp(),
+      data: {
+        itemId,
+        requestId,
+        route: "/requests",
+        params: { id: itemId },
+        status: "unread", // Track request notification status
+      },
+    });
+  } catch (error) {
+    console.error("Error creating rent request notification:", error);
+    throw error;
+  }
+};
+
+// Add a function to count new requests for an item
+export const getNewRequestsCount = async (userId: string, itemId: string) => {
+  try {
+    const userNotificationsRef = collection(
+      db,
+      `users/${userId}/notifications`
+    );
+    const q = query(
+      userNotificationsRef,
+      where("type", "==", "RENT_REQUEST"),
+      where("data.itemId", "==", itemId),
+      where("isRead", "==", false)
+    );
+
+    const snapshot = await getDocs(q);
+    return snapshot.size;
+  } catch (error) {
+    console.error("Error counting new requests:", error);
+    return 0;
+  }
+};

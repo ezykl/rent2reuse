@@ -42,6 +42,8 @@ import {
   terminateUserSessions,
 } from "@/lib/firebaseConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePushNotifications } from "@/utils/userPushNotifications";
+import { manageUserToken } from "@/utils/tokenManagement";
 
 // Type definitions
 interface FormData {
@@ -83,6 +85,7 @@ const SignIn = () => {
   const [pendingAuth, setPendingAuth] = useState<User | null>(null);
   const [suspendedModalVisible, setSuspendedModalVisible] =
     useState<boolean>(false);
+  const { expoPushToken } = usePushNotifications();
 
   // Email validation function
   const validateEmail = (email: string): string => {
@@ -169,14 +172,6 @@ const SignIn = () => {
           title: "Unauthorized Access",
           textBody: "This account doesn't have user access.",
         });
-        return false;
-      }
-
-      // Check account status
-      console.log("Account status:", userData.accountStatus);
-      if (userData.accountStatus === "Suspended") {
-        console.log("Account is suspended - showing modal");
-        setSuspendedModalVisible(true);
         return false;
       }
 
@@ -294,6 +289,9 @@ const SignIn = () => {
         // No active sessions, create a new one
         await createUserSession(userCredential.user.uid);
 
+        // Register the push token for this user
+        await manageUserToken(userCredential.user.uid, expoPushToken?.data);
+
         Toast.show({
           type: ALERT_TYPE.SUCCESS,
           title: "Success",
@@ -303,7 +301,7 @@ const SignIn = () => {
         router.replace("/home");
       }
     } catch (error) {
-      // console.error("Error completing sign in:", error);
+      console.error("Error completing sign in:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Login Failed",
@@ -541,36 +539,6 @@ const SignIn = () => {
                 className="bg-primary py-2 px-4 rounded-md"
               >
                 <Text className="text-white font-pmedium">Continue</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Account Suspended Modal */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={suspendedModalVisible}
-        onRequestClose={() => setSuspendedModalVisible(false)}
-      >
-        <View className="flex-1 justify-center items-center bg-black/50">
-          <View className="bg-white rounded-lg p-6 m-4 w-5/6 shadow-lg">
-            <Text className="text-xl font-psemibold text-red-500 mb-3">
-              Account Suspended
-            </Text>
-            <Text className="text-base text-secondary-300 mb-5">
-              Your account has been suspended due to terms of service
-              violations. Please contact support for assistance to restore your
-              account access.
-            </Text>
-
-            <View className="flex-row justify-center">
-              <TouchableOpacity
-                onPress={() => setSuspendedModalVisible(false)}
-                className="bg-red-500 py-3 px-6 rounded-md"
-              >
-                <Text className="text-white font-pmedium">OK</Text>
               </TouchableOpacity>
             </View>
           </View>

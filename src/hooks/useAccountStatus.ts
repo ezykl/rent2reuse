@@ -33,13 +33,6 @@ export function useAccountStatus() {
           if (status === "suspended" || status === "Suspended") {
             console.log("Account suspended, redirecting to suspended screen");
 
-            // Show a toast first for immediate feedback
-            Toast.show({
-              type: ALERT_TYPE.DANGER,
-              title: "Account Suspended",
-              textBody: "Your account has been suspended.",
-            });
-
             // Redirect to suspended screen
             setTimeout(() => {
               router.replace("/(auth)/account-suspended");

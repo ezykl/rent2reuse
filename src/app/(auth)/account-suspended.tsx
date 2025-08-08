@@ -56,7 +56,8 @@ const AccountSuspendedScreen = () => {
         <LargeButton
           title="Sign Out"
           handlePress={handleSignOut}
-          containerStyles="mt-8 w-full"
+          containerStyles="mt-8 w-full bg-red-500"
+          textStyles="text-white"
         />
       </View>
     </SafeAreaView>

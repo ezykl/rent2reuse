@@ -684,7 +684,7 @@ const Tools = () => {
                         className={`w-12 h-12 rounded-2xl items-center justify-center mb-2 ${
                           activeTab === "listings"
                             ? "bg-blue-500"
-                            : "bg-gray-200"
+                            : "bg-blue-50"
                         }`}
                       >
                         <Image
@@ -739,14 +739,14 @@ const Tools = () => {
                         className={`w-12 h-12 rounded-2xl items-center justify-center mb-2 ${
                           activeTab === "rented"
                             ? "bg-green-500"
-                            : "bg-gray-200"
+                            : "bg-green-50"
                         }`}
                       >
                         <Image
-                          source={icons.tools}
+                          source={icons.boxLine}
                           className="w-6 h-6"
                           tintColor={
-                            activeTab === "rented" ? "#FFFFFF" : "#9CA3AF"
+                            activeTab === "rented" ? "#FFFFFF" : "#22c55e"
                           }
                         />
                       </View>
@@ -794,14 +794,14 @@ const Tools = () => {
                         className={`w-12 h-12 rounded-2xl items-center justify-center mb-2 ${
                           activeTab === "incoming"
                             ? "bg-orange-500"
-                            : "bg-gray-200"
+                            : "bg-orange-50"
                         }`}
                       >
                         <Image
                           source={icons.envelope}
                           className="w-6 h-6"
                           tintColor={
-                            activeTab === "incoming" ? "#FFFFFF" : "#9CA3AF"
+                            activeTab === "incoming" ? "#FFFFFF" : "#f97316"
                           }
                         />
                       </View>
@@ -847,16 +847,14 @@ const Tools = () => {
                     <View className="items-center">
                       <View
                         className={`w-12 h-12 rounded-2xl items-center justify-center mb-2 ${
-                          activeTab === "outgoing"
-                            ? "bg-red-500"
-                            : "bg-gray-200"
+                          activeTab === "outgoing" ? "bg-red-500" : "bg-red-50"
                         }`}
                       >
                         <Image
                           source={icons.plane}
                           className="w-6 h-6"
                           tintColor={
-                            activeTab === "outgoing" ? "#FFFFFF" : "#9CA3AF"
+                            activeTab === "outgoing" ? "#FFFFFF" : "#ef4444"
                           }
                         />
                       </View>
@@ -1028,6 +1026,7 @@ const Tools = () => {
                         item={{
                           ...item,
                           requestCount: item.requestCount ?? 0,
+                          newRequestCount: item.newRequestCount ?? 0,
                           requests: item.requests ?? [],
                         }}
                         onViewRequests={(id) => router.push(`/requests/${id}`)}

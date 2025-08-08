@@ -87,12 +87,14 @@ import trash from "../assets/icons/trash.png";
 import userRequest from "../assets/icons/user-request.png";
 import check from "../assets/icons/check.png";
 import box from "../assets/icons/box.png";
+import boxLine from "../assets/icons/box-line.png";
 import clock from "../assets/icons/clock.png";
 
 import searchAi from "../assets/icons/searchAi.png";
 
 export default {
   clock,
+  boxLine,
   box,
   check,
   searchAi,
