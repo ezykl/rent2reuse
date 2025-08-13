@@ -28,9 +28,7 @@ const LargeButton = ({
       disabled={isLoading || disabled} // Ensure 'disabled' works correctly here
     >
       {!isLoading && (
-        <Text
-          className={`text-secondary-400 font-psemibold text-xl ${textStyles}`}
-        >
+        <Text className={`text-white font-psemibold text-xl ${textStyles}`}>
           {title}
         </Text>
       )}

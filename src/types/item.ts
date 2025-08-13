@@ -8,6 +8,8 @@ export interface Item {
   itemCondition: string;
   itemLocation: string;
   itemCategory: string;
+  itemMinRentDuration?: number;
+  createdAt: any;
   owner: {
     id: string;
     fullname: string;

@@ -2,13 +2,13 @@ import {
   View,
   Text,
   SafeAreaView,
-  Image,
   FlatList,
   TouchableOpacity,
   Dimensions,
   Modal,
   ActivityIndicator,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 import React, { useState, useEffect, useCallback } from "react";
 import Carousel from "react-native-reanimated-carousel";
@@ -18,7 +18,15 @@ import Category from "@/components/Category";
 import ItemCard from "@/components/ItemCard";
 import { router } from "expo-router";
 import { db } from "@/lib/firebaseConfig";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { Image } from "expo-image";
+
+import {
+  getDocs,
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+} from "firebase/firestore";
 import { useLoader } from "@/context/LoaderContext";
 import useProfileCompletion from "@/hooks/useProfileCompletion";
 import { useItems } from "@/hooks/useItems";
@@ -28,8 +36,12 @@ import { SearchBar } from "@/components/SearchBar";
 const { width } = Dimensions.get("window");
 
 const Home = () => {
-  // FIXED: Use only the hooks you need, avoid duplicates
-  const { items: recentItems, loading: recentLoading } = useItems("recent");
+  // Update the useItems hook destructuring to include refreshItems
+  const {
+    items: recentItems,
+    loading: recentLoading,
+    refreshItems,
+  } = useItems("recent");
 
   const [refreshing, setRefreshing] = useState(false);
   const { isLoading, setIsLoading } = useLoader();
@@ -49,6 +61,35 @@ const Home = () => {
     setModalKey((prev) => prev + 1); // Force modal re-render
     setShowProfileAlert(true);
   }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Refresh announcements
+      const q = query(
+        collection(db, "announcements"),
+        orderBy("createdAt", "desc")
+      );
+      const snapshot = await getDocs(q);
+      const activeAnnouncements = snapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          isActive: doc.data().isActive || false,
+          title: doc.data().title || "",
+          message: doc.data().message?.replace(/"/g, "") || "",
+          imageUrl: doc.data().imageUrl || null,
+        }))
+        .filter((ann) => ann.isActive);
+      setAnnouncements(activeAnnouncements);
+
+      // Refresh items using the exposed refreshItems function
+      await refreshItems();
+    } catch (error) {
+      console.error("Error refreshing:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshItems]);
 
   useEffect(() => {
     // Only show alert automatically if profile is incomplete (existing behavior)
@@ -178,6 +219,14 @@ const Home = () => {
         <Header />
 
         <FlatList
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#4BD07F"]} // Use your primary color
+              tintColor="#56D07F"
+            />
+          }
           data={recentItems}
           key={2}
           numColumns={2}
@@ -290,7 +339,7 @@ const Home = () => {
 
               {/* Announcements Carousel */}
               {Array.isArray(announcements) && announcements.length > 0 && (
-                <View className="mt-4 ">
+                <View className="mt-4">
                   <Text className="text-2xl text-secondary-400 font-psemibold mb-2">
                     Latest News
                   </Text>
@@ -305,13 +354,22 @@ const Home = () => {
                     renderItem={({ item }) => (
                       <TouchableOpacity
                         onPress={() => router.push(`/announcement/${item.id}`)}
-                        className="flex-1  bg-white rounded-xl overflow-hidden border border-gray-100"
+                        className="flex-1 bg-white rounded-xl overflow-hidden border border-gray-100"
                       >
                         {item.imageUrl ? (
                           <Image
                             source={{ uri: item.imageUrl }}
-                            className="w-full h-full"
-                            resizeMode="cover"
+                            style={{ width: "100%", height: "100%" }}
+                            contentFit="cover"
+                            transition={300}
+                            cachePolicy="memory-disk"
+                            recyclingKey={`announcement-${item.id}-${
+                              refreshing ? Date.now() : ""
+                            }`}
+                            placeholder={images.logo} // Use imported placeholder image
+                            onError={(error) => {
+                              console.error("Image loading error:", error);
+                            }}
                           />
                         ) : (
                           <View className="flex-1 justify-center p-4 bg-primary">

@@ -19,7 +19,7 @@ import { auth, db, storage } from "@/lib/firebaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 
-const OCR_SPACE_API_KEY = "K84923538988957";
+const OCR_SPACE_API_KEY = "K84356591988957";
 
 interface IDVerificationContentProps {
   onSave: (idVerified: { idImage: string; idNumber: string }) => void;
@@ -250,23 +250,11 @@ export const IDVerificationContent = ({
                   <View className="absolute bottom-0 right-0 w-6 h-1 bg-white rounded-full" />
                   <View className="absolute bottom-0 right-0 w-1 h-6 bg-white rounded-full" />
                 </View>
-
-                {/* ID Type indicator */}
-                <View className="absolute -top-12 left-0 right-0">
-                  <View className="bg-black/70 px-4 py-2 rounded-full self-center">
-                    <Text className="text-white font-pmedium text-sm">
-                      {
-                        ID_TYPES.find((type) => type.value === selectedIDType)
-                          ?.label
-                      }
-                    </Text>
-                  </View>
-                </View>
               </View>
             </View>
 
             {/* Enhanced Capture Controls */}
-            <View className="absolute bottom-8 inset-x-0">
+            <View className="absolute bottom-4 inset-x-0">
               <View className="items-center">
                 {/* Main capture button */}
                 <TouchableOpacity
@@ -509,38 +497,38 @@ export const IDVerificationContent = ({
         )}
 
         <View className="mt-2 space-y-3 gap-3">
-          <View className="bg-gray-100 px-4 py-3 rounded-xl">
+          <View className="bg-gray-100 px-4 py-2 rounded-xl">
             <Text className="text-gray-500 font-pregular text-sm">
               First Name
             </Text>
-            <Text className="text-gray-800 font-pmedium text-xl">
+            <Text className="text-gray-800 font-pmedium text-lg">
               {userData.firstName || "Not set"}
             </Text>
           </View>
 
           {userData.middleName && (
-            <View className="bg-gray-100 px-4 py-3 rounded-xl">
+            <View className="bg-gray-100 px-4 py-2 rounded-xl">
               <Text className="text-gray-500 font-pregular text-sm">
                 Middle Name
               </Text>
-              <Text className="text-gray-800 font-pmedium text-xl">
+              <Text className="text-gray-800 font-pmedium text-lg">
                 {userData.middleName}
               </Text>
             </View>
           )}
 
-          <View className="bg-gray-100 px-4 py-3 rounded-xl">
+          <View className="bg-gray-100 px-4 py-2 rounded-xl">
             <Text className="text-gray-500 font-pregular text-sm">
               Last Name
             </Text>
-            <Text className="text-gray-800 font-pmedium text-xl">
+            <Text className="text-gray-800 font-pmedium text-lg">
               {userData.lastName || "Not set"}
             </Text>
           </View>
 
           <View className="bg-gray-100 rounded-xl overflow-hidden">
             <TouchableOpacity
-              className="px-4 py-3"
+              className="px-4 py-2"
               onPress={() => setShowDropdown((prev) => !prev)}
               activeOpacity={0.8}
             >
@@ -549,7 +537,7 @@ export const IDVerificationContent = ({
                   <Text className="text-gray-500 font-pregular text-sm">
                     ID Type
                   </Text>
-                  <Text className="text-gray-800 font-pmedium text-xl">
+                  <Text className="text-gray-800 font-pmedium text-lg">
                     {
                       ID_TYPES.find((type) => type.value === selectedIDType)
                         ?.label
@@ -576,7 +564,7 @@ export const IDVerificationContent = ({
                 {ID_TYPES.map((type) => (
                   <TouchableOpacity
                     key={type.value}
-                    className="px-4 py-3"
+                    className="px-4 py-2"
                     onPress={() => {
                       setSelectedIDType(type.value as IDType);
                       setShowDropdown(false);
@@ -597,7 +585,7 @@ export const IDVerificationContent = ({
             )}
           </View>
 
-          <View className="bg-gray-100 px-4 py-3 rounded-xl">
+          <View className="bg-gray-100 px-4 py-2 rounded-xl">
             <Text className="text-gray-500 font-pregular text-sm">
               {getIDNumberLabel()}
             </Text>
@@ -606,7 +594,7 @@ export const IDVerificationContent = ({
               placeholderTextColor="#9CA3AF"
               value={idNumber}
               onChangeText={setIdNumber}
-              className="bg-gray-100 font-pmedium text-xl pt-2"
+              className="bg-gray-100 font-pmedium text-lg pt-2"
               keyboardType="numeric"
             />
           </View>

@@ -55,9 +55,9 @@ export const BirthdayContent = ({ onSave, onClose }: BirthdayContentProps) => {
             weekday_label: "text-secondary-300 font-pregular",
             year_selector_label: "font-pbold text-xl text-primary ",
             month_selector_label: "font-pbold text-xl text-primary ",
-            button_next: "bg-primary rounded-lg ",
-            button_prev: "bg-primary rounded-lg ",
-            today: "bg-primary",
+            button_next: "bg-gray-500/20 rounded-full ",
+            button_prev: "bg-gray-500/20  rounded-full ",
+
             day_label: "font-pregular text-lg",
             month_label: "font-pregular text-lg",
             year_label: "font-pregular text-lg",

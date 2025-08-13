@@ -128,28 +128,40 @@ const Tools = () => {
       const q = query(itemsRef, where("owner.id", "==", auth.currentUser.uid));
 
       const querySnapshot = await getDocs(q);
-      let totalIncomingRequests = 0; // Counter for all incoming requests
+      let totalIncomingRequests = 0;
 
       const listings = await Promise.all(
         querySnapshot.docs.map(async (doc) => {
           const data = doc.data();
           console.log(`\n🔎 Debug: Processing listing ${doc.id}:`);
-          console.log("Item data:", {
-            name: data.itemName,
-            status: data.itemStatus,
-          });
 
-          // Fetch request count for each item
+          // Get total pending requests
           const requestsRef = collection(db, "rentRequests");
           const requestsQuery = query(
             requestsRef,
             where("itemId", "==", doc.id),
             where("status", "==", "pending")
           );
-
-          console.log("🔄 Debug: Fetching requests for item:", doc.id);
           const requestsSnap = await getDocs(requestsQuery);
-          totalIncomingRequests += requestsSnap.size; // Add to total count
+          totalIncomingRequests += requestsSnap.size;
+
+          // Get unread notifications count for this item
+          const notificationsRef = collection(
+            db,
+            `users/${auth.currentUser?.uid}/notifications`
+          );
+          const unreadQuery = query(
+            notificationsRef,
+            where("type", "==", "RENT_REQUEST"),
+            where("data.itemId", "==", doc.id),
+            where("isRead", "==", false)
+          );
+          const unreadSnap = await getDocs(unreadQuery);
+          const newRequestCount = unreadSnap.size;
+
+          console.log(
+            `📊 Debug: Item ${doc.id} has ${newRequestCount} unread requests`
+          );
 
           const listingData = {
             id: doc.id,
@@ -164,6 +176,7 @@ const Tools = () => {
               day: "numeric",
             }),
             requestCount: requestsSnap.size,
+            newRequestCount: newRequestCount, // Add the unread notifications count
             renterInfo: data.renterInfo || null,
           };
 
@@ -171,6 +184,7 @@ const Tools = () => {
             id: listingData.id,
             name: listingData.itemName,
             requestCount: listingData.requestCount,
+            newRequestCount: listingData.newRequestCount,
           });
 
           return listingData;
@@ -393,6 +407,71 @@ const Tools = () => {
             } finally {
               setIsLoading(false);
             }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelRequest = async (requestId: string) => {
+    Alert.alert(
+      "Cancel Request",
+      "Are you sure you want to cancel this request?",
+      [
+        {
+          text: "No",
+          style: "cancel",
+        },
+        {
+          text: "Yes",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+              // First delete the request
+              await deleteDoc(doc(db, "rentRequests", requestId));
+
+              // Then update the user's rentUsed count
+              if (auth.currentUser) {
+                const userRef = doc(db, "users", auth.currentUser.uid);
+                const userDoc = await getDoc(userRef);
+
+                if (userDoc.exists()) {
+                  const currentPlan = userDoc.data().currentPlan;
+                  const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+
+                  console.log("Updating rent usage:", {
+                    current: currentPlan.rentUsed,
+                    new: newRentUsed,
+                  });
+
+                  await updateDoc(userRef, {
+                    "currentPlan.rentUsed": newRentUsed,
+                    "currentPlan.updatedAt": new Date(),
+                  });
+
+                  // Refresh user plan data
+                  await fetchUserPlan();
+                }
+              }
+
+              Toast.show({
+                type: ALERT_TYPE.SUCCESS,
+                title: "Success",
+                textBody: "Request cancelled successfully",
+              });
+
+              // Refresh the requests list
+              fetchSentRequests();
+            } catch (error) {
+              console.error("Error cancelling request:", error);
+              Toast.show({
+                type: ALERT_TYPE.DANGER,
+                title: "Error",
+                textBody: "Failed to cancel request",
+              });
+            }
+            setIsLoading(false);
           },
         },
       ]
@@ -641,17 +720,21 @@ const Tools = () => {
           </Text>
         </View>
       ) : (
-        <View className="flex-1">
+        <View className="flex-1 px-4">
+          <Header />
           <ScrollView
             className="flex-1"
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#4BD07F"]} // Use your primary color
+                tintColor="#56D07F"
+              />
             }
           >
-            <View className="px-4">
-              <Header />
-
+            <View>
               <View className="bg-white rounded-2xl ">
                 {/* Headers */}
                 <View className="flex-row justify-between items-center mb-2 px-4">
@@ -781,7 +864,7 @@ const Tools = () => {
 
                   {/* Incoming Requests */}
                   <TouchableOpacity
-                    className={`flex-1 p-3 rounded-xl border-2 ${
+                    className={`flex-1 p-3 rounded-xl border-2 relative ${
                       activeTab === "incoming"
                         ? "border-orange-400 bg-orange-50"
                         : "border-gray-100 bg-gray-50"
@@ -797,6 +880,22 @@ const Tools = () => {
                             : "bg-orange-50"
                         }`}
                       >
+                        {/* Add notification dot here */}
+                        {myListings.some(
+                          (item) => item.newRequestCount > 0
+                        ) && (
+                          <View
+                            className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 z-10"
+                            style={{
+                              elevation: 2,
+                              shadowColor: "#000",
+                              shadowOffset: { width: 0, height: 1 },
+                              shadowOpacity: 0.2,
+                              shadowRadius: 1,
+                            }}
+                          />
+                        )}
+
                         <Image
                           source={icons.envelope}
                           className="w-6 h-6"
@@ -924,6 +1023,7 @@ const Tools = () => {
                       <TouchableOpacity
                         onPress={handleAddListing}
                         className="bg-primary px-3 py-1.5 rounded-lg flex-row items-center"
+                        activeOpacity={0.8}
                       >
                         <Image
                           source={icons.plus}
@@ -957,7 +1057,7 @@ const Tools = () => {
                       </TouchableOpacity>
                     </View>
                   ) : (
-                    <View className="gap-4">
+                    <View>
                       {myListings.map((item) => (
                         <ListingCard
                           key={item.id}
@@ -1076,6 +1176,7 @@ const Tools = () => {
                             onPress={(id) =>
                               router.push(`/request-detail/${id}`)
                             }
+                            onCancel={handleCancelRequest}
                           />
                         ))}
                     </View>

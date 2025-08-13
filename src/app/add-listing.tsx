@@ -828,366 +828,366 @@ const AddListing = () => {
     };
 
     return (
-      <Modal visible={visible} animationType="none">
-        <SafeAreaView className="flex-1 bg-white">
-          <ScrollView className="p-5">
-            <View className="flex-row justify-between items-center">
-              <Text className="text-xl font-psemibold ">Create Listing</Text>
-              <TouchableOpacity onPress={onClose}>
-                <Image
-                  source={icons.close}
-                  className="w-6 h-6"
-                  resizeMode="contain"
-                />
-              </TouchableOpacity>
+      <Modal visible={visible} animationType="fade">
+        <SafeAreaView className="flex-1">
+          <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
+            <View className="w-7" />
+            <Text className="text-xl font-psemibold ">Create Listing</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Image source={icons.close} className="w-7 h-7" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView className="p-4">
+            <View className="w-full mb-4 bg-blue-400/10 p-2 rounded-xl border border-blue-300">
+              <Text className="text-blue-500 text-xs font-pmedium">
+                Note: Please ensure all rental item information is accurate and
+                complete. Reliable data helps renters make informed decisions
+                and reduces booking disputes. Double-check item descriptions,
+                condition, availability dates, and pricing before listing.
+              </Text>
             </View>
-
-            <ScrollView>
-              <View className="w-full mb-4 bg-blue-400/10 p-4 rounded-xl border border-blue-300">
-                <Text className="text-blue-500 text-sm font-pmedium">
-                  Note: Please ensure all rental item information is accurate
-                  and complete. Reliable data helps renters make informed
-                  decisions and reduces booking disputes. Double-check item
-                  descriptions, condition, availability dates, and pricing
-                  before listing.
+            <View className="space-y-4">
+              {/* Image Section */}
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Images ({images.length}/5)
                 </Text>
-              </View>
-              <View className="space-y-4">
-                {/* Image Section */}
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Images ({images.length}/5)
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    className={`border rounded-xl  mb-1 ${
-                      errors.images ? "border-red-500" : "border-transparent"
-                    }`}
-                  >
-                    {images.map((uri, index) => (
-                      <View
-                        key={index}
-                        className="relative w-24 h-24 rounded-xl overflow-hidden mr-2"
-                      >
-                        <Image
-                          source={{ uri }}
-                          className="w-full h-full"
-                          resizeMode="cover"
-                        />
-                        <TouchableOpacity
-                          onPress={() => removeImage(index)}
-                          className="absolute top-1 right-1 bg-red-500 rounded-full p-1"
-                        >
-                          <Image
-                            source={icons.close}
-                            className="w-4 h-4"
-                            tintColor="white"
-                            resizeMode="contain"
-                          />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                    {images.length < 5 && (
-                      <TouchableOpacity
-                        onPress={openCamera}
-                        className="w-24 h-24 rounded-xl bg-gray-100 border-gray-200 border items-center justify-center mr-2"
-                      >
-                        <Image
-                          source={icons.camera}
-                          className="w-5 h-5 mb-2"
-                          tintColor="#666"
-                        />
-                        <Text className="text-secondary-400 font-pregular text-xs text-center">
-                          Take Photo
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </ScrollView>
-                  {errors.images ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.images}
-                    </Text>
-                  ) : (
-                    <Text className="text-secondary-300 font-pregular text-xs mt-2">
-                      Take up to 5 photos. First photo will be the cover image.
-                    </Text>
-                  )}
-                </View>
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Item Name
-                  </Text>
-                  <TextInput
-                    value={formData.title}
-                    onChangeText={(text) => {
-                      setFormData((prev) => ({ ...prev, title: text }));
-                      setErrors((prev) => ({
-                        ...prev,
-                        title: validateField("title", text),
-                      }));
-                    }}
-                    className={`font-pregular bg-gray-100 border rounded-xl p-3 ${
-                      errors.title ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter item name"
-                  />
-                  {errors.title ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.title}
-                    </Text>
-                  ) : null}
-                </View>
-                {/* Category Selection */}
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Category
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowCategoryDropdown(true)}
-                    className={`font-pregular bg-gray-100 border rounded-xl p-3 flex-row justify-between items-center ${
-                      errors.category ? "border-red-500" : "border-gray-200"
-                    }`}
-                  >
-                    <Text
-                      className={
-                        formData.category
-                          ? "text-black font-pregular"
-                          : "text-gray-600 font-pregular"
-                      }
-                    >
-                      {formData.category || "Select category"}
-                    </Text>
-                    <Image
-                      source={icons.arrowDown}
-                      className="w-4 h-4"
-                      tintColor="#666"
-                    />
-                  </TouchableOpacity>
-                  {errors.category ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.category}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Category Dropdown Modal */}
-                <Modal
-                  visible={showCategoryDropdown}
-                  transparent
-                  animationType="slide"
-                  onRequestClose={() => setShowCategoryDropdown(false)}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  className=" rounded-xl  mb-1 "
                 >
-                  <TouchableOpacity
-                    className="flex-1 bg-black/50"
-                    activeOpacity={1}
-                    onPress={() => setShowCategoryDropdown(false)}
-                  >
-                    <View className="bg-white rounded-t-3xl mt-auto">
-                      <View className="p-4 border-b border-gray-200">
-                        <Text className="text-lg font-psemibold text-center">
-                          Select Category
-                        </Text>
-                      </View>
-                      <ScrollView className="max-h-[50vh]">
-                        {TOOL_CATEGORIES.map((category) => (
-                          <TouchableOpacity
-                            key={category}
-                            className="p-4 border-b border-gray-100"
-                            onPress={() => {
-                              setFormData((prev) => ({ ...prev, category }));
-                              setShowCategoryDropdown(false);
-                            }}
-                          >
-                            <Text
-                              className={`text-base ${
-                                formData.category === category
-                                  ? "text-primary font-psemibold"
-                                  : "text-secondary-400 font-pregular"
-                              }`}
-                            >
-                              {category}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  </TouchableOpacity>
-                </Modal>
-
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Rate Per Day (₱)
-                  </Text>
-                  <TextInput
-                    value={formData.price}
-                    onChangeText={(text) => {
-                      setFormData((prev) => ({ ...prev, price: text }));
-                      setErrors((prev) => ({
-                        ...prev,
-                        price: validateField("price", text),
-                      }));
-                    }}
-                    className={`font-pregular bg-gray-100 border rounded-xl p-3 ${
-                      errors.price ? "border-red-500" : "border-gray-200"
-                    }`}
-                    keyboardType="numeric"
-                    placeholder="Enter price"
-                  />
-                  {errors.price ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.price}
-                    </Text>
-                  ) : null}
-                </View>
-
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Minimum Rental Duration
-                  </Text>
-                  <TextInput
-                    value={formData.minimumDays}
-                    onChangeText={(text) =>
-                      setFormData((prev) => ({ ...prev, minimumDays: text }))
-                    }
-                    className={`font-pregular bg-gray-100 border rounded-xl p-3 ${
-                      errors.minimumDays ? "border-red-500" : "border-gray-200"
-                    }`}
-                    keyboardType="numeric"
-                    placeholder="Enter minimum rental duration in days"
-                  />
-                  {errors.minimumDays ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.minimumDays}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Description and Price Section */}
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Description
-                  </Text>
-                  <Text className="text-secondary-300 font-pregular text-xs mb-2">
-                    Be specific and include important details renters should
-                    know.
-                  </Text>
-                  <TextInput
-                    value={formData.description}
-                    onChangeText={(text) =>
-                      setFormData((prev) => ({ ...prev, description: text }))
-                    }
-                    className={`font-pregular bg-gray-100 border h-[100] rounded-xl p-3 ${
-                      errors.description ? "border-red-500" : "border-gray-200"
-                    }`}
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                    placeholder="Include general details, purpose, brand/model, inclusions/exclusion, and any special features."
-                  />
-                  {errors.description ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.description}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Condition Section */}
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Item Condition
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    className={`flex-row gap-x-2 ${
-                      errors.condition ? "border border-red-500 rounded-xl" : ""
-                    }`}
-                  >
-                    {ITEM_CONDITIONS.map((condition, index) => (
+                  {images.map((uri, index) => (
+                    <View
+                      key={index}
+                      className={`relative w-24 h-24 rounded-xl overflow-hidden mr-2`}
+                    >
+                      <Image
+                        source={{ uri }}
+                        className="w-full h-full"
+                        resizeMode="cover"
+                      />
                       <TouchableOpacity
-                        key={index}
-                        onPress={() => {
-                          const newCondition = condition.value;
-                          setFormData((prev) => ({
-                            ...prev,
-                            condition: newCondition,
-                          }));
-                          setErrors((prev) => ({
-                            ...prev,
-                            condition: validateField("condition", newCondition),
-                          }));
-                        }}
-                        className={`mr-2 px-4 py-2 rounded-xl border ${
-                          formData.condition === condition.value
-                            ? "bg-primary border-primary"
-                            : "bg-gray-100 border-gray-200"
-                        }`}
+                        onPress={() => removeImage(index)}
+                        className="absolute top-1 right-1 bg-red-500 rounded-full p-1"
                       >
-                        <Text
-                          className={`font-pmedium ${
-                            formData.condition === condition.value
-                              ? "text-white"
-                              : "text-secondary-400"
+                        <Image
+                          source={icons.close}
+                          className="w-4 h-4"
+                          tintColor="white"
+                          resizeMode="contain"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {images.length < 5 && (
+                    <TouchableOpacity
+                      onPress={openCamera}
+                      className={`w-24 h-24 rounded-xl bg-gray-100 border-gray-200 border items-center justify-center mr-2 ${
+                        errors.images ? "border-red-500" : "border-gray-200 "
+                      }`}
+                    >
+                      <Image
+                        source={icons.camera}
+                        className="w-5 h-5 mb-2"
+                        tintColor="#666"
+                      />
+                      <Text className="text-secondary-400 font-pregular text-xs text-center">
+                        Take Photo
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+                {errors.images ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.images}
+                  </Text>
+                ) : (
+                  <Text className="text-secondary-300 font-pregular text-xs mt-2">
+                    Take up to 5 photos. First photo will be the cover image.
+                  </Text>
+                )}
+              </View>
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Item Name
+                </Text>
+                <TextInput
+                  value={formData.title}
+                  onChangeText={(text) => {
+                    setFormData((prev) => ({ ...prev, title: text }));
+                    setErrors((prev) => ({
+                      ...prev,
+                      title: validateField("title", text),
+                    }));
+                  }}
+                  className={`font-pregular bg-gray-100 border rounded-xl p-3 ${
+                    errors.title ? "border-red-500" : "border-gray-200"
+                  }`}
+                  placeholder="Enter item name"
+                />
+                {errors.title ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.title}
+                  </Text>
+                ) : null}
+              </View>
+              {/* Category Selection */}
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Category
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowCategoryDropdown(true)}
+                  className={`font-pregular bg-gray-100 border rounded-xl p-3 flex-row justify-between items-center ${
+                    errors.category ? "border-red-500" : "border-gray-200"
+                  }`}
+                >
+                  <Text
+                    className={
+                      formData.category
+                        ? "text-black font-pregular"
+                        : "text-gray-600 font-pregular"
+                    }
+                  >
+                    {formData.category || "Select category"}
+                  </Text>
+                  <Image
+                    source={icons.arrowDown}
+                    className="w-4 h-4"
+                    tintColor="#666"
+                  />
+                </TouchableOpacity>
+                {errors.category ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.category}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Category Dropdown Modal */}
+              <Modal
+                visible={showCategoryDropdown}
+                animationType="slide"
+                transparent={true}
+              >
+                <View className="flex-1 bg-black/50 justify-end">
+                  <View className="bg-white rounded-t-3xl p-5">
+                    <View className="flex-row justify-between items-center mb-4">
+                      <Text className="text-xl font-psemibold">
+                        Select Category
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setShowCategoryDropdown(false)}
+                      >
+                        <Image source={icons.close} className="w-6 h-6" />
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView className="max-h-96">
+                      {TOOL_CATEGORIES.map((category) => (
+                        <TouchableOpacity
+                          key={category}
+                          onPress={() => {
+                            // Update formData with new category
+                            setFormData((prev) => ({ ...prev, category }));
+                            // Clear the category error
+                            setErrors((prev) => ({
+                              ...prev,
+                              category: "", // Clear the error when a category is selected
+                            }));
+                            setShowCategoryDropdown(false);
+                          }}
+                          className={`py-3 border-b border-gray-100 flex-row justify-between items-center ${
+                            formData.category === category ? "bg-primary/5" : ""
                           }`}
                         >
-                          {condition.value}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-
-                  {errors.condition ? (
-                    <Text className="text-red-500 text-xs mt-1">
-                      {errors.condition}
-                    </Text>
-                  ) : formData.condition ? (
-                    <Text className="text-secondary-300 font-pregular text-sm mb-2">
-                      {
-                        ITEM_CONDITIONS.find(
-                          (c) => c.value === formData.condition
-                        )?.details
-                      }
-                    </Text>
-                  ) : (
-                    <Text className="text-secondary-300 font-pregular text-xs mt-2">
-                      Please select the condition of your item
-                    </Text>
-                  )}
-                </View>
-
-                {/* Location Section */}
-                <View>
-                  <Text className="text-secondary-400 font-pmedium mt-2">
-                    Pickup Location
-                  </Text>
-                  <View className="bg-gray-100 border-gray-200 border rounded-xl p-3">
-                    <Text className="font-pregular text-black">
-                      {formData.location || "Loading address..."}
-                    </Text>
+                          <Text
+                            className={`text-base ${
+                              formData.category === category
+                                ? "text-primary font-psemibold"
+                                : ""
+                            }`}
+                          >
+                            {category}
+                          </Text>
+                          {formData.category === category && (
+                            <Image
+                              source={icons.singleCheck}
+                              className="w-5 h-5 mr-5"
+                              tintColor="#5C6EF6"
+                            />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   </View>
-                  <Text className="text-secondary-300 font-pregular text-xs mt-2 italic">
-                    This is your default pickup location. You can change this in
-                    your profile settings.
+                </View>
+              </Modal>
+
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Rate Per Day (₱)
+                </Text>
+                <TextInput
+                  value={formData.price}
+                  onChangeText={(text) => {
+                    setFormData((prev) => ({ ...prev, price: text }));
+                    setErrors((prev) => ({
+                      ...prev,
+                      price: validateField("price", text),
+                    }));
+                  }}
+                  className={`font-pregular bg-gray-100 border rounded-xl p-3 ${
+                    errors.price ? "border-red-500" : "border-gray-200"
+                  }`}
+                  keyboardType="numeric"
+                  placeholder="Enter price"
+                />
+                {errors.price ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.price}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Minimum Rental Duration
+                </Text>
+                <TextInput
+                  value={formData.minimumDays}
+                  onChangeText={(text) =>
+                    setFormData((prev) => ({ ...prev, minimumDays: text }))
+                  }
+                  className={`font-pregular bg-gray-100 border rounded-xl p-3 ${
+                    errors.minimumDays ? "border-red-500" : "border-gray-200"
+                  }`}
+                  keyboardType="numeric"
+                  placeholder="Enter minimum rental duration in days"
+                />
+                {errors.minimumDays ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.minimumDays}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Description and Price Section */}
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Description
+                </Text>
+                <Text className="text-secondary-300 font-pregular text-xs mb-2">
+                  Be specific and include important details renters should know.
+                </Text>
+                <TextInput
+                  value={formData.description}
+                  onChangeText={(text) =>
+                    setFormData((prev) => ({ ...prev, description: text }))
+                  }
+                  className={`font-pregular bg-gray-100 border h-[100] rounded-xl p-3 ${
+                    errors.description ? "border-red-500" : "border-gray-200"
+                  }`}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  placeholder="Include general details, purpose, brand/model, inclusions/exclusion, and any special features."
+                />
+                {errors.description ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.description}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Condition Section */}
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Item Condition
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  className="flex-row gap-x-2"
+                >
+                  {ITEM_CONDITIONS.map((condition, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => {
+                        const newCondition = condition.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          condition: newCondition,
+                        }));
+                        setErrors((prev) => ({
+                          ...prev,
+                          condition: validateField("condition", newCondition),
+                        }));
+                      }}
+                      className={`mr-2 px-4 py-2 rounded-xl border ${
+                        errors.condition
+                          ? " border-red-500"
+                          : formData.condition === condition.value
+                          ? "bg-primary border-primary"
+                          : "bg-gray-100 border-gray-200"
+                      }`}
+                    >
+                      <Text
+                        className={`font-pmedium ${
+                          formData.condition === condition.value
+                            ? "text-white"
+                            : "text-secondary-400"
+                        }`}
+                      >
+                        {condition.value}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {errors.condition ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.condition}
+                  </Text>
+                ) : formData.condition ? (
+                  <Text className="text-secondary-300 font-pregular text-sm mb-2">
+                    {
+                      ITEM_CONDITIONS.find(
+                        (c) => c.value === formData.condition
+                      )?.details
+                    }
+                  </Text>
+                ) : (
+                  <Text className="text-secondary-300 font-pregular text-xs mt-2">
+                    Please select the condition of your item
+                  </Text>
+                )}
+              </View>
+
+              {/* Location Section */}
+              <View>
+                <Text className="text-secondary-400 font-pmedium mt-2">
+                  Pickup Location
+                </Text>
+                <View className="bg-gray-100 border-gray-200 border rounded-xl p-3">
+                  <Text className="font-pregular text-gray-500">
+                    {formData.location || "Loading address..."}
                   </Text>
                 </View>
+                <Text className="text-secondary-300 font-pregular text-xs mt-2 italic">
+                  This is your default pickup location. You can change this in
+                  your profile settings.
+                </Text>
               </View>
-            </ScrollView>
-
-            <View className="my-4">
-              <LargeButton
-                title={isSubmitting ? "Creating Listing..." : "Create Listing"}
-                handlePress={handleSubmit}
-                disabled={isSubmitting}
-                containerStyles={`${isSubmitting ? "bg-gray-400" : ""}`}
-              />
-              {isSubmitting && (
-                <View className="absolute right-0 left-0 top-0 bottom-0 items-center justify-center">
-                  <ActivityIndicator color="#ffffff" />
-                </View>
-              )}
-              <View className="h-[20]"></View>
             </View>
+
+            <LargeButton
+              title={isSubmitting ? "Creating Listing..." : "Create Listing"}
+              handlePress={handleSubmit}
+              disabled={isSubmitting}
+              containerStyles={` ${isSubmitting ? "bg-gray-400" : ""}`}
+            />
+            <View className="h-20" />
           </ScrollView>
         </SafeAreaView>
 
@@ -1210,14 +1210,12 @@ const AddListing = () => {
             <TouchableOpacity onPress={() => router.back()}>
               <Image
                 source={icons.leftArrow}
-                className="w-6 h-6"
-                resizeMode="contain"
+                className="w-8 h-8"
+                tintColor="#6B7280"
               />
             </TouchableOpacity>
-            <Text className="text-secondary-400 text-xl font-psemibold">
-              List Item
-            </Text>
-            <View className="w-6" />
+            <Text className="text-xl font-pbold text-gray-800">List Item</Text>
+            <View className="w-8" />
           </View>
 
           <View className="w-full mb-4 bg-orange-400/10 p-4 rounded-xl border border-orange-300">

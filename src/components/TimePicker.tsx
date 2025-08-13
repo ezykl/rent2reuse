@@ -87,7 +87,7 @@ const TimePicker = ({
 
     // Working hours validation (8 AM - 6 PM)
     const workingHoursStart = timeToMinutes({
-      hours: 8,
+      hours: 6,
       minutes: 0,
       period: "AM",
     });
@@ -98,7 +98,7 @@ const TimePicker = ({
     });
 
     if (currentTimeInMinutes < workingHoursStart) {
-      errors.push("Time must be after 8:00 AM");
+      errors.push("Time must be after 6:00 AM");
     }
 
     if (currentTimeInMinutes > workingHoursEnd) {
@@ -181,11 +181,6 @@ const TimePicker = ({
       <Text className="text-4xl font-bold text-center text-gray-800 my-8">
         {formatTime(selectedTime)}
       </Text>
-
-      {/* Error Message */}
-      {!isValid && (
-        <Text className="text-red-500 text-center mb-4">{validationError}</Text>
-      )}
 
       {/* Time Picker Controls */}
       <View className="flex-row justify-between gap-4">
@@ -287,10 +282,14 @@ const TimePicker = ({
           </View>
         </View>
       </View>
-
+      {/* Error Message */}
+      {!isValid && (
+        <Text className="text-red-500 text-center mt-4">{validationError}</Text>
+      )}
       {/* Working Hours Info */}
-      <Text className="text-sm text-gray-500 text-center mt-6">
-        Working hours: 8:00 AM - 6:00 PM
+      <Text className="text-sm text-gray-500 text-center mt-4">
+        Suggested meet-up time: 6:00 AM - 6:00 PM.{"\n"}We encourage scheduling
+        during these hours.
       </Text>
 
       {/* Done Button - To confirm the time selection */}

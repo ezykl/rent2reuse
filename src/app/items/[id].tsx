@@ -28,6 +28,7 @@ import {
   query,
   where,
   getDocs,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -57,8 +58,10 @@ import {
 } from "react-native-gesture-handler";
 import TimePicker from "@/components/TimePicker";
 import { useTimeConverter } from "@/hooks/useTimeConverter";
+import { sendRentRequestNotifications } from "@/utils/notificationHelper";
 
-// Add this type for rent requests
+type RangeChange = { startDate?: DateType; endDate?: DateType };
+
 interface RentRequest {
   itemId: string;
   itemName: string;
@@ -199,6 +202,7 @@ export default function ItemDetails() {
           } as Item;
 
           setItem(completeItemData);
+          console.log("Fetched item:", completeItemData);
 
           // Fetch owner rating
           if (completeItemData.owner?.id) {
@@ -347,19 +351,26 @@ export default function ItemDetails() {
         Alert.alert("Error", "User not found. Please login again.");
         return;
       }
-      const limitCheck = await checkAndUpdateLimits(user.uid, "rent");
-      if (!limitCheck.success) {
-        Alert.alert("Plan Limit", limitCheck.message);
-        return;
-      }
 
-      // Format dates as "Month DD, YYYY"
-      const formattedStartDate = dayjs(formData.startDate).format(
-        "MMMM DD, YYYY"
-      );
-      const formattedEndDate = dayjs(formData.endDate).format("MMMM DD, YYYY");
+      // Convert pickup time to hours and minutes
+      const [time, modifier] = formData.selectedTime.split(" ");
+      let [hours, minutes] = time.split(":").map(Number);
+      if (modifier === "PM" && hours < 12) hours += 12;
+      if (modifier === "AM" && hours === 12) hours = 0;
 
-      const pickupTimeInMinutes = timeToMinutes(formData.selectedTime);
+      // Create start and end dates with pickup time
+      const startDateTime = dayjs(formData.startDate)
+        .hour(hours)
+        .minute(minutes)
+        .second(0);
+
+      const endDateTime = dayjs(formData.endDate)
+        .hour(hours)
+        .minute(minutes)
+        .second(0);
+
+      // Calculate days difference including both start and end dates
+      const daysDifference = endDateTime.diff(startDateTime, "day");
 
       // Create rent request with complete data
       const requesterFullName = [
@@ -379,19 +390,25 @@ export default function ItemDetails() {
         ownerId: item?.owner?.id ?? "",
         ownerName: item?.owner?.fullname ?? "",
         status: "pending",
-        startDate: formattedStartDate,
-        endDate: formattedEndDate,
-        pickupTime: pickupTimeInMinutes,
+        startDate: Timestamp.fromDate(startDateTime.toDate()),
+        endDate: Timestamp.fromDate(endDateTime.toDate()),
+        pickupTime: timeToMinutes(formData.selectedTime),
         message: formData.message,
-        totalPrice:
-          Math.max(
-            1,
-            Math.ceil(
-              (formData.endDate.getTime() - formData.startDate.getTime()) /
-                (1000 * 60 * 60 * 24)
-            )
-          ) * (item?.itemPrice ?? 0),
+        totalPrice: daysDifference * (item?.itemPrice ?? 0),
+        rentalDays: daysDifference,
         createdAt: serverTimestamp(),
+      });
+
+      await checkAndUpdateLimits(user?.uid, "rent");
+
+      // Send notifications
+      await sendRentRequestNotifications(item?.owner?.id!, {
+        itemId: item?.id!,
+        itemName: item?.itemName!,
+        requestId: rentRequestRef.id,
+        requesterName: requesterFullName,
+        startDate: Timestamp.fromDate(startDateTime.toDate()),
+        endDate: Timestamp.fromDate(endDateTime.toDate()),
       });
 
       Toast.show({
@@ -493,8 +510,8 @@ export default function ItemDetails() {
                 />
 
                 {/* Move price and title to bottom with gradient */}
-                <View className="absolute bottom-0 left-6 right-6">
-                  {/* Title and Price Container */}
+                <View className="absolute bottom-0 left-6 right-6 flex-row justify-between items-end">
+                  {/* Title and Price Container (Left) */}
                   <View className="rounded-xl pb-2">
                     <Text
                       className="text-white text-2xl font-bold mb-1"
@@ -508,6 +525,17 @@ export default function ItemDetails() {
                       </Text>
                       <Text className="text-white text-base ml-1">/day</Text>
                     </View>
+                  </View>
+                  {/* Listed Date & Time (Right) */}
+                  <View className="rounded-xl pb-2 items-end">
+                    <Text className="text-xs text-white/80 mb-1">Listed</Text>
+                    <Text className="text-white text-sm font-pmedium text-right">
+                      {item?.createdAt
+                        ? dayjs(
+                            item.createdAt.toDate?.() ?? item.createdAt
+                          ).format("MMM D, YYYY\n h:mm A")
+                        : ""}
+                    </Text>
                   </View>
                 </View>
 
@@ -538,14 +566,11 @@ export default function ItemDetails() {
               <View className="flex-1 items-center justify-center">
                 <View className="w-24 h-24 bg-gray-200 rounded-2xl items-center justify-center mb-3">
                   <Image
-                    source={images.thumbnail}
-                    className="w-40 h-40 opacity-50"
+                    source={images.logoSmall}
+                    className="w-40 h-40 opacity-10"
                     resizeMode="contain"
                   />
                 </View>
-                <Text className="text-gray-400 text-base">
-                  No images available
-                </Text>
               </View>
             )}
           </View>
@@ -601,8 +626,11 @@ export default function ItemDetails() {
           </TouchableOpacity>
 
           {/* Condition & Location Quick Info */}
-          <View className="flex-row mb-6">
-            <View className="flex-1 bg-green-50 p-3 rounded-xl mr-2">
+          <View className="flex-row mb-2">
+            <View
+              style={{ flex: 1 }}
+              className="bg-green-50 p-3 rounded-xl mr-1"
+            >
               <Text className="text-green-700 text-xs font-medium mb-1">
                 CONDITION
               </Text>
@@ -610,7 +638,10 @@ export default function ItemDetails() {
                 {item?.itemCondition ?? ""}
               </Text>
             </View>
-            <View className="flex-1 bg-blue-50 p-3 rounded-xl ml-2">
+            <View
+              style={{ flex: 3 }}
+              className="bg-blue-50 p-3 rounded-xl ml-2"
+            >
               <Text className="text-blue-700 text-xs font-medium mb-1">
                 LOCATION
               </Text>
@@ -621,8 +652,8 @@ export default function ItemDetails() {
           </View>
 
           {/* Description Section */}
-          <View className="mb-8">
-            <Text className="text-lg font-semibold text-gray-900 mb-3">
+          <View className="mb-3 px-4">
+            <Text className="text-lg font-semibold text-gray-900 mb-2">
               Description
             </Text>
             <Text className="text-gray-600 text-base leading-6">
@@ -644,7 +675,13 @@ export default function ItemDetails() {
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-gray-600">Minimum Rental</Text>
-                <Text className="font-semibold text-gray-900">1 day</Text>
+                <Text className="font-semibold text-gray-900">
+                  {" "}
+                  {item?.itemMinRentDuration}{" "}
+                  {item?.itemMinRentDuration && item.itemMinRentDuration > 1
+                    ? "days"
+                    : "day"}
+                </Text>
               </View>
               <View className="flex-row justify-between">
                 <Text className="text-gray-600">Availability</Text>
@@ -743,6 +780,7 @@ export default function ItemDetails() {
         itemName={item?.itemName ?? ""}
         itemPrice={item?.itemPrice ?? 0}
         itemImage={item?.images?.[0] ?? ""}
+        itemMinRentDuration={item?.itemMinRentDuration ?? 1}
       />
     </View>
   );
@@ -756,6 +794,7 @@ const RentRequestForm = ({
   itemName,
   itemPrice,
   itemImage,
+  itemMinRentDuration,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -768,19 +807,21 @@ const RentRequestForm = ({
   itemName: string;
   itemPrice: number;
   itemImage: string;
+  itemMinRentDuration: number;
 }) => {
   if (!visible) return null;
   const insets = useSafeAreaInsets();
   const defaultClassNames = useDefaultClassNames();
   // Get current date at start of day to ensure proper comparison
-  const today = dayjs().startOf("day");
+  const today = dayjs().add(1, "day").startOf("day");
+  const itemMinDuration: number = Number(itemMinRentDuration) || 1;
 
   const [selectedDates, setSelectedDates] = useState<{
     startDate: dayjs.Dayjs | null;
     endDate: dayjs.Dayjs | null;
   }>({
     startDate: today, // Initialize with today's date
-    endDate: today.add(1, "day"), // Initialize with tomorrow's date
+    endDate: today.add(itemMinDuration, "day"), // Initialize with tomorrow's date
   });
 
   // Simplified to single time for both start and end
@@ -801,13 +842,7 @@ const RentRequestForm = ({
     return Math.max(1, days) * itemPrice;
   };
 
-  const handleDateChange = ({
-    startDate,
-    endDate,
-  }: {
-    startDate?: Date;
-    endDate?: Date;
-  }) => {
+  const handleDateChange = ({ startDate, endDate }: RangeChange) => {
     if (startDate) {
       const start = dayjs(startDate).startOf("day");
       const end = endDate ? dayjs(endDate).startOf("day") : null;
@@ -939,24 +974,14 @@ const RentRequestForm = ({
                 minDate={minimumDate}
                 maxDate={dayjs().add(1, "year").toDate()}
                 disableYearPicker={true}
-                navigationPosition="around"
                 disableMonthPicker={true}
                 showOutsideDays={true}
-                displayFullDays={true}
-                firstDayOfWeek={0}
                 onChange={handleDateChange}
-                onMonthYearChange={handleMonthChange}
                 classNames={{
                   ...defaultClassNames,
-
                   weekday_label: "text-secondary-300 font-pregular",
                   year_selector_label: "font-pbold text-xl text-primary ",
                   month_selector_label: "font-pbold text-xl text-primary ",
-                  button_next:
-                    "bg-primary text-white rounded-lg h-[30px] w-[30px] justify-center items-center hover:bg-primary/80",
-                  button_prev:
-                    "bg-primary rounded-lg h-[30px] w-[30px] justify-center items-center hover:bg-primary/80",
-
                   day_label: "font-pregular text-lg",
                   month_label: "font-pregular text-lg",
                   year_label: "font-pregular text-lg",
@@ -972,25 +997,47 @@ const RentRequestForm = ({
                   day: `${defaultClassNames.day} hover:bg-amber-100`,
                   disabled: "opacity-50",
                 }}
-                timePicker={false}
-                headerButtonStyle={{
-                  backgroundColor: isCurrentMonth ? "#f3f4f6" : "#f3f4f6",
-                  opacity: isCurrentMonth ? 0.3 : 1,
-                }}
-                headerButtonsPosition="around"
               />
             </View>
 
             {/* Day Count Display */}
             {selectedDates.startDate && selectedDates.endDate && (
-              <View className="mt-4 bg-primary/10 p-4 rounded-xl">
-                <Text className="text-center text-primary font-psemibold">
+              <View
+                className={`mt-4 p-4 rounded-xl ${
+                  selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                  itemMinDuration
+                    ? "bg-red-100"
+                    : "bg-primary/10"
+                }`}
+              >
+                <Text
+                  className={`text-center font-psemibold ${
+                    selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                    itemMinDuration
+                      ? "text-red-600"
+                      : "text-primary"
+                  }`}
+                >
                   {dayCount} {dayCount === 1 ? "day" : "days"} selected
                 </Text>
-                <Text className="text-center text-gray-600 text-sm mt-1">
+                <Text
+                  className={`text-center text-sm mt-1 ${
+                    selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                    itemMinDuration
+                      ? "text-red-600"
+                      : "text-gray-600"
+                  }`}
+                >
                   {selectedDates.startDate.format("MMM DD")} -{" "}
                   {selectedDates.endDate.format("MMM DD, YYYY")}
                 </Text>
+                {selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                  itemMinDuration && (
+                  <Text className="text-center text-xs text-red-600 mt-2">
+                    Minimum rental period is {itemMinDuration}{" "}
+                    {itemMinDuration === 1 ? "day" : "days"}
+                  </Text>
+                )}
               </View>
             )}
           </ScrollView>
@@ -998,8 +1045,21 @@ const RentRequestForm = ({
           {/* Set Date Button */}
           <View className="p-4 border-t border-gray-100">
             <TouchableOpacity
+              disabled={
+                !selectedDates.startDate ||
+                !selectedDates.endDate ||
+                (selectedDates.startDate &&
+                  selectedDates.endDate &&
+                  selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                    itemMinDuration)
+              }
               className={`py-4 rounded-xl items-center ${
-                !selectedDates.startDate || !selectedDates.endDate
+                !selectedDates.startDate ||
+                !selectedDates.endDate ||
+                (selectedDates.startDate &&
+                  selectedDates.endDate &&
+                  selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                    itemMinDuration)
                   ? "bg-gray-300"
                   : "bg-primary"
               }`}
@@ -1008,9 +1068,19 @@ const RentRequestForm = ({
                   setShowDatePicker(false);
                 }
               }}
-              disabled={!selectedDates.startDate || !selectedDates.endDate}
             >
-              <Text className="text-white font-pbold text-base">
+              <Text
+                className={`font-pbold text-base ${
+                  !selectedDates.startDate ||
+                  !selectedDates.endDate ||
+                  (selectedDates.startDate &&
+                    selectedDates.endDate &&
+                    selectedDates.endDate.diff(selectedDates.startDate, "day") <
+                      itemMinDuration)
+                    ? "text-gray-400"
+                    : "text-white"
+                }`}
+              >
                 {!selectedDates.startDate || !selectedDates.endDate
                   ? "Select Dates"
                   : "Set Dates"}

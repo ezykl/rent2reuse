@@ -1265,12 +1265,12 @@ const Profile: React.FC = () => {
                       Close
                     </Text>
                   </TouchableOpacity>
-                  <Text className="text-xl font-pbold">
+                  <Text className="text-lg font-pbold">
                     {activeModal === "location" && "Set Your Location"}
                     {activeModal === "emailVerification" && "Verify Email"}
                     {activeModal === "idVerification" && "Verify ID"}
                     {activeModal === "birthday" && "Add Birth Date"}
-                    {activeModal === "contact" && "Add Contact Number"}
+                    {activeModal === "contact" && "Add Contact #"}
                     {activeModal === "profileImage" && "Add Profile Picture"}
                   </Text>
                   <View style={{ width: 50 }} />

@@ -15,6 +15,7 @@ import NotificationCard from "@/components/NotificationCard";
 import { useNotifications } from "@/context/NotificationProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FirestoreNotification } from "@/types/notification";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 const NotificationScreen = () => {
   const insets = useSafeAreaInsets();
@@ -66,23 +67,24 @@ const NotificationScreen = () => {
 
   return (
     <SafeAreaView
-      className="bg-white h-full px-4"
+      className="bg-white h-full "
       style={{ paddingTop: insets.top }}
     >
       {/* Header */}
-      <View className="flex-row items-center justify-between my-4">
-        <TouchableOpacity onPress={() => router.back()}>
+      <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="items-center justify-center"
+        >
           <Image
             source={icons.leftArrow}
-            className="h-[28px] w-[28px]"
-            resizeMode="contain"
+            className="w-8 h-8"
+            tintColor="#6B7280"
           />
         </TouchableOpacity>
-
-        <Text className="text-center font-psemibold text-2xl flex-1">
-          Notifications
-        </Text>
-
+        <View className="flex-1 items-center">
+          <Text className="text-xl font-pbold text-gray-800">Notification</Text>
+        </View>
         {notifications?.some((n) => !n.isRead) && (
           <TouchableOpacity onPress={markAllAsRead}>
             <Text className="text-primary font-pmedium">Mark all as read</Text>
@@ -90,20 +92,22 @@ const NotificationScreen = () => {
         )}
       </View>
 
-      <FlatList
-        data={notifications || []}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: insets.bottom }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={() => (
-          <View className="flex-1 items-center justify-center py-8">
-            <Text className="text-gray-500 font-pmedium">
-              No notifications yet
-            </Text>
-          </View>
-        )}
-      />
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <FlatList
+          data={notifications || []}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: insets.bottom }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={() => (
+            <View className="flex-1 items-center justify-center py-8 px-4">
+              <Text className="text-gray-500 font-pmedium">
+                No notifications yet
+              </Text>
+            </View>
+          )}
+        />
+      </GestureHandlerRootView>
 
       {/* Notification Detail Modal */}
       <Modal

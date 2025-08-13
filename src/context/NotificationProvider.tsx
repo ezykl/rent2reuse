@@ -13,6 +13,8 @@ import {
   where,
   orderBy,
   onSnapshot,
+  doc,
+  deleteDoc,
 } from "firebase/firestore";
 import { auth, db } from "@/lib/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
@@ -21,7 +23,7 @@ import { FirestoreNotification } from "@/types/notification";
 import {
   getUserNotifications,
   markNotificationAsRead,
-  deleteNotification, // Update this import
+  deleteNotification as deleteNotificationFromServer, // Update this import
 } from "@/lib/notifications";
 
 interface NotificationContextType {
@@ -107,11 +109,21 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Update other functions to use proper user reference
-  const deleteNotification = async (id: string) => {
+  const deleteNotification = async (notificationId: string) => {
     try {
       if (!user?.uid) return;
-      await deleteNotification(id);
-      setNotifications((prev) => prev.filter((notif) => notif.id !== id));
+
+      // Delete from Firestore
+      const notificationRef = doc(
+        db,
+        `users/${user.uid}/notifications/${notificationId}`
+      );
+      await deleteDoc(notificationRef);
+
+      // Update local state
+      setNotifications((prev) =>
+        prev.filter((notification) => notification.id !== notificationId)
+      );
     } catch (error) {
       console.error("Error deleting notification:", error);
     }

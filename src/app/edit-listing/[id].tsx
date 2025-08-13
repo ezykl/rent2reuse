@@ -512,7 +512,7 @@ const EditListing = () => {
       {/* Category Dropdown Modal */}
       <Modal
         visible={showCategoryDropdown}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
       >
         <View className="flex-1 bg-black/50 justify-end">

@@ -1,1 +1,1 @@
-export const API__URL = "http://192.168.100.12:5000/predict";
+export const API__URL = "http://192.168.100.6:5000/predict";

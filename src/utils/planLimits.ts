@@ -58,6 +58,7 @@ export const checkAndUpdateLimits = async (
         "currentPlan.listUsed": increment(1),
       });
     }
+
     if (action === "rent") {
       const remainingRentals = currentPlan.rentLimit - currentPlan.rentUsed;
 

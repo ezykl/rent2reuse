@@ -25,13 +25,7 @@ const ListingCard = ({ item, onEdit, onDelete, onPress }: ListingCardProps) => {
 
   return (
     <TouchableOpacity
-      className={`w-full bg-white rounded-xl mb-4 shadow-sm border-l-4 ${
-        isAvailable
-          ? "border-l-green-500"
-          : isUnavailable
-          ? "border-l-gray-400"
-          : "border-l-orange-500"
-      } `}
+      className="w-full bg-white rounded-xl border border-gray-200 mb-4 shadow-sm"
       onPress={() => onPress(item.id)}
       activeOpacity={0.7}
       style={{ height: 100 }} // Make height consistent
@@ -44,20 +38,12 @@ const ListingCard = ({ item, onEdit, onDelete, onPress }: ListingCardProps) => {
               ? { uri: item.images[0] }
               : require("../assets/thumbnail.png")
           }
-          style={{ width: 100 }}
-          className="h-full rounded-l-xl"
+          style={{ width: 90 }}
+          className="h-full rounded-l-xl overflow-hidden"
         />
 
-        {/* {item.requestCount > 0 && (
-          <View className="absolute top-2 right-2 bg-red-500 w-6 h-6 rounded-full items-center justify-center">
-            <Text className="text-white text-xs font-pbold">
-              {item.requestCount}
-            </Text>
-          </View>
-        )} */}
-
         {/* Content */}
-        <View className="flex-1 p-3 justify-between">
+        <View className="flex-1 p-2 justify-center">
           <View>
             <Text
               className="text-lg font-pbold text-gray-800"
@@ -106,13 +92,13 @@ const ListingCard = ({ item, onEdit, onDelete, onPress }: ListingCardProps) => {
         <View className="justify-center pr-4 gap-2">
           <TouchableOpacity
             onPress={() => onEdit(item.id)}
-            className="p-2 rounded-xl bg-blue-50"
+            className="p-3 rounded-xl bg-blue-50"
           >
             <Image source={icons.edit} className="w-5 h-5" tintColor="blue" />
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => onDelete(item.id)}
-            className="p-2 rounded-xl bg-red-50"
+            className="p-3 rounded-xl bg-red-50"
           >
             <Image
               source={icons.trash}

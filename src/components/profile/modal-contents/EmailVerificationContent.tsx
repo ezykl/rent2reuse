@@ -1,8 +1,15 @@
-import { View, Text, TouchableOpacity, Image } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  Alert,
+  Linking,
+} from "react-native";
 import { icons } from "@/constant";
 import { auth } from "@/lib/firebaseConfig";
-import { sendEmailVerification } from "firebase/auth";
-import { useState } from "react";
+import { sendEmailVerification, onAuthStateChanged } from "firebase/auth";
+import { useState, useEffect } from "react";
 
 interface EmailVerificationContentProps {
   onClose?: () => void;
@@ -15,20 +22,121 @@ export const EmailVerificationContent = ({
 }: EmailVerificationContentProps) => {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSendVerification = async () => {
-    if (!auth.currentUser) return;
+    const user = auth.currentUser;
+
+    if (!user) {
+      setError("No user found. Please log in again.");
+      return;
+    }
+
+    // Check if email is already verified
+    if (user.emailVerified) {
+      setError("Email is already verified!");
+      return;
+    }
 
     try {
       setSending(true);
-      await sendEmailVerification(auth.currentUser);
+      setError(null);
+
+      await sendEmailVerification(user);
+
       setSent(true);
+
+      // Optional: Call onVerified callback
       if (onVerified) onVerified();
-    } catch (error) {
+    } catch (error: any) {
+      // Handle specific Firebase errors
+      let errorMessage = "Failed to send verification email.";
+
+      switch (error.code) {
+        case "auth/too-many-requests":
+          errorMessage = "Too many requests. Please try again later.";
+          break;
+        case "auth/user-disabled":
+          errorMessage = "This account has been disabled.";
+          break;
+        case "auth/user-not-found":
+          errorMessage = "User not found. Please log in again.";
+          break;
+        case "auth/network-request-failed":
+          errorMessage =
+            "Network error. Please check your internet connection.";
+          break;
+        default:
+          errorMessage = error.message || "Failed to send verification email.";
+      }
+
+      setError(errorMessage);
       setSent(false);
     } finally {
       setSending(false);
     }
+  };
+
+  // Add useEffect to listen for email verification
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // Force refresh the user to get the latest emailVerified status
+        await user.reload();
+
+        if (user.emailVerified) {
+          // Email has been verified
+          if (onVerified) {
+            onVerified();
+          }
+          // Show success message before closing
+          Alert.alert(
+            "Email Verified",
+            "Your email has been successfully verified!",
+            [
+              {
+                text: "OK",
+                onPress: () => onClose && onClose(),
+              },
+            ]
+          );
+        }
+      }
+    });
+
+    // Cleanup subscription
+    return () => unsubscribe();
+  }, [onVerified, onClose]);
+
+  // Add a function to check verification status manually
+  const checkVerificationStatus = async () => {
+    const user = auth.currentUser;
+    if (user) {
+      await user.reload();
+      if (user.emailVerified) {
+        if (onVerified) {
+          onVerified();
+        }
+        onClose && onClose();
+      }
+    }
+  };
+
+  // Add a refresh button in the UI
+  const renderRefreshButton = () => {
+    if (sent) {
+      return (
+        <TouchableOpacity
+          onPress={checkVerificationStatus}
+          className="mt-3 py-3 px-4 bg-gray-100 rounded-xl"
+        >
+          <Text className="text-gray-600 font-pmedium text-center">
+            I've verified my email
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+    return null;
   };
 
   return (
@@ -43,24 +151,10 @@ export const EmailVerificationContent = ({
             Verify your email address to unlock all features
           </Text>
         </View>
-        {onClose && (
-          <TouchableOpacity
-            onPress={onClose}
-            className="p-2 -mr-2"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Image
-              source={icons.close}
-              className="w-6 h-6"
-              resizeMode="contain"
-              tintColor="#6B7280"
-            />
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* Content */}
-      <View className="bg-blue-50 rounded-xl p-4 mb-6">
+      <View className="bg-blue-50 rounded-xl p-4 mb-4">
         <View className="flex-row items-start">
           <Image
             source={icons.envelope}
@@ -79,31 +173,56 @@ export const EmailVerificationContent = ({
         </View>
       </View>
 
-      {/* Inline Alert */}
+      {/* Success Alert */}
       {sent && (
         <View className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <Text className="text-green-700 text-center">
-            Verification email sent! Please check your inbox.
+          <Text className="text-green-700 text-center font-pmedium">
+            Verification email sent successfully!
+          </Text>
+          <Text className="text-green-600 text-center text-sm mt-1">
+            Please check your inbox and spam folder.
           </Text>
         </View>
       )}
 
-      {/* Action Button */}
-      <TouchableOpacity
-        onPress={handleSendVerification}
-        disabled={sending || sent}
-        className={`bg-primary py-4 rounded-xl ${
-          sending || sent ? "opacity-70" : ""
-        }`}
-      >
-        <Text className="text-white font-pbold text-center">
-          {sending
-            ? "Sending..."
-            : sent
-            ? "Email Sent"
-            : "Send Verification Email"}
-        </Text>
-      </TouchableOpacity>
+      {/* Error Alert */}
+      {error && (
+        <View className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <Text className="text-red-600 text-center text-sm mt-1">{error}</Text>
+        </View>
+      )}
+
+      {/* Action Buttons */}
+      <View className="space-y-3">
+        {/* Send Email Button */}
+        <TouchableOpacity
+          onPress={handleSendVerification}
+          disabled={sending}
+          className={`bg-primary py-4 rounded-xl ${
+            sending ? "opacity-70" : ""
+          }`}
+        >
+          <Text className="text-white font-pbold text-center">
+            {sending
+              ? "Sending..."
+              : sent
+              ? "Resend Verification Email"
+              : "Send Verification Email"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Add the refresh button */}
+        {renderRefreshButton()}
+      </View>
+
+      {/* Additional Info */}
+      {sent && (
+        <View className="mt-4 p-3 bg-gray-50 rounded-lg">
+          <Text className="text-gray-600 text-sm text-center">
+            Didn't receive the email? Check your spam folder or try resending.
+          </Text>
+        </View>
+      )}
     </View>
   );
 };

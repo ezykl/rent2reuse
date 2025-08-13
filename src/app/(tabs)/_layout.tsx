@@ -13,6 +13,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
+import { useCameraPermissions } from "expo-image-picker";
 
 import { icons, images } from "../../constant";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
@@ -54,12 +55,33 @@ const TabsLayout = () => {
   const [isOptionsVisible, setIsOptionsVisible] = useState(false);
   const { user } = useAuth();
   const { completionPercentage } = useProfileCompletion();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  // Create a new function to check camera permissions
+  const checkCameraPermission = async () => {
+    if (!cameraPermission?.granted) {
+      const permission = await requestCameraPermission();
+      if (!permission.granted) {
+        Toast.show({
+          type: ALERT_TYPE.WARNING,
+          title: "Camera Permission Required",
+          textBody: "Please enable camera access to use this feature",
+        });
+        return false;
+      }
+    }
+    return true;
+  };
 
   // Update the handleListItem function
   const handleListItem = async () => {
     setIsOptionsVisible(false);
 
     try {
+      // Check camera permission first
+      const hasCameraPermission = await checkCameraPermission();
+      if (!hasCameraPermission) return;
+
       // 1. First check if user is logged in
       if (!user) {
         router.push("/sign-in");
@@ -80,37 +102,39 @@ const TabsLayout = () => {
       // 3. Check user's current plan and limits
       const userDoc = await getDoc(doc(db, "users", user.uid));
       const userData = userDoc.data();
+      {
+        if (!userData) {
+          Toast.show({
+            type: ALERT_TYPE.DANGER,
+            title: "Error",
+            textBody: "Unable to fetch user data",
+          });
+          return;
+        }
 
-      if (!userData) {
-        Toast.show({
-          type: ALERT_TYPE.DANGER,
-          title: "Error",
-          textBody: "Unable to fetch user data",
-        });
-        return;
+        // Check if user has any plan
+        if (!userData.currentPlan) {
+          router.push("/plans");
+          Toast.show({
+            type: ALERT_TYPE.INFO,
+            title: "Plan Required",
+            textBody: "Please select a plan to start listing items",
+          });
+          return;
+        }
       }
-
-      // Check if user has any plan
-      if (!userData.currentPlan) {
-        router.push("/plans");
-        Toast.show({
-          type: ALERT_TYPE.INFO,
-          title: "Plan Required",
-          textBody: "Please select a plan to start listing items",
-        });
-        return;
-      }
-
       // Now check the listing limits
-      const canList = await checkAndUpdateLimits(user.uid, "list");
-      if (!canList.success) {
-        Toast.show({
-          type: ALERT_TYPE.WARNING,
-          title: "Plan Limit Reached",
-          textBody: canList.message || "Upgrade your plan to list more items",
-        });
-        router.push("/plans");
-        return;
+      const { listLimit, listUsed } = userData.currentPlan || {};
+      if (typeof listLimit === "number" && typeof listUsed === "number") {
+        if (listUsed >= listLimit) {
+          Toast.show({
+            type: ALERT_TYPE.WARNING,
+            title: "Plan Limit Reached",
+            textBody: "Upgrade your plan to list more items",
+          });
+          router.push("/plans");
+          return;
+        }
       }
 
       // 4. If all checks pass, navigate to add listing
@@ -270,7 +294,11 @@ const TabsLayout = () => {
 
                         {/* Search Option */}
                         <TouchableOpacity
-                          onPress={() => {
+                          onPress={async () => {
+                            const hasCameraPermission =
+                              await checkCameraPermission();
+                            if (!hasCameraPermission) return;
+
                             setIsOptionsVisible(false);
                             router.push({
                               pathname: "/search",

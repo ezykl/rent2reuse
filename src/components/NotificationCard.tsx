@@ -18,7 +18,7 @@ const NotificationCard = ({
     switch (type) {
       case "RENT_REQUEST":
         return {
-          icon: icons.about,
+          icon: icons.envelope,
           bgColor: "bg-blue-100",
           iconColor: "#3B82F6",
         };
@@ -58,16 +58,32 @@ const NotificationCard = ({
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "";
 
-    const date = timestamp.toDate();
-    const now = new Date();
-    const diffHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
-    );
+    try {
+      const date = timestamp.toDate();
+      const now = new Date();
 
-    if (diffHours < 1) return "Just now";
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffHours < 48) return "Yesterday";
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      // Calculate time difference in milliseconds
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / (60 * 1000));
+      const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+      const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+
+      // More granular time display
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+
+      // For older dates, show the actual date
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: now.getFullYear() !== date.getFullYear() ? "numeric" : undefined,
+      });
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "Date error";
+    }
   };
 
   const config = getNotificationConfig(notification.type);
@@ -76,13 +92,14 @@ const NotificationCard = ({
     onPress(); // This will open the modal now instead of navigating
   };
 
-  const handleDelete = (e: any) => {
+  const handleDelete = async (e: any) => {
     e.stopPropagation(); // Prevent triggering the parent's onPress
+    // Call the provided onDelete function directly
     onDelete();
   };
 
   return (
-    <TouchableOpacity onPress={handlePress} className="w-full mb-2">
+    <TouchableOpacity onPress={handlePress} className="w-full px-4 ">
       <View
         className={`p-4 rounded-lg border ${
           !notification.isRead
@@ -132,18 +149,16 @@ const NotificationCard = ({
 
             {/* Delete Action */}
             <TouchableOpacity
-              className="self-end mt-2 px-3 py-1 bg-gray-100 rounded-full"
+              className="self-end mt-2 px-3  bg-red-100 rounded-full py-1"
               onPress={handleDelete}
             >
-              <Text className="text-xs text-gray-600 font-pmedium">
-                Dismiss
-              </Text>
+              <Text className="text-red-500">Delete</Text>
             </TouchableOpacity>
           </View>
 
           {/* Unread indicator */}
           {!notification.isRead && (
-            <View className="w-2 h-2 bg-blue-500 rounded-full" />
+            <View className="absolute -top-2 -right-2 w-2 h-2 bg-blue-500 rounded-full" />
           )}
         </View>
       </View>

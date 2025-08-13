@@ -13,15 +13,20 @@ interface SentRequestCardProps {
     itemImage?: string;
     ownerName: string;
     status: "pending" | "approved" | "rejected" | "completed";
-    startDate: string;
-    endDate: string;
+    startDate: any;
+    endDate: any;
     pickupTime: number;
     totalPrice: number;
   };
   onPress: (id: string) => void;
+  onCancel: (id: string) => void;
 }
 
-const SentRequestCard = ({ request, onPress }: SentRequestCardProps) => {
+const SentRequestCard = ({
+  request,
+  onPress,
+  onCancel,
+}: SentRequestCardProps) => {
   const { minutesToTime } = useTimeConverter();
 
   const getStatusColor = (status: string) => {
@@ -53,6 +58,23 @@ const SentRequestCard = ({ request, onPress }: SentRequestCardProps) => {
     }
   };
 
+  const convertFirestoreTimestamp = (timestamp: any) => {
+    if (!timestamp) return null;
+
+    // If it's a Firestore Timestamp object
+    if (timestamp.toDate) {
+      return timestamp.toDate();
+    }
+
+    // If it's already a Date object
+    if (timestamp instanceof Date) {
+      return timestamp;
+    }
+
+    // If it's a string or other format, try to parse it
+    return new Date(timestamp);
+  };
+
   const statusStyle = getStatusColor(request.status);
 
   // Convert the pickup time
@@ -75,8 +97,32 @@ const SentRequestCard = ({ request, onPress }: SentRequestCardProps) => {
                 className="w-4 h-4 mr-2"
                 tintColor="#6B7280"
               />
-              <Text className="text-sm text-gray-600">
+              {/* <Text className="text-sm text-gray-600">
                 {request.startDate} - {request.endDate}
+              </Text> */}
+              <Text className="font-psemibold text-gray-800">
+                {request.startDate && request.endDate
+                  ? (() => {
+                      const startDate = convertFirestoreTimestamp(
+                        request.startDate
+                      );
+                      const endDate = convertFirestoreTimestamp(
+                        request.endDate
+                      );
+
+                      if (
+                        startDate &&
+                        endDate &&
+                        dayjs(startDate).isValid() &&
+                        dayjs(endDate).isValid()
+                      ) {
+                        return `${dayjs(startDate).format("MMM DD")} - ${dayjs(
+                          endDate
+                        ).format("MMM DD, YYYY")}`;
+                      }
+                      return "Invalid dates";
+                    })()
+                  : "Select rental dates"}
               </Text>
             </View>
             <View className="flex-row items-center">
@@ -125,20 +171,26 @@ const SentRequestCard = ({ request, onPress }: SentRequestCardProps) => {
           </View>
         </View>
 
-        {/* Timeline for pending requests */}
+        {/* Timeline and Cancel Button for pending requests */}
         {request.status === "pending" && (
           <View className="mt-3 pt-3 border-t border-gray-100">
-            <View className="flex-row items-center">
-              <View className="w-6 h-6 rounded-full bg-primary items-center justify-center">
-                <Image
-                  source={icons.arrowDown}
-                  className="w-4 h-4"
-                  tintColor="white"
-                />
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center flex-1">
+                <Text className="ml-2 text-sm text-gray-600">
+                  Waiting for owner's approval
+                </Text>
               </View>
-              <Text className="ml-2 text-sm text-gray-600">
-                Waiting for owner's approval
-              </Text>
+              <TouchableOpacity
+                className="ml-4 px-3 py-1.5 bg-red-50 rounded-full"
+                onPress={(e) => {
+                  e.stopPropagation(); // Prevent triggering the card's onPress
+                  onCancel(request.id);
+                }}
+              >
+                <Text className="text-sm font-pmedium text-red-600">
+                  Cancel
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}

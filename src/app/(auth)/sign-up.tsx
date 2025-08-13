@@ -278,7 +278,6 @@ const SignUp = () => {
         lastname: form.lastname,
         email: form.email.trim(),
         role: "user",
-        plan: "",
         status: "Pending",
         createdAt: new Date().toISOString(),
       });

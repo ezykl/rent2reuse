@@ -28,12 +28,12 @@ const RequestedItemCard = ({
 }: RequestedItemCardProps) => {
   return (
     <TouchableOpacity
-      className="w-full bg-white rounded-xl mb-4 shadow-sm border-l-4 border-l-orange-500"
+      className="w-full bg-white rounded-xl border border-gray-200 mb-4 shadow-sm"
       onPress={() => onViewRequests(item.id)}
       activeOpacity={0.7}
       style={{ height: 100 }}
     >
-      <View className="flex-row h-full">
+      <View className="flex-row h-full justify-between items-center">
         {/* Image */}
         <Image
           source={
@@ -41,24 +41,20 @@ const RequestedItemCard = ({
               ? { uri: item.images[0] }
               : require("../assets/thumbnail.png")
           }
-          style={{ width: 100 }}
-          className="h-full rounded-l-xl"
+          style={{ width: 90 }}
+          className="h-full rounded-l-xl overflow-hidden"
         />
 
         {/* New Request Badge - only show for unread requests */}
         {item.newRequestCount > 0 && (
-          <View className="absolute top-2 right-2 bg-red-500 w-6 h-6 rounded-full items-center justify-center">
-            <Text className="text-white text-xs font-pbold">
-              {item.newRequestCount}
-            </Text>
-          </View>
+          <View className="absolute top-1 right-1 bg-red-500 w-3 h-3 rounded-full items-center justify-center"></View>
         )}
 
         {/* Content */}
-        <View className="flex-1 p-3 justify-between">
-          <View>
+        <View className="flex-1 p-2 justify-between">
+          <View className="gap-2">
             <Text
-              className="text-lg font-psemibold text-gray-800"
+              className="text-lg font-pbold text-gray-800"
               numberOfLines={1}
             >
               {item.itemName}
@@ -66,29 +62,24 @@ const RequestedItemCard = ({
             <Text className="text-base font-psemibold text-primary">
               ₱{item.itemPrice}/day
             </Text>
-          </View>
 
-          {/* Request Status - Show total requests */}
-          <View className="flex-row items-center justify-between">
-            <View className="bg-orange-100 px-3 py-1.5 rounded-full flex-row items-center">
-              <Image
-                source={icons.userRequest}
-                className="w-4 h-4 mr-2"
-                tintColor="#F97316"
-              />
-              <Text className="text-sm font-psemibold text-orange-700">
-                {item.requestCount}{" "}
-                {item.requestCount === 1 ? "request" : "requests"}
-                {item.newRequestCount > 0 && ` • ${item.newRequestCount} new`}
-              </Text>
+            {/* Request Status - Show total requests */}
+            <View className="flex-row items-center justify-between">
+              <View className="bg-orange-100 px-3 py-1.5 rounded-full flex-row items-center">
+                <Text className="text-xs font-psemibold text-orange-700">
+                  {item.requestCount}{" "}
+                  {item.requestCount === 1 ? "request" : "requests"}
+                  {item.newRequestCount > 0 && ` • ${item.newRequestCount} new`}
+                </Text>
+              </View>
             </View>
-            <Image
-              source={icons.arrowRight}
-              className="w-5 h-5"
-              tintColor="#6B7280"
-            />
           </View>
         </View>
+        <Image
+          source={icons.arrowRight}
+          className="w-5 h-5 px-3 mx-2"
+          tintColor="#6B7280"
+        />
       </View>
     </TouchableOpacity>
   );

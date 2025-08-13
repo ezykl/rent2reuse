@@ -62,7 +62,7 @@ function RootLayoutContent() {
         />
         <Stack.Screen
           name="announcement/[id]"
-          options={{ animation: "flip", headerShown: false }}
+          options={{ headerShown: false }}
         />
         <Stack.Screen name="create-ticket" options={{ headerShown: false }} />
         <Stack.Screen name="rating-screen" options={{ headerShown: false }} />
