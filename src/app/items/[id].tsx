@@ -381,6 +381,26 @@ export default function ItemDetails() {
         .filter((name) => name && name.trim().length > 0)
         .join(" ");
 
+      // Create chat document first
+      const chatRef = await addDoc(collection(db, "chat"), {
+        participants: [user.uid, item?.owner?.id],
+        itemId: item?.id,
+        requesterId: user.uid, // Add this explicitly
+        ownerId: item?.owner?.id, // Add this explicitly
+        itemDetails: {
+          name: item?.itemName,
+          image: item?.images?.[0],
+          price: item?.itemPrice,
+        },
+        createdAt: serverTimestamp(),
+        lastMessage: formData.message,
+        lastMessageTime: serverTimestamp(),
+        lastSender: user.uid,
+        status: "pending",
+        unreadCount: 1,
+      });
+
+      // Create rent request with chat reference
       const rentRequestRef = await addDoc(collection(db, "rentRequests"), {
         itemId: item?.id ?? "",
         itemName: item?.itemName ?? "",
@@ -397,6 +417,23 @@ export default function ItemDetails() {
         totalPrice: daysDifference * (item?.itemPrice ?? 0),
         rentalDays: daysDifference,
         createdAt: serverTimestamp(),
+        chatId: chatRef.id, // Store chat reference
+      });
+
+      // Add initial message to chat
+      await addDoc(collection(db, "chat", chatRef.id, "messages"), {
+        senderId: user.uid,
+        text: formData.message,
+        createdAt: serverTimestamp(),
+        type: "rentRequest",
+        rentRequestId: rentRequestRef.id,
+        read: false,
+        itemDetails: {
+          id: item?.id,
+          name: item?.itemName,
+          price: item?.itemPrice,
+          image: item?.images?.[0],
+        },
       });
 
       await checkAndUpdateLimits(user?.uid, "rent");

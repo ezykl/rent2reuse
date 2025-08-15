@@ -1020,18 +1020,30 @@ const Tools = () => {
                       My Listed Tools
                     </Text>
                     {myListings.length !== 0 && (
-                      <TouchableOpacity
-                        onPress={handleAddListing}
-                        className="bg-primary px-3 py-1.5 rounded-lg flex-row items-center"
-                        activeOpacity={0.8}
-                      >
-                        <Image
-                          source={icons.plus}
-                          className="w-6 h-6"
-                          tintColor="white"
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
+                      <View className="flex-row items-center gap-2 justify-center">
+                        <TouchableOpacity
+                          onPress={handleAddListing}
+                          className="bg-primary p-2  flex-row rounded-lg justify-center items-center gap-2"
+                          activeOpacity={0.8}
+                          style={{
+                            elevation: 3,
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 2,
+                          }}
+                        >
+                          <Image
+                            source={icons.plus}
+                            className="w-5 h-5"
+                            tintColor="white"
+                            resizeMode="cover"
+                          />
+                          <Text className="text-white font-psemibold">
+                            Add Listing
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     )}
                   </View>
 

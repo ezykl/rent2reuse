@@ -455,17 +455,19 @@ const SignUp = () => {
 
       {/* Terms and Conditions Checkbox */}
       <View className="flex-row items-center mt-4">
-        <Checkbox.Android
-          status={isChecked ? "checked" : "unchecked"}
-          onPress={() => setIsChecked(!isChecked)}
-          color="#4BD07F"
-          disabled={!isChecked} // Checkbox is disabled until terms are accepted
-        />
         <TouchableOpacity
           onPress={() => setIsModalVisible(true)}
-          className="flex-1"
+          className="flex-row justify-center items-center gap-2 "
+          disabled={isChecked}
         >
-          <Text className="text-base text-gray-700">
+          <Checkbox.Android
+            status={isChecked ? "checked" : "unchecked"}
+            onPress={() => setIsChecked(!isChecked)}
+            color="#4BD07F"
+            disabled={!isChecked} // Checkbox is disabled until terms are accepted
+          />
+
+          <Text className="text-base font-pregular text-gray-700">
             I've read and agreed to the{" "}
             <Text className="text-primary font-pmedium">
               Terms and Conditions
@@ -568,7 +570,9 @@ const SignUp = () => {
               <View className="flex-row justify-between mt-7">
                 {currentStep > 1 && (
                   <TouchableOpacity
-                    onPress={handleBack}
+                    onPress={() => {
+                      handleBack();
+                    }}
                     className="flex-1 mr-2 bg-gray-500 rounded-xl py-4 items-center justify-center"
                     activeOpacity={0.7}
                   >
@@ -579,7 +583,9 @@ const SignUp = () => {
                 {currentStep < totalSteps ? (
                   <LargeButton
                     title="Next"
-                    handlePress={handleNext}
+                    handlePress={() => {
+                      handleNext();
+                    }}
                     containerStyles={`flex-1 ${currentStep > 1 ? "ml-2" : ""} ${
                       !isStepValid() ? "opacity-50" : ""
                     }`}

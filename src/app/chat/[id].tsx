@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useLayoutEffect,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -37,6 +43,7 @@ import { db, auth } from "@/lib/firebaseConfig";
 import { icons } from "@/constant";
 import { format } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 
 const ChatHeader = ({
   recipientEmail,
@@ -159,25 +166,379 @@ const ActionMenu = ({
   );
 };
 
+// First, update the Message interface to match rentRequest data structure
+interface Message {
+  status: string;
+  id: string;
+  senderId: string;
+  text: string;
+  createdAt: any;
+  type?: "message" | "rentRequest" | "statusUpdate";
+  read: boolean;
+  readAt: any;
+  rentRequestId?: string;
+  rentRequestDetails?: {
+    itemId: string;
+    itemName: string;
+    itemImage: string;
+    totalPrice: number;
+    startDate: any;
+    endDate: any;
+    rentalDays: number;
+    ownerId: string;
+    ownerName: string;
+    requesterId: string;
+    requesterName: string;
+    pickupTime: number;
+    message: string;
+    status: string;
+  };
+}
+
+const RentRequestMessage = ({
+  item,
+  isOwner,
+  onAccept,
+  onDecline,
+  onCancel,
+}: {
+  item: Message;
+  isOwner: boolean;
+  onAccept?: () => void;
+  onDecline?: () => void;
+  onCancel?: () => void;
+}) => {
+  const [showDetails, setShowDetails] = useState(false);
+  const [rentRequestData, setRentRequestData] = useState<any>(null);
+  const [itemData, setItemData] = useState<any>(null);
+  const isSender = item.senderId === auth.currentUser?.uid;
+
+  // Fetch rentRequest and item data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch rent request data
+
+        if (item.rentRequestId && requestDataCache.has(item.rentRequestId)) {
+          const cachedData = requestDataCache.get(item.rentRequestId);
+          setRentRequestData(cachedData.requestData);
+          setItemData(cachedData.itemData);
+          return;
+        }
+        if (item.rentRequestId) {
+          const rentRequestRef = doc(db, "rentRequests", item.rentRequestId);
+          const rentRequestSnap = await getDoc(rentRequestRef);
+
+          if (rentRequestSnap.exists()) {
+            const requestData = rentRequestSnap.data();
+            setRentRequestData(requestData);
+
+            if (requestData.itemId) {
+              const itemRef = doc(db, "items", requestData.itemId);
+              const itemSnap = await getDoc(itemRef);
+
+              if (itemSnap.exists()) {
+                const itemData = itemSnap.data();
+                setItemData(itemData);
+
+                // Cache the data
+                requestDataCache.set(item.rentRequestId, {
+                  requestData,
+                  itemData,
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching request data:", error);
+      }
+    };
+
+    fetchData();
+  }, [item.rentRequestId]);
+
+  // Format date helper function
+  const formatDate = (date: any) => {
+    if (!date) return "";
+    return format(date.toDate(), "MMM d, yyyy");
+  };
+
+  if (!rentRequestData) {
+    return (
+      <View className="bg-white rounded-xl p-4 mb-3">
+        <Text className="text-gray-500">Loading request details...</Text>
+      </View>
+    );
+  }
+
+  // Helper function to get status badge style
+  const getStatusBadge = (status: string | undefined) => {
+    switch (status?.toLowerCase()) {
+      case "approved":
+      case "accepted":
+        return "bg-primary text-green-600";
+      case "declined":
+      case "rejected":
+        return "bg-red-100 text-red-600";
+      case "cancelled":
+        return "bg-gray-100 text-gray-600";
+      case "pending":
+        return "bg-blue-100 text-blue-600";
+      default:
+        return "bg-gray-100 text-gray-600"; // Default style for undefined or unknown status
+    }
+  };
+
+  return (
+    <View className={`flex- mb-3 ${isSender ? "pl-8" : "pr-8"}`}>
+      <View
+        className={`p-4 shadow-sm flex-1 ${
+          isSender
+            ? "bg-white rounded-xl rounded-br-none border border-primary"
+            : "bg-white rounded-xl rounded-bl-none border border-gray-200"
+        }`}
+      >
+        {/* Status Badge */}
+        <View
+          className={`absolute top-4 right-4 px-2 py-1 rounded-full ${getStatusBadge(
+            rentRequestData.status
+          )}`}
+        >
+          <Text
+            className={`text-xs font-pmedium capitalize ${isSender ? "" : ""}`}
+          >
+            {rentRequestData.status || "pending"}
+          </Text>
+        </View>
+
+        <Text
+          className={`text-sm font-pmedium mb-2 ${
+            isSender ? "text-gray-500" : "text-gray-500"
+          }`}
+        >
+          {isSender ? "Your Request" : "Rental Request"}
+        </Text>
+
+        {/* Basic Info */}
+        <View className="flex-row items-start gap-3">
+          <Image
+            source={{ uri: rentRequestData.itemImage }}
+            className="w-16 h-16 rounded-lg"
+            resizeMode="cover"
+          />
+          <View className="flex-1">
+            <Text
+              className={`font-pbold text-base mb-1 ${
+                isSender ? "text-gray-900" : "text-gray-900"
+              }`}
+            >
+              {rentRequestData.itemName}
+            </Text>
+            <Text
+              className={`text-sm ${
+                isSender ? "text-gray-600" : "text-gray-600"
+              }`}
+            >
+              {formatDate(rentRequestData.startDate)} -{" "}
+              {formatDate(rentRequestData.endDate)}
+            </Text>
+            <Text
+              className={`font-pmedium mt-1 ${
+                isSender ? "text-primary" : "text-primary"
+              }`}
+            >
+              ₱
+              {Math.round(
+                rentRequestData.totalPrice / rentRequestData.rentalDays
+              )}
+              /day
+            </Text>
+          </View>
+        </View>
+
+        <View>
+          <Text
+            className={`text-xs font-pbold uppercase ${
+              isSender ? "text-gray-400" : "text-gray-400"
+            }`}
+          >
+            Message
+          </Text>
+          <Text
+            className={`text-sm mt-1 ${
+              isSender ? "text-gray-700" : "text-gray-700"
+            }`}
+          >
+            {rentRequestData.message}
+          </Text>
+        </View>
+
+        {/* Show More/Less Button */}
+        <TouchableOpacity
+          onPress={() => setShowDetails(!showDetails)}
+          className="mt-3 py-2 flex-row items-center justify-center"
+        >
+          <Text
+            className={`text-sm font-pmedium mr-1 ${
+              isSender ? "text-blue-500" : "text-blue-500"
+            }`}
+          >
+            {showDetails ? "Show less" : "Show details"}
+          </Text>
+
+          <Image
+            source={icons.arrowDown}
+            className={`w-4 h-4 ${showDetails ? "rotate-180" : ""}`}
+            tintColor={isSender ? "#5C6EF6" : "#5C6EF6"}
+          />
+        </TouchableOpacity>
+
+        {/* Detailed Info */}
+        {showDetails && (
+          <View
+            className={`mt-3 pt-3 ${
+              isSender ? "border-t border-gray-100" : "border-t border-gray-100"
+            }`}
+          >
+            <View className="space-y-3">
+              <View>
+                <Text
+                  className={`text-xs font-pbold uppercase ${
+                    isSender ? "text-gray-400" : "text-gray-400"
+                  }`}
+                >
+                  Rental Period
+                </Text>
+                <Text
+                  className={`text-sm mt-1 ${
+                    isSender ? "text-gray-700" : "text-gray-700"
+                  }`}
+                >
+                  {rentRequestData.rentalDays} days
+                </Text>
+              </View>
+
+              <View>
+                <Text
+                  className={`text-xs font-pbold uppercase ${
+                    isSender ? "text-gray-400" : "text-gray-400"
+                  }`}
+                >
+                  Total Amount
+                </Text>
+                <Text
+                  className={`text-sm mt-1 ${
+                    isSender ? "text-gray-700" : "text-gray-700"
+                  }`}
+                >
+                  ₱{rentRequestData.totalPrice.toLocaleString()}
+                </Text>
+              </View>
+
+              <View>
+                <Text
+                  className={`text-xs font-pbold uppercase ${
+                    isSender ? "text-gray-400" : "text-gray-400"
+                  }`}
+                >
+                  Pickup Time
+                </Text>
+                <Text
+                  className={`text-sm mt-1 ${
+                    isSender ? "text-gray-700" : "text-gray-700"
+                  }`}
+                >
+                  {Math.floor(rentRequestData.pickupTime / 60)}:
+                  {(rentRequestData.pickupTime % 60)
+                    .toString()
+                    .padStart(2, "0")}
+                </Text>
+              </View>
+
+              {itemData && (
+                <View>
+                  <Text
+                    className={`text-xs font-pbold uppercase ${
+                      isSender ? "text-gray-400" : "text-gray-400"
+                    }`}
+                  >
+                    Item Details
+                  </Text>
+                  <Text
+                    className={`text-sm mt-1 ${
+                      isSender ? "text-gray-700" : "text-gray-700"
+                    }`}
+                  >
+                    Category: {itemData.category}
+                  </Text>
+                  <Text
+                    className={`text-sm ${
+                      isSender ? "text-gray-700" : "text-gray-700"
+                    }`}
+                  >
+                    Condition: {itemData.condition}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {rentRequestData.status === "pending" && (
+          <>
+            {isOwner ? (
+              <View className="flex-row gap-2 mt-4">
+                <TouchableOpacity
+                  onPress={onAccept}
+                  className="flex-1 bg-primary py-3 rounded-xl"
+                >
+                  <Text className="text-white font-pbold text-center">
+                    ACCEPT
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onDecline}
+                  className="flex-1 bg-red-500 py-3 rounded-xl"
+                >
+                  <Text className="text-white font-pbold text-center">
+                    DECLINE
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View className="mt-4">
+                <TouchableOpacity
+                  onPress={onCancel}
+                  className={`py-3 rounded-xl ${
+                    isSender ? "bg-red-400" : "bg-white"
+                  }`}
+                >
+                  <Text
+                    className={`font-pbold text-center ${
+                      isSender ? "text-white" : "text-gray-600"
+                    }`}
+                  >
+                    CANCEL REQUEST
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const requestDataCache = new Map();
+
 const ChatScreen = () => {
   const { id: chatId } = useLocalSearchParams();
   const navigation = useNavigation();
   const currentUserId = auth.currentUser?.uid;
-  interface Message {
-    id: string;
-    senderId: string;
-    text: string;
-    createdAt: any;
-    type?: "rentRequest";
-    read: boolean;
-    readAt: any;
-    itemDetails?: {
-      id: string;
-      name: string;
-      price: number;
-      image: string;
-    };
-  }
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -187,8 +548,15 @@ const ChatScreen = () => {
   const [requestStatuses, setRequestStatuses] = useState<
     Record<string, string>
   >({});
+  const [canSendMessage, setCanSendMessage] = useState(false);
   const flatListRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
+
+  const [chatData, setChatData] = useState<{
+    requesterId: string;
+    ownerId: string;
+    status: string;
+  } | null>(null);
 
   if (!currentUserId || !chatId) {
     return (
@@ -265,6 +633,31 @@ const ChatScreen = () => {
     initializeChat();
   }, [chatId, currentUserId]);
 
+  useEffect(() => {
+    if (!chatId || !currentUserId) return;
+
+    const chatRef = doc(db, "chat", String(chatId));
+
+    const unsubscribe = onSnapshot(chatRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setChatData({
+          requesterId: data.requesterId,
+          ownerId: data.ownerId,
+          status: data.status,
+        });
+
+        const isOwner = currentUserId === data.ownerId;
+        const hasRentRequest = data.hasRentRequest;
+
+        // Owner can always send messages, requester needs valid request
+        setCanSendMessage(isOwner || data.status === "accepted");
+      }
+    });
+
+    return () => unsubscribe();
+  }, [chatId, currentUserId]);
+
   // Set header title
   useLayoutEffect(() => {
     if (recipientEmail) {
@@ -274,48 +667,27 @@ const ChatScreen = () => {
 
   // Listen for messages
   useEffect(() => {
-    if (loading) return;
+    if (!chatId) return;
 
     const messagesRef = collection(db, "chat", String(chatId), "messages");
-    const q = query(
-      messagesRef,
-      orderBy("createdAt", "asc"),
-      // Add limit to reduce BloomFilter errors
-      limit(100)
-    );
+    const q = query(messagesRef, orderBy("createdAt", "desc")); // Change to desc
 
     const unsubscribe = onSnapshot(
       q,
-      {
-        // Add error handling for snapshot
-        includeMetadataChanges: true,
-      },
       (snapshot) => {
-        if (!snapshot.metadata.hasPendingWrites) {
-          const fetchedMessages = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          })) as Message[];
-          setMessages(fetchedMessages);
-
-          // Auto-scroll to bottom when new messages arrive
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-        }
+        const fetchedMessages = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Message[];
+        setMessages(fetchedMessages.reverse()); // Reverse the array for correct display
       },
       (error) => {
-        if (error.name === "BloomFilterError") {
-          console.log("Ignoring BloomFilter error in message listener");
-        } else {
-          console.error("Error listening to messages:", error);
-          Alert.alert("Error", "Failed to load messages");
-        }
+        console.error("Error fetching messages:", error);
       }
     );
 
     return () => unsubscribe();
-  }, [chatId, loading]);
+  }, [chatId]);
 
   const sendMessage = async () => {
     if (newMessage.trim() === "") return;
@@ -336,9 +708,10 @@ const ChatScreen = () => {
       const messageData = {
         senderId: currentUserId,
         text: messageText,
+        type: "message", // Add message type
         createdAt: serverTimestamp(),
-        read: false, // Add this
-        readAt: null, // Add this
+        read: false,
+        readAt: null,
       };
 
       // Add message to subcollection
@@ -352,6 +725,10 @@ const ChatScreen = () => {
         lastSender: currentUserId,
         unreadCount: increment(1), // Add this to track unread messages
       });
+
+      // Scroll to bottom after sending
+
+      flatListRef.current?.scrollToEnd({ animated: true });
     } catch (error) {
       console.error("Error sending message:", error);
       Alert.alert("Error", "Failed to send message");
@@ -359,169 +736,7 @@ const ChatScreen = () => {
     }
   };
 
-  // First, add the RentRequest interface
-  interface RentRequest {
-    id: string;
-    itemId: string;
-    itemName: string;
-    price: number;
-    requesterId: string;
-    ownerId: string;
-    status: "pending" | "accepted" | "rejected" | "completed";
-    createdAt: any;
-  }
-
-  // Update the RentRequestMessage component
-  const RentRequestMessage = ({ item }: { item: Message }) => {
-    const requestStatus = requestStatuses[item.rentRequestId] || "pending";
-    const [loading, setLoading] = useState(false);
-
-    const getStatusColor = (status: string) => {
-      switch (status) {
-        case "pending":
-          return {
-            bg: "bg-yellow-50",
-            text: "text-yellow-600",
-            border: "border-yellow-200",
-          };
-        case "accepted":
-          return {
-            bg: "bg-green-50",
-            text: "text-green-600",
-            border: "border-green-200",
-          };
-        case "rejected":
-          return {
-            bg: "bg-red-50",
-            text: "text-red-600",
-            border: "border-red-200",
-          };
-        default:
-          return {
-            bg: "bg-gray-50",
-            text: "text-gray-600",
-            border: "border-gray-200",
-          };
-      }
-    };
-
-    const statusStyle = getStatusColor(requestStatus);
-
-    const handleAction = async (action: "accept" | "reject") => {
-      if (!item.rentRequestId || loading) return;
-
-      setLoading(true);
-      try {
-        const requestRef = doc(db, "rentRequests", item.rentRequestId);
-
-        // Update status in rentRequests collection
-        await updateDoc(requestRef, {
-          status: action === "accept" ? "accepted" : "rejected",
-          updatedAt: serverTimestamp(),
-        });
-
-        // Add status update message in chat
-        await addDoc(collection(db, "chat", String(chatId), "messages"), {
-          type: "requestStatus",
-          senderId: currentUserId,
-          text: `Request ${action === "accept" ? "accepted" : "rejected"}`,
-          rentRequestId: item.rentRequestId,
-          createdAt: serverTimestamp(),
-          read: false,
-        });
-
-        // If accepted, update item status
-        if (action === "accept") {
-          const itemRef = doc(db, "items", item.itemDetails.id);
-          await updateDoc(itemRef, {
-            status: "reserved",
-            reservedBy: item.senderId,
-            reservedAt: serverTimestamp(),
-          });
-        }
-      } catch (error) {
-        console.error("Error updating request:", error);
-        Alert.alert("Error", "Failed to update request status");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <View
-        className={`${statusStyle.bg} rounded-xl p-4 mb-3 border ${statusStyle.border}`}
-      >
-        <View className="flex-row items-start">
-          {/* Left side - Image */}
-          <View className="relative">
-            <Image
-              source={{ uri: item.itemDetails.image }}
-              className="w-20 h-20 rounded-lg"
-              resizeMode="cover"
-            />
-            <View
-              className={`absolute -top-1 -right-1 px-2 py-1 rounded-full ${statusStyle.bg} border ${statusStyle.border}`}
-            >
-              <Text
-                style={{ fontSize: 8 }}
-                className={` font-pbold ${statusStyle.text}`}
-              >
-                {`${requestStatus}`.toUpperCase()}
-              </Text>
-            </View>
-          </View>
-
-          {/* Right side - Details */}
-          <View className="flex-1 ml-4">
-            <Text className="font-pbold text-base text-gray-900 mb-1">
-              {item.itemDetails.name}
-            </Text>
-            <View className="flex-row items-center mb-2">
-              <Text className="text-primary font-pmedium text-lg">
-                ₱{item.itemDetails.price}
-              </Text>
-              <Text className="text-gray-500 text-sm ml-1">/day</Text>
-            </View>
-
-            {/* Action Buttons */}
-            {requestStatus === "pending" && currentUserId !== item.senderId && (
-              <View className="flex-row gap-2">
-                <TouchableOpacity
-                  onPress={() => handleAction("reject")}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 rounded-full bg-white border border-red-200"
-                >
-                  <Text className="text-red-600 font-pmedium text-center">
-                    Decline
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleAction("accept")}
-                  disabled={loading}
-                  className="flex-1 px-4 py-2.5 rounded-full bg-primary"
-                >
-                  <Text className="text-white font-pmedium text-center">
-                    Accept
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {requestStatus !== "pending" && (
-              <TouchableOpacity
-                onPress={() => router.push(`/items/${item.itemDetails.id}`)}
-                className="px-4 py-2.5 rounded-full bg-white border border-primary"
-              >
-                <Text className="text-primary font-pmedium text-center">
-                  View Details
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
+  // Update the RentRequestMessage component to use rentRequestDetails
 
   // Add this near your other useEffect hooks
   useEffect(() => {
@@ -590,6 +805,21 @@ const ChatScreen = () => {
     return () => unsubscribe();
   }, [chatId, currentUserId, loading]);
 
+  const memoizedHandleAccept = useCallback(
+    (requestId: string) => handleAcceptRequest(requestId),
+    []
+  );
+
+  const memoizedHandleDecline = useCallback(
+    (requestId: string) => handleDeclineRequest(requestId),
+    []
+  );
+
+  const memoizedHandleCancel = useCallback(
+    (requestId: string) => handleCancelRequest(requestId),
+    []
+  );
+
   const handleSendLocation = async () => {
     // Implement location sharing
     Alert.alert("Send Location", "Location sharing will be implemented here");
@@ -621,7 +851,7 @@ const ChatScreen = () => {
     },
     {
       id: "2",
-      icon: icons.document,
+      icon: icons.arrowDown,
       label: "Agreement",
       action: handleSendAgreement,
       bgColor: "#E8EAF6",
@@ -629,7 +859,7 @@ const ChatScreen = () => {
     },
     {
       id: "3",
-      icon: icons.request,
+      icon: icons.arrowDown,
       label: "Requests",
       action: handleViewRequests,
       bgColor: "#FFF3E0",
@@ -657,10 +887,12 @@ const ChatScreen = () => {
       const statusUpdates: Record<string, string> = {};
       await Promise.all(
         rentRequestMessages.map(async (message) => {
-          const requestRef = doc(db, "rentRequests", message.rentRequestId);
-          const requestSnap = await getDoc(requestRef);
-          if (requestSnap.exists()) {
-            statusUpdates[message.rentRequestId] = requestSnap.data().status;
+          if (typeof message.rentRequestId === "string") {
+            const requestRef = doc(db, "rentRequests", message.rentRequestId);
+            const requestSnap = await getDoc(requestRef);
+            if (requestSnap.exists()) {
+              statusUpdates[message.rentRequestId] = requestSnap.data().status;
+            }
           }
         })
       );
@@ -671,10 +903,84 @@ const ChatScreen = () => {
     fetchRequestStatuses();
   }, [messages]);
 
-  // First, create a separate component for the sticky header
-  const StickyRentRequest = ({ messages }: { messages: Message[] }) => {
-    const rentRequest = messages.find((m) => m.type === "rentRequest");
-    return rentRequest ? <RentRequestMessage item={rentRequest} /> : null;
+  const handleAcceptRequest = async (requestId?: string) => {
+    if (!requestId) return;
+
+    try {
+      const requestRef = doc(db, "rentRequests", requestId);
+      await updateDoc(requestRef, {
+        status: "accepted",
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add status update message
+      await addDoc(collection(db, "chat", String(chatId), "messages"), {
+        type: "statusUpdate",
+        text: "Request accepted",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+    } catch (error) {
+      console.error("Error accepting request:", error);
+    }
+  };
+
+  const handleDeclineRequest = async (requestId?: string) => {
+    if (!requestId) return;
+
+    try {
+      const requestRef = doc(db, "rentRequests", requestId);
+      await updateDoc(requestRef, {
+        status: "declined",
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add status update message
+      await addDoc(collection(db, "chat", String(chatId), "messages"), {
+        type: "statusUpdate",
+        text: "Request declined",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+    } catch (error) {
+      console.error("Error declining request:", error);
+    }
+  };
+
+  const handleCancelRequest = async (requestId?: string) => {
+    if (!requestId) return;
+
+    try {
+      const requestRef = doc(db, "rentRequests", requestId);
+      await updateDoc(requestRef, {
+        status: "cancelled",
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add status update message
+      await addDoc(collection(db, "chat", String(chatId), "messages"), {
+        type: "statusUpdate",
+        text: "Request cancelled by requester",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Request Cancelled",
+        textBody: "Your request has been cancelled successfully",
+      });
+    } catch (error) {
+      console.error("Error cancelling request:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to cancel request",
+      });
+    }
   };
 
   if (loading) {
@@ -705,19 +1011,42 @@ const ChatScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 70}
         className="flex-1"
+        style={{ flex: 1 }} // Add this
       >
         <FlatList
           ref={flatListRef}
-          data={messages.filter((m) => m.type !== "rentRequest")} // Filter out rent request from main list
+          data={messages}
+          inverted={false} // Change to false
           keyExtractor={(item) => item.id}
           contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "flex-end",
             paddingVertical: 16,
             paddingHorizontal: 12,
           }}
-          ListHeaderComponent={() => <StickyRentRequest messages={messages} />}
-          stickyHeaderIndices={[0]}
+          // Add automatic scrolling to bottom for new messages
+          onContentSizeChange={() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }}
+          onLayout={() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }}
           renderItem={({ item }) => {
-            if (item.type === "requestStatus") {
+            if (item.type === "rentRequest") {
+              // Update how we determine if user is owner
+              const isOwner = currentUserId === chatData?.ownerId;
+              return (
+                <RentRequestMessage
+                  item={item}
+                  isOwner={isOwner}
+                  onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
+                  onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
+                  onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
+                />
+              );
+            }
+
+            if (item.type === "statusUpdate") {
               return (
                 <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">
                   <Text className="text-gray-600 text-sm text-center">
@@ -727,62 +1056,89 @@ const ChatScreen = () => {
               );
             }
 
+            const isSender = item.senderId === currentUserId;
             return (
               <View
                 className={`flex-row mb-3 ${
-                  item.senderId === currentUserId
-                    ? "justify-end"
-                    : "justify-start"
+                  isSender ? "justify-end" : "justify-start"
                 }`}
               >
-                {item.senderId !== currentUserId && (
+                {!isSender && (
                   <Image
                     source={{ uri: recipientImage }}
                     className="w-8 h-8 rounded-full mr-2 mt-1"
                   />
                 )}
                 <View
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 border border-gray-200 shadow-sm
-                    ${
-                      item.senderId === currentUserId
-                        ? "bg-primary rounded-tr-none"
-                        : "bg-white rounded-tl-none"
-                    }`}
+                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${
+                    isSender
+                      ? "bg-primary rounded-tr-none"
+                      : "bg-white rounded-tl-none border border-gray-200"
+                  }`}
                 >
-                  <Text
-                    className={`${
-                      item.senderId === currentUserId
-                        ? "text-white"
-                        : "text-gray-800"
-                    } text-base`}
-                  >
+                  <Text className={isSender ? "text-white" : "text-gray-800"}>
                     {item.text}
                   </Text>
                 </View>
-                {item.senderId === currentUserId && (
-                  <View className="flex-row items-center ml-2">
-                    {item.read ? (
-                      <>
-                        <Image
-                          source={icons.doubleCheck}
-                          className="w-4 h-4 tint-primary"
-                        />
-                        {item.readAt && (
-                          <Text className="text-xs text-gray-400 ml-1">
-                            {format(item.readAt.toDate(), "HH:mm")}
-                          </Text>
-                        )}
-                      </>
-                    ) : (
-                      <Image
-                        source={icons.singleCheck}
-                        className="w-4 h-4 tint-gray-400"
-                      />
-                    )}
-                  </View>
-                )}
               </View>
             );
+
+            // return (
+            //   <View
+            //     className={`flex-row mb-3 ${
+            //       item.senderId === currentUserId
+            //         ? "justify-end"
+            //         : "justify-start"
+            //     }`}
+            //   >
+            //     {item.senderId !== currentUserId && (
+            //       <Image
+            //         source={{ uri: recipientImage }}
+            //         className="w-8 h-8 rounded-full mr-2 mt-1"
+            //       />
+            //     )}
+            //     <View
+            //       className={`max-w-[75%] rounded-2xl px-4 py-3 border border-gray-200 shadow-sm
+            //         ${
+            //           item.senderId === currentUserId
+            //             ? "bg-primary rounded-tr-none"
+            //             : "bg-white rounded-tl-none"
+            //         }`}
+            //     >
+            //       <Text
+            //         className={`${
+            //           item.senderId === currentUserId
+            //             ? "text-white"
+            //             : "text-gray-800"
+            //         } text-base`}
+            //       >
+            //         {item.text}
+            //       </Text>
+            //     </View>
+            //     {item.senderId === currentUserId && (
+            //       <View className="flex-row items-center ml-2">
+            //         {item.read ? (
+            //           <>
+            //             <Image
+            //               source={icons.doubleCheck}
+            //               className="w-4 h-4 tint-primary"
+            //             />
+            //             {item.readAt && (
+            //               <Text className="text-xs text-gray-400 ml-1">
+            //                 {format(item.readAt.toDate(), "HH:mm")}
+            //               </Text>
+            //             )}
+            //           </>
+            //         ) : (
+            //           <Image
+            //             source={icons.singleCheck}
+            //             className="w-4 h-4 tint-gray-400"
+            //           />
+            //         )}
+            //       </View>
+            //     )}
+            //   </View>
+            // );
           }}
           ListEmptyComponent={() => (
             <View className="flex-1 justify-center items-center pt-12">
@@ -804,49 +1160,56 @@ const ChatScreen = () => {
 
         {/* Message Input */}
         <View className="flex-row p-2 bg-white border-t border-gray-100 gap-2">
-          <TouchableOpacity
-            onPress={() => setShowActionMenu(true)}
-            className="p-3 m-1 rounded-full bg-primary"
-          >
-            <Image
-              source={icons.bigPlus}
-              className="w-2 h-2 p-2"
-              resizeMode="contain"
-              tintColor="white"
-            />
-          </TouchableOpacity>
-          <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
-            <TextInput
-              value={newMessage}
-              onChangeText={setNewMessage}
-              placeholder="Type a message..."
-              multiline
-              maxLength={1000}
-              className="flex-1 max-h-28  text-base"
-              style={{ textAlignVertical: "top" }}
-            />
-          </View>
-          <TouchableOpacity
-            onPress={sendMessage}
-            disabled={!newMessage.trim()}
-            className={`m-1 p-3 rounded-full justify-center w- ${
-              newMessage.trim() ? "bg-primary" : "bg-gray-300"
-            }`}
-          >
-            <Image
-              source={icons.plane}
-              className="w-2 h-2 p-2 "
-              resizeMode="contain"
-              tintColor="white"
-            />
-          </TouchableOpacity>
-
-          <ActionMenu
-            visible={showActionMenu}
-            onClose={() => setShowActionMenu(false)}
-            items={actionItems}
-          />
+          {!canSendMessage ? (
+            <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
+              <Text className="text-gray-500 text-center">
+                Waiting for owner to respond to your request...
+              </Text>
+            </View>
+          ) : (
+            <>
+              <TouchableOpacity
+                onPress={() => setShowActionMenu(true)}
+                className="p-3 rounded-full bg-primary"
+              >
+                <Image
+                  source={icons.bigPlus}
+                  className="w-5 h-5" // Updated size
+                  tintColor="white"
+                />
+              </TouchableOpacity>
+              <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
+                <TextInput
+                  value={newMessage}
+                  onChangeText={setNewMessage}
+                  placeholder="Type a message..."
+                  multiline
+                  maxLength={1000}
+                  className="flex-1 max-h-28 text-base"
+                />
+              </View>
+              <TouchableOpacity
+                onPress={sendMessage}
+                disabled={!newMessage.trim()}
+                className={`p-3 rounded-full justify-center ${
+                  newMessage.trim() ? "bg-primary" : "bg-gray-300"
+                }`}
+              >
+                <Image
+                  source={icons.plane}
+                  className="w-5 h-5" // Updated size
+                  tintColor="white"
+                />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
+
+        <ActionMenu
+          visible={showActionMenu}
+          onClose={() => setShowActionMenu(false)}
+          items={actionItems}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

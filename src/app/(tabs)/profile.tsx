@@ -34,7 +34,7 @@ import {
 } from "firebase/firestore";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import * as Location from "expo-location";
-import { formatDistance } from "date-fns";
+import { formatDistance, set } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -51,7 +51,7 @@ import PlanSubscription from "@/components/PlanSubscription";
 import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
 
 const Profile: React.FC = () => {
-  const { setIsLoading } = useLoader();
+  const { isLoading, setIsLoading } = useLoader();
   const insets = useSafeAreaInsets();
   const [verified, setVerified] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -123,18 +123,21 @@ const Profile: React.FC = () => {
         return;
       }
 
-      if (!currentUser.emailVerified) {
+      try {
         await currentUser.reload();
         currentUser = auth.currentUser; // Refresh currentUser after reload
-      }
 
-      if (currentUser?.uid) {
-        setCurrentUserId(currentUser.uid);
-        await ensureUserProfileExists(currentUser.uid);
-      }
-      setVerified(currentUser?.emailVerified || false);
+        if (currentUser?.uid) {
+          setCurrentUserId(currentUser.uid);
+          await ensureUserProfileExists(currentUser.uid);
+        }
+        setVerified(currentUser?.emailVerified || false);
 
-      refreshStatus();
+        // Force refresh profile completion status
+        await refreshStatus();
+      } catch (error) {
+        console.error("Error checking auth:", error);
+      }
     };
 
     checkAuth();
@@ -144,6 +147,7 @@ const Profile: React.FC = () => {
   useEffect(() => {
     const fetchProfileData = async () => {
       try {
+        setIsLoading(true);
         const currentUser = auth.currentUser;
         if (!currentUser) return;
 
@@ -190,6 +194,7 @@ const Profile: React.FC = () => {
           textBody: "Failed to load profile data",
         });
       }
+      setIsLoading(false);
     };
 
     // Fetch initial data
@@ -241,14 +246,14 @@ const Profile: React.FC = () => {
 
   const ensureUserProfileExists = async (uid: string) => {
     try {
+      if (!uid) return;
       const profileRef = doc(db, "users", uid);
       const profileSnap = await getDoc(profileRef);
 
       if (!profileSnap.exists()) {
         await setDoc(profileRef, {
-          bio: "",
           location: "",
-          socialLinks: {},
+
           createdAt: new Date(),
         });
       }
@@ -260,8 +265,16 @@ const Profile: React.FC = () => {
   const handleLogout = async () => {
     setIsLoading(true);
     try {
+      setProfileData(null);
+      setCurrentUserId(null);
+
       await signOut(auth);
-      router.replace("/sign-in");
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Successfully signed out.",
+      });
+      router.replace("/(auth)/sign-in");
     } catch (error) {
       console.error("Error signing out:", error);
       Toast.show({
@@ -767,10 +780,24 @@ const Profile: React.FC = () => {
             onClose={async () => {
               if (auth.currentUser) {
                 await auth.currentUser.reload();
+                // Force refresh status
+                await refreshStatus();
+                // Update completion percentage
+                setRefreshFlag((prev) => prev + 1);
               }
               setActiveModal(null);
             }}
+            onVerified={async () => {
+              // Wait for status refresh
+              await refreshStatus();
+              // Force UI update
+              setRefreshFlag((prev) => prev + 1);
+            }}
           />
+        );
+      case "location":
+        return (
+          <LocationModalContent onSave={handleLocationSave} loading={loading} />
         );
       case "idVerification":
         return (

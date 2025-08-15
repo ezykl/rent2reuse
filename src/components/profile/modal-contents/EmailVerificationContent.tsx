@@ -10,6 +10,7 @@ import { icons } from "@/constant";
 import { auth } from "@/lib/firebaseConfig";
 import { sendEmailVerification, onAuthStateChanged } from "firebase/auth";
 import { useState, useEffect } from "react";
+import Toast, { ALERT_TYPE } from "react-native-alert-notification";
 
 interface EmailVerificationContentProps {
   onClose?: () => void;
@@ -77,6 +78,73 @@ export const EmailVerificationContent = ({
     }
   };
 
+  const checkVerificationStatus = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        // Force reload user
+        await user.reload();
+
+        if (user.emailVerified) {
+          // First call onVerified to update the parent state
+          if (onVerified) {
+            await onVerified();
+          }
+
+          // Show success message
+          Toast.Toast.show({
+            type: ALERT_TYPE.SUCCESS,
+            title: "Email Verified",
+            textBody: "Your email has been successfully verified!",
+          });
+
+          // Close modal after verification
+          if (onClose) {
+            onClose();
+          }
+        } else {
+          Toast.Toast.show({
+            type: ALERT_TYPE.WARNING,
+            title: "Not Verified",
+            textBody:
+              "Your email is not yet verified. Please check your inbox and click the verification link.",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error checking verification status:", error);
+      Toast.Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to check verification status",
+      });
+    }
+  };
+
+  // Add useEffect to check verification status periodically when modal is open
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (sent) {
+      interval = setInterval(async () => {
+        const user = auth.currentUser;
+        if (user) {
+          await user.reload();
+          if (user.emailVerified) {
+            clearInterval(interval);
+            await checkVerificationStatus();
+          }
+        }
+      }, 3000); // Check every 3 seconds
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [sent]);
+
   // Add useEffect to listen for email verification
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -108,17 +176,41 @@ export const EmailVerificationContent = ({
     return () => unsubscribe();
   }, [onVerified, onClose]);
 
-  // Add a function to check verification status manually
-  const checkVerificationStatus = async () => {
-    const user = auth.currentUser;
-    if (user) {
-      await user.reload();
-      if (user.emailVerified) {
-        if (onVerified) {
-          onVerified();
+  // Update the checkVerificationStatus function
+  const updatedCheckVerificationStatus = async () => {
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        await user.reload();
+        if (user.emailVerified) {
+          // Show success message
+          Alert.alert(
+            "Email Verified",
+            "Your email has been successfully verified!",
+            [
+              {
+                text: "OK",
+                onPress: async () => {
+                  if (onVerified) {
+                    await onVerified(); // Wait for onVerified to complete
+                  }
+                  if (onClose) {
+                    onClose();
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            "Not Verified",
+            "Your email is not yet verified. Please check your inbox and click the verification link."
+          );
         }
-        onClose && onClose();
       }
+    } catch (error) {
+      console.error("Error checking verification status:", error);
+      Alert.alert("Error", "Failed to check verification status");
     }
   };
 

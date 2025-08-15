@@ -1,5 +1,9 @@
 import { AIResult } from "../types/ai-types";
-import { ACCEPTED_CATEGORIES, ITEM_TO_CATEGORY_MAP, PROHIBITED_CATEGORIES } from "../constant/tool-categories";
+import {
+  ACCEPTED_CATEGORIES,
+  ITEM_TO_CATEGORY_MAP,
+  PROHIBITED_CATEGORIES,
+} from "../constant/tool-categories";
 
 export const processAIResult = (result: AIResult) => {
   const itemName = result["Predicted Item"];
@@ -24,6 +28,7 @@ export const getCategoryInfo = (itemName: string) => {
 
   return {
     category,
-    examples: ACCEPTED_CATEGORIES.find(cat => cat.name === category)?.examples || [],
+    examples:
+      ACCEPTED_CATEGORIES.find((cat) => cat.name === category)?.examples || [],
   };
 };

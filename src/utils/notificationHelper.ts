@@ -21,8 +21,8 @@ export const sendRentRequestNotifications = async (
     itemName: string;
     requestId: string;
     requesterName: string;
-    startDate: string;
-    endDate: string;
+    startDate: any;
+    endDate: any;
   }
 ) => {
   try {

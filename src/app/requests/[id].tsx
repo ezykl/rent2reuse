@@ -17,6 +17,9 @@ import {
   getDoc,
   doc,
   Timestamp,
+  updateDoc,
+  serverTimestamp,
+  addDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { icons } from "@/constant";
@@ -367,16 +370,45 @@ const ViewRequests = () => {
 
   const handleStatusUpdate = async (requestId: string, newStatus: string) => {
     try {
-      // Add your status update logic here
+      const requestRef = doc(db, "rentRequests", requestId);
+      const requestSnap = await getDoc(requestRef);
+
+      if (!requestSnap.exists()) return;
+
+      const requestData = requestSnap.data();
+
+      // Update request status
+      await updateDoc(requestRef, {
+        status: newStatus,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update chat status to allow messaging
+      if (requestData.chatId) {
+        await updateDoc(doc(db, "chat", requestData.chatId), {
+          status: newStatus,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Add status update message
+      if (requestData.chatId) {
+        await addDoc(collection(db, "chat", requestData.chatId, "messages"), {
+          type: "statusUpdate",
+          text: `Request ${newStatus}`,
+          senderId: id,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+      }
+
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
         textBody: `Request ${newStatus} successfully!`,
       });
-
-      // Remove the updated request from the list
-      setRequests((prev) => prev.filter((req) => req.id !== requestId));
     } catch (error) {
+      console.error("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
