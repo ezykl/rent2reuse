@@ -391,6 +391,8 @@ export default function ItemDetails() {
           name: item?.itemName,
           image: item?.images?.[0],
           price: item?.itemPrice,
+          totalPrice: daysDifference * (item?.itemPrice ?? 0),
+          rentalDays: daysDifference,
         },
         createdAt: serverTimestamp(),
         lastMessage: formData.message,
@@ -417,7 +419,7 @@ export default function ItemDetails() {
         totalPrice: daysDifference * (item?.itemPrice ?? 0),
         rentalDays: daysDifference,
         createdAt: serverTimestamp(),
-        chatId: chatRef.id, // Store chat reference
+        chatId: chatRef.id,
       });
 
       // Add initial message to chat
@@ -428,12 +430,6 @@ export default function ItemDetails() {
         type: "rentRequest",
         rentRequestId: rentRequestRef.id,
         read: false,
-        itemDetails: {
-          id: item?.id,
-          name: item?.itemName,
-          price: item?.itemPrice,
-          image: item?.images?.[0],
-        },
       });
 
       await checkAndUpdateLimits(user?.uid, "rent");

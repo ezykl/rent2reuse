@@ -828,7 +828,7 @@ const Profile: React.FC = () => {
         {/* Quick Actions */}
         <View className="divide-y divide-gray-100">
           <TouchableOpacity
-            onPress={() => router.push("/favorites")}
+            onPress={() => router.push("/create-ticket")}
             className="flex-row items-center px-6 py-4"
           >
             <Image
@@ -838,7 +838,7 @@ const Profile: React.FC = () => {
               resizeMode="contain"
             />
             <Text className="flex-1 font-pmedium text-gray-800">
-              Favourites
+              Submit Ticket
             </Text>
             <Image
               source={icons.arrowRight}

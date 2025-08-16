@@ -38,6 +38,7 @@ import {
   getDocs,
   writeBatch,
   limit,
+  deleteDoc,
 } from "firebase/firestore";
 import { db, auth } from "@/lib/firebaseConfig";
 import { icons } from "@/constant";
@@ -45,17 +46,33 @@ import { format } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 
-const ChatHeader = ({
-  recipientEmail,
-  recipientImage,
-  recipientStatus,
-  onBack,
-}: {
-  recipientEmail: string;
+// First fix the ChatHeader props interface
+interface ChatHeaderProps {
+  recipientName: {
+    firstname: string;
+    lastname: string;
+    middlename?: string;
+  };
   recipientImage?: string;
   recipientStatus?: any;
   onBack: () => void;
-}) => {
+}
+
+const ChatHeader = ({
+  recipientName,
+  recipientImage,
+  recipientStatus,
+  onBack,
+}: ChatHeaderProps) => {
+  // Format full name helper function
+  const formatFullName = () => {
+    const middleInitial = recipientName.middlename
+      ? ` ${recipientName.middlename.charAt(0)}.`
+      : "";
+    return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
+  };
+  console.log("Formatted Full Name:", formatFullName()); // Debug log
+
   const getStatusText = (status: any) => {
     if (status?.isOnline) return "Online";
     if (status?.lastSeen) {
@@ -76,7 +93,11 @@ const ChatHeader = ({
   return (
     <View className="flex-row items-center p-4 bg-white border-b border-gray-100">
       <TouchableOpacity onPress={onBack} className="mr-3">
-        <Image source={icons.leftArrow} className="w-6 h-6" />
+        <Image
+          source={icons.leftArrow}
+          className="w-8 h-8"
+          tintColor="#6B7280"
+        />
       </TouchableOpacity>
       <View className="relative">
         <Image
@@ -90,9 +111,7 @@ const ChatHeader = ({
         />
       </View>
       <View className="ml-3 flex-1">
-        <Text className="text-base font-semibold">
-          {recipientEmail.split("@")[0]}
-        </Text>
+        <Text className="text-base font-semibold">{formatFullName()}</Text>
         <Text className="text-xs text-gray-500">
           {getStatusText(recipientStatus)}
         </Text>
@@ -201,30 +220,42 @@ const RentRequestMessage = ({
   onAccept,
   onDecline,
   onCancel,
+  chatData, // Add chatData prop
 }: {
   item: Message;
   isOwner: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
   onCancel?: () => void;
+  chatData?: any;
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [rentRequestData, setRentRequestData] = useState<any>(null);
-  const [itemData, setItemData] = useState<any>(null);
   const isSender = item.senderId === auth.currentUser?.uid;
 
-  // Fetch rentRequest and item data
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch rent request data
-
         if (item.rentRequestId && requestDataCache.has(item.rentRequestId)) {
           const cachedData = requestDataCache.get(item.rentRequestId);
-          setRentRequestData(cachedData.requestData);
-          setItemData(cachedData.itemData);
+          setRentRequestData(cachedData);
           return;
         }
+
+        // If request is cancelled, use chat data as fallback
+        if (chatData?.status === "cancelled") {
+          const fallbackData = {
+            itemName: chatData.itemDetails?.name,
+            itemImage: chatData.itemDetails?.image,
+            totalPrice: chatData.itemDetails?.price,
+            status: "cancelled",
+            // Add other necessary fields from chatData
+          };
+          setRentRequestData(fallbackData);
+          return;
+        }
+
+        // Try to fetch from rentRequests collection
         if (item.rentRequestId) {
           const rentRequestRef = doc(db, "rentRequests", item.rentRequestId);
           const rentRequestSnap = await getDoc(rentRequestRef);
@@ -232,31 +263,36 @@ const RentRequestMessage = ({
           if (rentRequestSnap.exists()) {
             const requestData = rentRequestSnap.data();
             setRentRequestData(requestData);
-
-            if (requestData.itemId) {
-              const itemRef = doc(db, "items", requestData.itemId);
-              const itemSnap = await getDoc(itemRef);
-
-              if (itemSnap.exists()) {
-                const itemData = itemSnap.data();
-                setItemData(itemData);
-
-                // Cache the data
-                requestDataCache.set(item.rentRequestId, {
-                  requestData,
-                  itemData,
-                });
-              }
-            }
+            requestDataCache.set(item.rentRequestId, requestData);
+          } else {
+            // If request document doesn't exist, fall back to chat data
+            const fallbackData = {
+              itemName: chatData.itemDetails?.name,
+              itemImage: chatData.itemDetails?.image,
+              totalPrice: chatData.itemDetails?.price,
+              status: chatData.status,
+              // Add other necessary fields from chatData
+            };
+            setRentRequestData(fallbackData);
           }
         }
       } catch (error) {
         console.error("Error fetching request data:", error);
+        // Fall back to chat data on error
+        if (chatData) {
+          const fallbackData = {
+            itemName: chatData.itemDetails?.name,
+            itemImage: chatData.itemDetails?.image,
+            totalPrice: chatData.itemDetails?.price,
+            status: chatData.status,
+          };
+          setRentRequestData(fallbackData);
+        }
       }
     };
 
     fetchData();
-  }, [item.rentRequestId]);
+  }, [item.rentRequestId, chatData]);
 
   // Format date helper function
   const formatDate = (date: any) => {
@@ -290,12 +326,35 @@ const RentRequestMessage = ({
     }
   };
 
+  const getStatusDisplay = () => {
+    switch (rentRequestData.status.toLowerCase()) {
+      case "cancelled":
+        return (
+          <View className="bg-gray-100 p-4 rounded-lg mt-4">
+            <Text className="text-gray-600 text-center">
+              This request was cancelled
+            </Text>
+          </View>
+        );
+      case "declined":
+        return (
+          <View className="bg-red-50 p-4 rounded-lg mt-4">
+            <Text className="text-red-600 text-center">
+              This request was declined
+            </Text>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <View className={`flex- mb-3 ${isSender ? "pl-8" : "pr-8"}`}>
       <View
         className={`p-4 shadow-sm flex-1 ${
           isSender
-            ? "bg-white rounded-xl rounded-br-none border border-primary"
+            ? "bg-white rounded-xl rounded-br-none border-2 border-primary"
             : "bg-white rounded-xl rounded-bl-none border border-gray-200"
         }`}
       >
@@ -455,38 +514,16 @@ const RentRequestMessage = ({
                     .padStart(2, "0")}
                 </Text>
               </View>
-
-              {itemData && (
-                <View>
-                  <Text
-                    className={`text-xs font-pbold uppercase ${
-                      isSender ? "text-gray-400" : "text-gray-400"
-                    }`}
-                  >
-                    Item Details
-                  </Text>
-                  <Text
-                    className={`text-sm mt-1 ${
-                      isSender ? "text-gray-700" : "text-gray-700"
-                    }`}
-                  >
-                    Category: {itemData.category}
-                  </Text>
-                  <Text
-                    className={`text-sm ${
-                      isSender ? "text-gray-700" : "text-gray-700"
-                    }`}
-                  >
-                    Condition: {itemData.condition}
-                  </Text>
-                </View>
-              )}
             </View>
           </View>
         )}
 
-        {/* Action Buttons */}
+        {/* Status Display */}
+        {getStatusDisplay()}
+
+        {/* Only show action buttons if status is pending */}
         {rentRequestData.status === "pending" && (
+          /* Action Buttons */
           <>
             {isOwner ? (
               <View className="flex-row gap-2 mt-4">
@@ -528,6 +565,14 @@ const RentRequestMessage = ({
             )}
           </>
         )}
+        {/* Show accepted status message when accepted */}
+        {rentRequestData.status === "accepted" && (
+          <View className="bg-green-50 p-4 rounded-lg mt-4">
+            <Text className="text-green-600 text-center font-pmedium">
+              ✓ Request accepted! You can now chat freely.
+            </Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -542,6 +587,14 @@ const ChatScreen = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [recipientName, setRecipientName] = useState<{
+    firstname: string;
+    lastname: string;
+    middlename?: string;
+  }>({
+    firstname: "",
+    lastname: "",
+  });
   const [recipientImage, setRecipientImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [showActionMenu, setShowActionMenu] = useState(false);
@@ -556,6 +609,12 @@ const ChatScreen = () => {
     requesterId: string;
     ownerId: string;
     status: string;
+    itemDetails?: {
+      name?: string;
+      price?: number;
+      image?: string;
+      itemId?: string;
+    };
   } | null>(null);
 
   if (!currentUserId || !chatId) {
@@ -584,8 +643,12 @@ const ChatScreen = () => {
           }
 
           const recipientData = recipientSnap.data();
-          setRecipientEmail(recipientData.email);
-          setRecipientImage(recipientData.profileImage || ""); // Set profile image for new chat
+          setRecipientImage(recipientData.profileImage || "");
+          setRecipientName({
+            firstname: recipientData.firstname || "", // Changed from firstName
+            lastname: recipientData.lastname || "", // Changed from lastName
+            middlename: recipientData.middlename || "", // Changed from middleName
+          });
 
           // Create new chat document
           const newChatData = {
@@ -610,8 +673,12 @@ const ChatScreen = () => {
               const userSnap = await getDoc(doc(db, "users", otherUserId));
               if (userSnap.exists()) {
                 const userData = userSnap.data();
-                setRecipientEmail(userData.email);
-                setRecipientImage(userData.profileImage || ""); // Set profile image for existing chat
+                setRecipientImage(userData.profileImage || "");
+                setRecipientName({
+                  firstname: userData.firstname || "", // Changed from firstName
+                  lastname: userData.lastname || "", // Changed from lastName
+                  middlename: userData.middlename || "", // Changed from middleName
+                });
               }
             }
           }
@@ -620,12 +687,6 @@ const ChatScreen = () => {
         setLoading(false);
       } catch (error: any) {
         console.error("Error initializing chat:", error);
-        // Specifically handle BloomFilter errors
-        if (error.name === "BloomFilterError") {
-          console.log("Ignoring BloomFilter error - continuing operation");
-        } else {
-          Alert.alert("Error", "Failed to load chat");
-        }
         setLoading(false);
       }
     };
@@ -645,13 +706,20 @@ const ChatScreen = () => {
           requesterId: data.requesterId,
           ownerId: data.ownerId,
           status: data.status,
+          itemDetails: data.itemDetails,
         });
 
         const isOwner = currentUserId === data.ownerId;
-        const hasRentRequest = data.hasRentRequest;
+        const hasOwnerResponded = data.hasOwnerResponded || false;
+        // Allow sending messages if owner, or if status is "accepted"
+        const canSend =
+          isOwner ||
+          data.status === "accepted" ||
+          (hasOwnerResponded &&
+            data.status !== "declined" &&
+            data.status !== "cancelled");
 
-        // Owner can always send messages, requester needs valid request
-        setCanSendMessage(isOwner || data.status === "accepted");
+        setCanSendMessage(canSend);
       }
     });
 
@@ -718,15 +786,19 @@ const ChatScreen = () => {
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       await addDoc(messagesRef, messageData);
 
-      // Update chat metadata
-      await updateDoc(chatRef, {
+      const updateData: any = {
         lastMessage: messageText,
         lastMessageTime: serverTimestamp(),
         lastSender: currentUserId,
-        unreadCount: increment(1), // Add this to track unread messages
-      });
+        unreadCount: increment(1),
+      };
 
-      // Scroll to bottom after sending
+      const isOwner = currentUserId === chatData?.ownerId;
+      if (isOwner) {
+        updateData.hasOwnerResponded = true;
+      }
+
+      await updateDoc(chatRef, updateData);
 
       flatListRef.current?.scrollToEnd({ animated: true });
     } catch (error) {
@@ -907,22 +979,41 @@ const ChatScreen = () => {
     if (!requestId) return;
 
     try {
-      const requestRef = doc(db, "rentRequests", requestId);
-      await updateDoc(requestRef, {
+      // Update chat metadata
+      await updateDoc(doc(db, "chat", String(chatId)), {
         status: "accepted",
-        updatedAt: serverTimestamp(),
+        lastMessage: "Request accepted by owner",
+        lastMessageTime: serverTimestamp(),
+        hasOwnerResponded: true, // Mark that owner has responded
       });
 
       // Add status update message
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
         type: "statusUpdate",
-        text: "Request accepted",
+        text: "Request accepted by owner",
         senderId: currentUserId,
         createdAt: serverTimestamp(),
         read: false,
       });
+
+      const rentRequestRef = doc(db, "rentRequests", requestId);
+      await updateDoc(rentRequestRef, {
+        status: "accepted",
+        updatedAt: serverTimestamp(),
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Request accepted successfully",
+      });
     } catch (error) {
       console.error("Error accepting request:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to accept request",
+      });
     }
   };
 
@@ -930,8 +1021,17 @@ const ChatScreen = () => {
     if (!requestId) return;
 
     try {
-      const requestRef = doc(db, "rentRequests", requestId);
-      await updateDoc(requestRef, {
+      // Update chat metadata
+      await updateDoc(doc(db, "chat", String(chatId)), {
+        status: "declined",
+        lastMessage: "Request declined by owner",
+        lastMessageTime: serverTimestamp(),
+        hasOwnerResponded: true, // Mark that owner has responded
+      });
+
+      // Update the rent request in the rentRequests collection
+      const rentRequestRef = doc(db, "rentRequests", requestId);
+      await updateDoc(rentRequestRef, {
         status: "declined",
         updatedAt: serverTimestamp(),
       });
@@ -939,13 +1039,24 @@ const ChatScreen = () => {
       // Add status update message
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
         type: "statusUpdate",
-        text: "Request declined",
+        text: "Request declined by owner",
         senderId: currentUserId,
         createdAt: serverTimestamp(),
         read: false,
       });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Request declined successfully",
+      });
     } catch (error) {
       console.error("Error declining request:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to decline request",
+      });
     }
   };
 
@@ -953,10 +1064,29 @@ const ChatScreen = () => {
     if (!requestId) return;
 
     try {
-      const requestRef = doc(db, "rentRequests", requestId);
-      await updateDoc(requestRef, {
+      const chatRef = doc(db, "chat", String(chatId));
+      const chatSnap = await getDoc(chatRef);
+
+      if (!chatSnap.exists()) {
+        throw new Error("Chat not found");
+      }
+
+      const chatData = chatSnap.data();
+
+      // Store current item details before cancellation
+      const itemDetails = {
+        name: chatData.itemDetails?.name,
+        price: chatData.itemDetails?.price,
+        image: chatData.itemDetails?.image,
+        itemId: chatData.itemId,
+      };
+
+      // Update chat status but preserve item details
+      await updateDoc(chatRef, {
         status: "cancelled",
-        updatedAt: serverTimestamp(),
+        lastMessage: "Request cancelled by requester",
+        lastMessageTime: serverTimestamp(),
+        itemDetails: itemDetails, // Preserve item details
       });
 
       // Add status update message
@@ -966,12 +1096,38 @@ const ChatScreen = () => {
         senderId: currentUserId,
         createdAt: serverTimestamp(),
         read: false,
+        status: "cancelled",
+        // itemDetails: itemDetails,
       });
+
+      // Update the rent request message if it exists
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const q = query(
+        messagesRef,
+        where("rentRequestId", "==", requestId),
+        where("type", "==", "rentRequest")
+      );
+
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const rentRequestMessage = querySnapshot.docs[0];
+        await updateDoc(rentRequestMessage.ref, {
+          status: "cancelled",
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Delete from rentRequests collection
+      const requestRef = doc(db, "rentRequests", requestId);
+      await deleteDoc(requestRef);
+
+      // Disable messaging
+      setCanSendMessage(false);
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
-        title: "Request Cancelled",
-        textBody: "Your request has been cancelled successfully",
+        title: "Success",
+        textBody: "Request cancelled successfully",
       });
     } catch (error) {
       console.error("Error cancelling request:", error);
@@ -1001,10 +1157,10 @@ const ChatScreen = () => {
       style={{ paddingBottom: insets.bottom, paddingTop: insets.top }}
     >
       <ChatHeader
-        recipientEmail={recipientEmail}
+        recipientName={recipientName}
         recipientImage={recipientImage}
         onBack={() => router.back()}
-        recipientStatus={{ isOnline: true, lastSeen: new Date() }} // Dummy data for testing
+        recipientStatus={{ isOnline: true, lastSeen: new Date() }}
       />
 
       <KeyboardAvoidingView
@@ -1035,6 +1191,56 @@ const ChatScreen = () => {
             if (item.type === "rentRequest") {
               // Update how we determine if user is owner
               const isOwner = currentUserId === chatData?.ownerId;
+              // If the request is cancelled, show a minimal cancelled card using chatData
+              if (
+                (item.status && item.status.toLowerCase() === "cancelled") ||
+                (chatData?.status &&
+                  chatData.status.toLowerCase() === "cancelled")
+              ) {
+                // Use chatData.itemDetails for fallback info
+                const details = chatData?.itemDetails || {};
+                return (
+                  <View
+                    className={`flex- mb-3 ${
+                      currentUserId === chatData?.requesterId ? "pl-8" : "pr-8"
+                    }`}
+                  >
+                    <View
+                      className={`p-4 bg-gray-100 rounded-xl border border-gray-200 shadow-sm flex-1  ${
+                        currentUserId === chatData?.requesterId
+                          ? "rounded-br-none"
+                          : "rounded-bl-none"
+                      }`}
+                    >
+                      <View className="flex-row items-center gap-3 mb-2">
+                        <Image
+                          source={{
+                            uri:
+                              details.image || "https://via.placeholder.com/64",
+                          }}
+                          className="w-12 h-12 rounded-lg"
+                          resizeMode="cover"
+                        />
+                        <View className="flex-1">
+                          <Text className="font-pbold text-base text-gray-900">
+                            {details.name || "Rental Item"}
+                          </Text>
+                          <Text className="text-xs text-gray-500 mt-1">
+                            Request Cancelled
+                          </Text>
+                        </View>
+                      </View>
+                      <View className="bg-gray-200 rounded-lg px-3 py-2 mt-2">
+                        <Text className="text-gray-600 text-center">
+                          This request was cancelled.
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }
+
+              // Otherwise, show the full RentRequestMessage card
               return (
                 <RentRequestMessage
                   item={item}
@@ -1042,6 +1248,7 @@ const ChatScreen = () => {
                   onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
                   onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
                   onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
+                  chatData={chatData}
                 />
               );
             }
@@ -1161,43 +1368,71 @@ const ChatScreen = () => {
         {/* Message Input */}
         <View className="flex-row p-2 bg-white border-t border-gray-100 gap-2">
           {!canSendMessage ? (
-            <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
-              <Text className="text-gray-500 text-center">
-                Waiting for owner to respond to your request...
-              </Text>
-            </View>
+            // Show appropriate message based on status and user role
+            (() => {
+              if (chatData?.status === "cancelled") {
+                return (
+                  <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
+                    <Text className="text-gray-500 text-center">
+                      Request has been cancelled.
+                    </Text>
+                  </View>
+                );
+              }
+
+              if (chatData?.status === "declined") {
+                return (
+                  <View className="flex-1 bg-red-100 rounded-full py-3 px-4">
+                    <Text className="text-red-600 text-center">
+                      Request has been declined.
+                    </Text>
+                  </View>
+                );
+              }
+
+              // For pending status without owner response
+              const isOwner = currentUserId === chatData?.ownerId;
+              if (!isOwner && chatData?.status === "pending") {
+                return (
+                  <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
+                    <Text className="text-gray-500 text-center">
+                      Waiting for owner to respond to your request...
+                    </Text>
+                  </View>
+                );
+              }
+
+              return null;
+            })()
           ) : (
             <>
               <TouchableOpacity
                 onPress={() => setShowActionMenu(true)}
-                className="p-3 rounded-full bg-primary"
+                className="w-12 h-12 bg-gray-200 rounded-full items-center justify-center"
               >
                 <Image
                   source={icons.bigPlus}
-                  className="w-5 h-5" // Updated size
-                  tintColor="white"
+                  className="w-6 h-6"
+                  tintColor="#6B7280"
                 />
               </TouchableOpacity>
-              <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
-                <TextInput
-                  value={newMessage}
-                  onChangeText={setNewMessage}
-                  placeholder="Type a message..."
-                  multiline
-                  maxLength={1000}
-                  className="flex-1 max-h-28 text-base"
-                />
-              </View>
+
+              <TextInput
+                value={newMessage}
+                onChangeText={setNewMessage}
+                placeholder="Type a message..."
+                multiline
+                className="flex-1 bg-gray-100 rounded-full px-4 py-3 max-h-24"
+                style={{ textAlignVertical: "top" }}
+              />
               <TouchableOpacity
                 onPress={sendMessage}
-                disabled={!newMessage.trim()}
-                className={`p-3 rounded-full justify-center ${
-                  newMessage.trim() ? "bg-primary" : "bg-gray-300"
-                }`}
+                className="w-12 h-12 bg-primary rounded-full items-center justify-center"
+                disabled={newMessage.trim() === ""}
               >
                 <Image
                   source={icons.plane}
-                  className="w-5 h-5" // Updated size
+                  className="w-6 h-6"
                   tintColor="white"
                 />
               </TouchableOpacity>

@@ -44,12 +44,16 @@ interface User {
 interface Chat {
   id: string;
   recipientId: string;
-  recipientEmail: string;
-  recipientProfileImage: string; // Updated to match user profile field
+  recipientName: {
+    firstname: string;
+    lastname: string;
+    middlename?: string;
+  };
+  recipientProfileImage: string;
   lastMessage: string;
   lastMessageTime: Date | null;
   isCurrentUserLastSender: boolean;
-  isRentRequest?: boolean; // Add this field
+  isRentRequest?: boolean;
   requestStatus: "pending" | "accepted" | "rejected";
   itemDetails?: {
     id: string;
@@ -65,7 +69,7 @@ interface SearchResult {
   isExistingChat: boolean;
   chatId?: string;
   userId: string;
-  email: string;
+  fullName: string;
   profilePic: string;
   lastMessage?: string;
   lastMessageTime?: Date | null;
@@ -185,90 +189,69 @@ const ChatList = () => {
     }
   };
 
+  // Update the loadExistingChats function
   const loadExistingChats = (userId: string) => {
     try {
       const chatsRef = collection(db, "chat");
       const q = query(
         chatsRef,
-        where("participants", "array-contains", userId)
+        where("participants", "array-contains", userId),
+        orderBy("lastMessageTime", "desc")
       );
 
-      const unsubscribeChats = onSnapshot(
-        q,
-        async (snapshot) => {
-          if (snapshot.empty) {
-            setChats([]);
-            setLoading(false);
-            return;
-          }
-
-          const chatList = await Promise.all(
-            snapshot.docs.map(async (docSnap) => {
-              const chatId = docSnap.id;
-              const chatData = docSnap.data();
-
-              const participants = chatData.participants || [];
-              const recipientId = participants.find(
-                (id: string) => id !== userId
-              );
-
-              if (!recipientId) return null;
-
-              const userDoc = await getDoc(doc(db, "users", recipientId));
-              const recipient = userDoc.exists() ? userDoc.data() : null;
-
-              // Get the last message to check if it's a rent request
-              const messagesRef = collection(db, "chat", chatId, "messages");
-              const lastMessageQuery = query(
-                messagesRef,
-                orderBy("createdAt", "desc")
-              );
-              const lastMessageSnap = await getDocs(lastMessageQuery);
-              const lastMessage = !lastMessageSnap.empty
-                ? lastMessageSnap.docs[0].data()
-                : null;
-
-              return {
-                id: chatId,
-                recipientId,
-                recipientEmail: recipient?.email || "",
-                recipientProfileImage:
-                  recipient?.profileImage || "https://via.placeholder.com/50",
-                lastMessage: chatData.lastMessage || "No messages yet",
-                lastMessageTime: chatData.lastMessageTime?.toDate() || null,
-                isCurrentUserLastSender: chatData.lastSender === userId,
-                isRentRequest: lastMessage?.type === "rentRequest",
-                requestStatus: lastMessage?.requestStatus || "pending",
-                itemDetails: lastMessage?.itemDetails || null,
-                unreadCount: lastMessage?.unreadCount || 0,
-                lastMessageRead: lastMessage?.readBy?.includes(userId) || false,
-              } as Chat;
-            })
-          );
-
-          // Sort chats: rent requests first, then by time
-          const sortedChatList = chatList
-            .filter((chat): chat is Chat => chat !== null)
-            .sort((a, b) => {
-              // Sort rent requests first
-              if (a.isRentRequest && !b.isRentRequest) return -1;
-              if (!a.isRentRequest && b.isRentRequest) return 1;
-
-              // Then sort by time
-              if (!a.lastMessageTime) return 1;
-              if (!b.lastMessageTime) return -1;
-              return b.lastMessageTime.getTime() - a.lastMessageTime.getTime();
-            });
-
-          setChats(sortedChatList);
+      const unsubscribeChats = onSnapshot(q, async (snapshot) => {
+        if (snapshot.empty) {
+          setChats([]);
           setLoading(false);
-        },
-        (error) => {
-          console.error("Error getting chats:", error);
-          Alert.alert("Error", "There was an error loading your messages");
-          setLoading(false);
+          return;
         }
-      );
+
+        const chatList = await Promise.all(
+          snapshot.docs.map(async (docSnap) => {
+            const chatData = docSnap.data();
+            const chatId = docSnap.id;
+
+            // Get recipient info
+            const recipientId = chatData.participants.find(
+              (id: string) => id !== userId
+            );
+            const userDoc = await getDoc(doc(db, "users", recipientId));
+            const recipient = userDoc.exists() ? userDoc.data() : null;
+
+            return {
+              id: chatId,
+              recipientId,
+              recipientName: {
+                firstname: recipient?.firstname || "",
+                lastname: recipient?.lastname || "",
+                middlename: recipient?.middlename || "",
+              },
+              recipientProfileImage:
+                recipient?.profileImage || "https://via.placeholder.com/50",
+              lastMessage: chatData.lastMessage || "No messages yet",
+              lastMessageTime: chatData.lastMessageTime?.toDate() || null,
+              isCurrentUserLastSender: chatData.lastSender === userId,
+              unreadCount: chatData.unreadCount || 0,
+              lastMessageRead: chatData.lastMessageRead || false,
+              isRentRequest: chatData.isRentRequest || false,
+              requestStatus: chatData.requestStatus || "pending",
+              itemDetails: chatData.itemDetails || null,
+            } as Chat;
+          })
+        );
+
+        // Sort chats by lastMessageTime
+        const sortedChats = chatList
+          .filter((chat): chat is Chat => chat !== null)
+          .sort((a, b) => {
+            if (!a.lastMessageTime) return 1;
+            if (!b.lastMessageTime) return -1;
+            return b.lastMessageTime.getTime() - a.lastMessageTime.getTime();
+          });
+
+        setChats(sortedChats);
+        setLoading(false);
+      });
 
       return unsubscribeChats;
     } catch (error) {
@@ -287,6 +270,19 @@ const ChatList = () => {
     }
   };
 
+  // Add this helper function at the top with your other interfaces
+  const formatFullName = (name: {
+    firstname: string;
+    lastname: string;
+    middlename?: string;
+  }) => {
+    const middleInitial = name.middlename
+      ? ` ${name.middlename.charAt(0)}.`
+      : "";
+    return `${name.firstname}${middleInitial} ${name.lastname}`;
+  };
+
+  // Update the search useEffect
   useEffect(() => {
     if (!search || search.trim() === "") {
       setSearchResults([]);
@@ -294,39 +290,61 @@ const ChatList = () => {
     }
     const searchLower = search.toLowerCase();
 
-    //existing chat matxhes the seacrg
-    const matchingChats = chats.filter(
-      (chat) =>
-        chat.recipientEmail &&
-        chat.recipientEmail.toLowerCase().includes(searchLower)
-    );
+    // Search in existing chats
+    const matchingChats = chats.filter((chat) => {
+      const fullName = formatFullName(chat.recipientName).toLowerCase();
+      const firstName = chat.recipientName.firstname.toLowerCase();
+      const lastName = chat.recipientName.lastname.toLowerCase();
 
-    //users who sont have existing chat
+      return (
+        fullName.includes(searchLower) ||
+        firstName.includes(searchLower) ||
+        lastName.includes(searchLower)
+      );
+    });
+
+    // Get IDs of users we already have chats with
     const existingChatUserIds = new Set(
       matchingChats.map((chat) => chat.recipientId)
     );
 
+    // Search in all users who don't have existing chats
     const matchingUsers: SearchResult[] = allUsers
-      .filter(
-        (user) =>
-          user.email && //check if email exists
-          user.email.toLowerCase().includes(searchLower) &&
-          !existingChatUserIds.has(user.id)
-      )
+      .filter((user) => {
+        if (existingChatUserIds.has(user.id)) return false;
+
+        const fullName = formatFullName({
+          firstname: user.firstname || "",
+          lastname: user.lastname || "",
+          middlename: user.middlename,
+        }).toLowerCase();
+        const firstName = (user.firstname || "").toLowerCase();
+        const lastName = (user.lastname || "").toLowerCase();
+
+        return (
+          fullName.includes(searchLower) ||
+          firstName.includes(searchLower) ||
+          lastName.includes(searchLower)
+        );
+      })
       .map((user) => ({
         isExistingChat: false,
         userId: user.id,
-        email: user.email!,
-        profilePic: user.profilePic || "https://via.placeholder.com/50",
+        fullName: formatFullName({
+          firstname: user.firstname || "",
+          lastname: user.lastname || "",
+          middlename: user.middlename,
+        }),
+        profilePic: user.profileImage || "https://via.placeholder.com/50",
       }));
 
-    //combine existing chats and new chats
+    // Combine existing chats and new users
     const combinedResults: SearchResult[] = [
       ...matchingChats.map((chat) => ({
         isExistingChat: true,
         chatId: chat.id,
         userId: chat.recipientId,
-        email: chat.recipientEmail,
+        fullName: formatFullName(chat.recipientName),
         profilePic: chat.recipientProfileImage,
         lastMessage: chat.lastMessage,
         lastMessageTime: chat.lastMessageTime,
@@ -359,7 +377,7 @@ const ChatList = () => {
       <View className="flex-1 ml-4">
         <View className="flex-row items-center justify-between mb-1">
           <Text className="text-base font-bold text-gray-900">
-            {item.recipientEmail.split("@")[0]}
+            {formatFullName(item.recipientName)}
           </Text>
           {item.lastMessageTime && (
             <Text className="text-xs text-gray-500">
@@ -426,7 +444,7 @@ const ChatList = () => {
               />
               <View className="flex-1">
                 <Text className="text-lg font-semibold">
-                  {item.email || "Unknown User"}
+                  {item.fullName || "Unknown User"}
                 </Text>
                 {item.isExistingChat ? (
                   <Text
@@ -558,13 +576,24 @@ const ChatList = () => {
           }}
           renderItem={({ item }) => (
             <TouchableOpacity
-              className="flex-row items-center px-4 py-4 my- bg-white rounded-2xl shadow-sm border border-gray-50"
+              className="flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border border-gray-50"
               onPress={() => router.push(`/chat/${item.id}`)}
             >
               <View className="relative">
                 <Image
-                  source={{ uri: item.recipientProfileImage }}
-                  className="w-14 h-14 rounded-full bg-gray-200"
+                  // Show item image for rent requests, fallback to profile image
+                  source={{
+                    uri: item.isRentRequest
+                      ? item.itemDetails?.image
+                      : item.recipientProfileImage,
+                  }}
+                  className="w-14 h-14 rounded-2xl bg-gray-200"
+                  // Add specific styling for item images
+                  style={
+                    item.isRentRequest
+                      ? { borderRadius: 12 }
+                      : { borderRadius: 28 }
+                  }
                 />
                 {/* Status indicators */}
                 <View className="absolute bottom-0 right-0">
@@ -578,7 +607,7 @@ const ChatList = () => {
                           : "bg-red-500"
                       }`}
                     />
-                  ) : item.unreadCount > 0 ? (
+                  ) : !item.isCurrentUserLastSender && item.unreadCount > 0 ? (
                     <View className="bg-primary w-5 h-5 rounded-full items-center justify-center">
                       <Text className="text-white text-xs font-bold">
                         {item.unreadCount}
@@ -590,17 +619,29 @@ const ChatList = () => {
 
               <View className="flex-1 ml-4">
                 <View className="flex-row items-center justify-between">
-                  <Text
-                    className={`text-lg ${
-                      item.unreadCount > 0
-                        ? "font-bold text-gray-900"
-                        : "font-medium text-gray-800"
-                    }`}
-                  >
-                    {item.recipientEmail.split("@")[0]}
-                  </Text>
-                  <View className="flex-row items-center">
-                    {/* Read indicator */}
+                  <View className="flex-1">
+                    <Text
+                      className={`text-lg ${
+                        !item.isCurrentUserLastSender && item.unreadCount > 0
+                          ? "font-bold text-gray-900"
+                          : "font-medium text-gray-800"
+                      }`}
+                      numberOfLines={1}
+                    >
+                      {formatFullName(item.recipientName)}
+                      {item.isRentRequest && item.itemDetails?.name && (
+                        <>
+                          <Text className="text-gray-400"> • </Text>
+                          <Text className="text-primary font-medium">
+                            {item.itemDetails.name}
+                          </Text>
+                        </>
+                      )}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row items-center ml-2">
+                    {/* Read indicator - Only show for messages you sent */}
                     {item.isCurrentUserLastSender && (
                       <Image
                         source={
@@ -619,7 +660,7 @@ const ChatList = () => {
                     {item.lastMessageTime && (
                       <Text
                         className={`text-xs ${
-                          item.unreadCount > 0
+                          !item.isCurrentUserLastSender && item.unreadCount > 0
                             ? "font-semibold text-primary"
                             : "text-gray-500"
                         }`}
@@ -633,18 +674,7 @@ const ChatList = () => {
                   </View>
                 </View>
 
-                {item.isRentRequest && (
-                  <View className="flex-row items-center my-1">
-                    <View className="w-2 h-2 rounded-full mr-2 bg-primary" />
-                    <Text className="text-sm font-medium text-primary">
-                      {item.itemDetails?.name}
-                    </Text>
-                    <Text className="text-sm text-gray-600 ml-2">
-                      ₱{item.itemDetails?.price}
-                    </Text>
-                  </View>
-                )}
-
+                {/* Remove the separate item details section since it's now in the title */}
                 <Text
                   className={`text-sm ${
                     item.unreadCount > 0

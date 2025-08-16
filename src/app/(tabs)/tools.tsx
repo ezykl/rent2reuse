@@ -30,6 +30,8 @@ import {
   deleteDoc,
   updateDoc,
   orderBy,
+  serverTimestamp,
+  addDoc,
 } from "firebase/firestore";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -39,6 +41,7 @@ import ListingCard from "@/components/ListingCard";
 import { ref, deleteObject, listAll } from "firebase/storage";
 import RequestedItemCard from "@/components/RequestedItemCard";
 import SentRequestCard from "@/components/SentRequestCard";
+import { useLoader } from "@/context/LoaderContext";
 
 interface UserPlan {
   listLimit: number;
@@ -59,6 +62,8 @@ const Tools = () => {
   const [myListings, setMyListings] = useState<ListingItemType[]>([]);
   const [rentedTools, setRentedTools] = useState<RentedItem[]>([]);
   const [rentRequests, setRentRequests] = useState<RequestItem[]>([]);
+  const { isLoading: loaderIsLoading, setIsLoading: setLoaderIsLoading } =
+    useLoader();
   const [isLoading, setIsLoading] = useState(true);
   const [userPlan, setUserPlan] = useState<UserPlan>({
     listLimit: 0,
@@ -253,6 +258,7 @@ const Tools = () => {
           totalPrice: data.totalPrice,
           createdAt: data.createdAt?.toDate(),
           type: "outgoing",
+          chatId: data.chatId,
         };
       });
 
@@ -427,42 +433,88 @@ const Tools = () => {
           style: "destructive",
           onPress: async () => {
             try {
-              setIsLoading(true);
-              // First delete the request
-              await deleteDoc(doc(db, "rentRequests", requestId));
+              setLoaderIsLoading(true);
 
-              // Then update the user's rentUsed count
-              if (auth.currentUser) {
-                const userRef = doc(db, "users", auth.currentUser.uid);
-                const userDoc = await getDoc(userRef);
+              // Get the request data first to find associated chat
+              const requestRef = doc(db, "rentRequests", requestId);
+              const requestSnap = await getDoc(requestRef);
 
-                if (userDoc.exists()) {
-                  const currentPlan = userDoc.data().currentPlan;
-                  const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+              if (requestSnap.exists()) {
+                const requestData = requestSnap.data();
+                const chatId = requestData.chatId; // Assuming chatId is stored in request
 
-                  console.log("Updating rent usage:", {
-                    current: currentPlan.rentUsed,
-                    new: newRentUsed,
+                if (chatId) {
+                  // Update chat status
+                  const chatRef = doc(db, "chat", chatId);
+                  await updateDoc(chatRef, {
+                    status: "cancelled",
+                    lastMessage: "Request cancelled by requester",
+                    lastMessageTime: serverTimestamp(),
                   });
 
-                  await updateDoc(userRef, {
-                    "currentPlan.rentUsed": newRentUsed,
-                    "currentPlan.updatedAt": new Date(),
+                  // Add status update message
+                  await addDoc(collection(db, "chat", chatId, "messages"), {
+                    type: "statusUpdate",
+                    text: "Request cancelled by requester",
+                    senderId: auth.currentUser?.uid,
+                    createdAt: serverTimestamp(),
+                    read: false,
+                    status: "cancelled",
                   });
 
-                  // Refresh user plan data
-                  await fetchUserPlan();
+                  // Update rent request message in chat
+                  const messagesRef = collection(
+                    db,
+                    "chat",
+                    chatId,
+                    "messages"
+                  );
+                  const q = query(
+                    messagesRef,
+                    where("rentRequestId", "==", requestId),
+                    where("type", "==", "rentRequest")
+                  );
+
+                  const querySnapshot = await getDocs(q);
+                  if (!querySnapshot.empty) {
+                    const rentRequestMessage = querySnapshot.docs[0];
+                    await updateDoc(rentRequestMessage.ref, {
+                      status: "cancelled",
+                      updatedAt: serverTimestamp(),
+                    });
+                  }
                 }
+
+                // Delete the request
+                await deleteDoc(requestRef);
+
+                // Update user's rentUsed count
+                if (auth.currentUser) {
+                  const userRef = doc(db, "users", auth.currentUser.uid);
+                  const userDoc = await getDoc(userRef);
+
+                  if (userDoc.exists()) {
+                    const currentPlan = userDoc.data().currentPlan;
+                    const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+
+                    await updateDoc(userRef, {
+                      "currentPlan.rentUsed": newRentUsed,
+                      "currentPlan.updatedAt": new Date(),
+                    });
+
+                    await fetchUserPlan();
+                  }
+                }
+
+                Toast.show({
+                  type: ALERT_TYPE.SUCCESS,
+                  title: "Success",
+                  textBody: "Request cancelled successfully",
+                });
+
+                // Refresh the requests list
+                fetchSentRequests();
               }
-
-              Toast.show({
-                type: ALERT_TYPE.SUCCESS,
-                title: "Success",
-                textBody: "Request cancelled successfully",
-              });
-
-              // Refresh the requests list
-              fetchSentRequests();
             } catch (error) {
               console.error("Error cancelling request:", error);
               Toast.show({
@@ -471,7 +523,7 @@ const Tools = () => {
                 textBody: "Failed to cancel request",
               });
             }
-            setIsLoading(false);
+            setLoaderIsLoading(false);
           },
         },
       ]
@@ -1184,9 +1236,10 @@ const Tools = () => {
                               endDate: request.endDate,
                               pickupTime: request.pickupTime,
                               totalPrice: request.totalPrice,
+                              chatId: request.chatId,
                             }}
                             onPress={(id) =>
-                              router.push(`/request-detail/${id}`)
+                              router.push(`/chat/${request.chatId}`)
                             }
                             onCancel={handleCancelRequest}
                           />

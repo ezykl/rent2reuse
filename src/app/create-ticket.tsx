@@ -52,10 +52,9 @@ export default function CreateTicket() {
       const subject = SUPPORT_SUBJECTS.find((s) => s.id === selectedSubject);
       const now = new Date();
       const generatedTicketId = generateTicketId();
+      const currentUserId = auth.currentUser.uid;
 
-      // Debug log to verify ticket ID before storing
-      console.log("About to store ticket with ID:", generatedTicketId);
-
+      // Create ticket
       const ticketData = {
         ticketId: generatedTicketId, // Use the generated ID
         userId: auth.currentUser.uid,
@@ -85,9 +84,25 @@ export default function CreateTicket() {
 
       const docRef = await addDoc(collection(db, "support"), ticketData);
 
-      // Debug log the document reference
-      console.log("Document created with ID:", docRef.id);
-      console.log("Ticket ID stored:", generatedTicketId);
+      // Create notification in user's subcollection
+      const userNotificationsRef = collection(
+        db,
+        `users/${currentUserId}/notifications`
+      );
+
+      await addDoc(userNotificationsRef, {
+        type: "SUPPORT_TICKET",
+        title: "Support Ticket Created",
+        message: `Your ticket ${generatedTicketId} has been submitted successfully. Our support team will review it shortly.`,
+        isRead: false,
+        createdAt: serverTimestamp(),
+        data: {
+          route: "/support-details",
+          params: {
+            ticketId: generatedTicketId,
+          },
+        },
+      });
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -97,6 +112,7 @@ export default function CreateTicket() {
 
       router.back();
     } catch (error) {
+      console.error("Error creating ticket:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

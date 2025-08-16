@@ -425,9 +425,7 @@ const ViewRequests = () => {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
         <LottieActivityIndicator size={80} />
-        <Text className="text-gray-500 font-pregular mt-3 text-sm">
-          Loading requests...
-        </Text>
+        <Text className="text-gray-500 font-pregular mt-3 text-sm">s...</Text>
       </View>
     );
   }

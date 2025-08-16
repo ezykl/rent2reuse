@@ -17,6 +17,7 @@ interface SentRequestCardProps {
     endDate: any;
     pickupTime: number;
     totalPrice: number;
+    chatId: string;
   };
   onPress: (id: string) => void;
   onCancel: (id: string) => void;
