@@ -42,7 +42,13 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "@/lib/firebaseConfig";
 import { icons } from "@/constant";
-import { format } from "date-fns";
+import {
+  format,
+  isToday,
+  isYesterday,
+  differenceInMinutes,
+  isSameDay,
+} from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 
@@ -58,6 +64,30 @@ interface ChatHeaderProps {
   onBack: () => void;
 }
 
+// Helper function to format timestamp for display
+const formatTimestamp = (timestamp: any): string => {
+  if (!timestamp) return "";
+
+  const date = timestamp.toDate();
+
+  if (isToday(date)) {
+    return format(date, "h:mm a"); // "2:30 PM"
+  } else if (isYesterday(date)) {
+    return `Yesterday ${format(date, "h:mm a")}`; // "Yesterday 2:30 PM"
+  } else {
+    // For older messages, show date and time
+    const now = new Date();
+    const diffInDays = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffInDays < 7) {
+      return format(date, "EEE h:mm a"); // "Mon 2:30 PM"
+    } else {
+      return format(date, "MMM d, h:mm a"); // "Jan 15, 2:30 PM"
+    }
+  }
+};
 const ChatHeader = ({
   recipientName,
   recipientImage,
@@ -573,6 +603,12 @@ const RentRequestMessage = ({
             </Text>
           </View>
         )}
+
+        <View className="mt-2 flex-row justify-end">
+          <Text className="text-xs text-gray-400">
+            {item.createdAt ? formatTimestamp(item.createdAt) : ""}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -586,6 +622,7 @@ const ChatScreen = () => {
   const currentUserId = auth.currentUser?.uid;
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientName, setRecipientName] = useState<{
     firstname: string;
@@ -624,6 +661,122 @@ const ChatScreen = () => {
       </View>
     );
   }
+
+  const TypingIndicator = ({ isVisible }: { isVisible: boolean }) => {
+    if (!isVisible) return null;
+
+    return (
+      <View className="flex-row justify-start mb-3">
+        <Image
+          source={{ uri: recipientImage }}
+          className="w-8 h-8 rounded-full mr-2 mt-1"
+        />
+        <View className="bg-white rounded-2xl rounded-tl-none px-4 py-3 border border-gray-200">
+          <View className="flex-row items-center space-x-1">
+            <View className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+            <View
+              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              style={{ animationDelay: "0.1s" }}
+            />
+            <View
+              className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+              style={{ animationDelay: "0.2s" }}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const shouldShowTimestamp = (
+    currentMessage: Message,
+    previousMessage: Message | null
+  ): boolean => {
+    if (!previousMessage) return true; // Always show for first message
+
+    if (!currentMessage.createdAt || !previousMessage.createdAt) return false;
+
+    const currentTime = currentMessage.createdAt.toDate();
+    const previousTime = previousMessage.createdAt.toDate();
+
+    // Show timestamp if:
+    // 1. More than 5 minutes have passed
+    // 2. Different senders
+    // 3. Different days
+    return (
+      differenceInMinutes(currentTime, previousTime) > 5 ||
+      currentMessage.senderId !== previousMessage.senderId ||
+      !isSameDay(currentTime, previousTime)
+    );
+  };
+
+  // Helper function to format day separators
+  const formatDaySeparator = (timestamp: any): string => {
+    if (!timestamp) return "";
+
+    const date = timestamp.toDate();
+
+    if (isToday(date)) {
+      return "Today";
+    } else if (isYesterday(date)) {
+      return "Yesterday";
+    } else {
+      const now = new Date();
+      const diffInDays = Math.floor(
+        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diffInDays < 7) {
+        return format(date, "EEEE"); // "Monday"
+      } else {
+        return format(date, "MMMM d, yyyy"); // "January 15, 2024"
+      }
+    }
+  };
+
+  // Helper function to check if we should show day separator
+  const shouldShowDaySeparator = (
+    currentMessage: Message,
+    previousMessage: Message | null
+  ): boolean => {
+    if (
+      !previousMessage ||
+      !currentMessage.createdAt ||
+      !previousMessage.createdAt
+    )
+      return false;
+
+    const currentDate = currentMessage.createdAt.toDate();
+    const previousDate = previousMessage.createdAt.toDate();
+
+    return !isSameDay(currentDate, previousDate);
+  };
+
+  // 2. Create a TimeIndicator component
+  const TimeIndicator = ({ timestamp }: { timestamp: any }) => {
+    return (
+      <View className="flex-row justify-center my-2">
+        <View className="bg-gray-200 px-3 py-1 rounded-full">
+          <Text className="text-xs text-gray-600 font-pmedium">
+            {formatTimestamp(timestamp)}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  // 3. Create a DaySeparator component
+  const DaySeparator = ({ timestamp }: { timestamp: any }) => {
+    return (
+      <View className="flex-row justify-center my-4">
+        <View className="bg-gray-100 px-4 py-2 rounded-full border border-gray-200">
+          <Text className="text-sm text-gray-700 font-pmedium">
+            {formatDaySeparator(timestamp)}
+          </Text>
+        </View>
+      </View>
+    );
+  };
 
   // Initialize or fetch chat data
   useEffect(() => {
@@ -693,6 +846,14 @@ const ChatScreen = () => {
 
     initializeChat();
   }, [chatId, currentUserId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!chatId || !currentUserId) return;
@@ -1187,165 +1348,102 @@ const ChatScreen = () => {
           onLayout={() => {
             flatListRef.current?.scrollToEnd({ animated: true });
           }}
-          renderItem={({ item }) => {
-            if (item.type === "rentRequest") {
-              // Update how we determine if user is owner
-              const isOwner = currentUserId === chatData?.ownerId;
-              // If the request is cancelled, show a minimal cancelled card using chatData
-              if (
-                (item.status && item.status.toLowerCase() === "cancelled") ||
-                (chatData?.status &&
-                  chatData.status.toLowerCase() === "cancelled")
-              ) {
-                // Use chatData.itemDetails for fallback info
-                const details = chatData?.itemDetails || {};
-                return (
-                  <View
-                    className={`flex- mb-3 ${
-                      currentUserId === chatData?.requesterId ? "pl-8" : "pr-8"
-                    }`}
-                  >
-                    <View
-                      className={`p-4 bg-gray-100 rounded-xl border border-gray-200 shadow-sm flex-1  ${
-                        currentUserId === chatData?.requesterId
-                          ? "rounded-br-none"
-                          : "rounded-bl-none"
-                      }`}
-                    >
-                      <View className="flex-row items-center gap-3 mb-2">
-                        <Image
-                          source={{
-                            uri:
-                              details.image || "https://via.placeholder.com/64",
-                          }}
-                          className="w-12 h-12 rounded-lg"
-                          resizeMode="cover"
-                        />
-                        <View className="flex-1">
-                          <Text className="font-pbold text-base text-gray-900">
-                            {details.name || "Rental Item"}
-                          </Text>
-                          <Text className="text-xs text-gray-500 mt-1">
-                            Request Cancelled
-                          </Text>
-                        </View>
-                      </View>
-                      <View className="bg-gray-200 rounded-lg px-3 py-2 mt-2">
-                        <Text className="text-gray-600 text-center">
-                          This request was cancelled.
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                );
-              }
-
-              // Otherwise, show the full RentRequestMessage card
-              return (
-                <RentRequestMessage
-                  item={item}
-                  isOwner={isOwner}
-                  onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
-                  onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
-                  onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
-                  chatData={chatData}
-                />
-              );
-            }
-
-            if (item.type === "statusUpdate") {
-              return (
-                <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">
-                  <Text className="text-gray-600 text-sm text-center">
-                    {item.text}
-                  </Text>
-                </View>
-              );
-            }
-
-            const isSender = item.senderId === currentUserId;
-            return (
-              <View
-                className={`flex-row mb-3 ${
-                  isSender ? "justify-end" : "justify-start"
-                }`}
-              >
-                {!isSender && (
-                  <Image
-                    source={{ uri: recipientImage }}
-                    className="w-8 h-8 rounded-full mr-2 mt-1"
-                  />
-                )}
-                <View
-                  className={`max-w-[75%] rounded-2xl px-4 py-3 ${
-                    isSender
-                      ? "bg-primary rounded-tr-none"
-                      : "bg-white rounded-tl-none border border-gray-200"
-                  }`}
-                >
-                  <Text className={isSender ? "text-white" : "text-gray-800"}>
-                    {item.text}
-                  </Text>
-                </View>
-              </View>
+          renderItem={({ item, index }) => {
+            const previousMessage = index > 0 ? messages[index - 1] : null;
+            const showTimestamp = shouldShowTimestamp(item, previousMessage);
+            const showDaySeparator = shouldShowDaySeparator(
+              item,
+              previousMessage
             );
 
-            // return (
-            //   <View
-            //     className={`flex-row mb-3 ${
-            //       item.senderId === currentUserId
-            //         ? "justify-end"
-            //         : "justify-start"
-            //     }`}
-            //   >
-            //     {item.senderId !== currentUserId && (
-            //       <Image
-            //         source={{ uri: recipientImage }}
-            //         className="w-8 h-8 rounded-full mr-2 mt-1"
-            //       />
-            //     )}
-            //     <View
-            //       className={`max-w-[75%] rounded-2xl px-4 py-3 border border-gray-200 shadow-sm
-            //         ${
-            //           item.senderId === currentUserId
-            //             ? "bg-primary rounded-tr-none"
-            //             : "bg-white rounded-tl-none"
-            //         }`}
-            //     >
-            //       <Text
-            //         className={`${
-            //           item.senderId === currentUserId
-            //             ? "text-white"
-            //             : "text-gray-800"
-            //         } text-base`}
-            //       >
-            //         {item.text}
-            //       </Text>
-            //     </View>
-            //     {item.senderId === currentUserId && (
-            //       <View className="flex-row items-center ml-2">
-            //         {item.read ? (
-            //           <>
-            //             <Image
-            //               source={icons.doubleCheck}
-            //               className="w-4 h-4 tint-primary"
-            //             />
-            //             {item.readAt && (
-            //               <Text className="text-xs text-gray-400 ml-1">
-            //                 {format(item.readAt.toDate(), "HH:mm")}
-            //               </Text>
-            //             )}
-            //           </>
-            //         ) : (
-            //           <Image
-            //             source={icons.singleCheck}
-            //             className="w-4 h-4 tint-gray-400"
-            //           />
-            //         )}
-            //       </View>
-            //     )}
-            //   </View>
-            // );
+            return (
+              <View>
+                {/* Day Separator */}
+                {showDaySeparator && (
+                  <DaySeparator timestamp={item.createdAt} />
+                )}
+
+                {/* Time Indicator */}
+                {showTimestamp && <TimeIndicator timestamp={item.createdAt} />}
+
+                {/* Message Content */}
+                {item.type === "rentRequest" ? (
+                  <RentRequestMessage
+                    item={item}
+                    isOwner={currentUserId === chatData?.ownerId}
+                    onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
+                    onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
+                    onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
+                    chatData={chatData}
+                  />
+                ) : item.type === "statusUpdate" ? (
+                  <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">
+                    <Text className="text-gray-600 text-sm text-center">
+                      {item.text}
+                    </Text>
+                  </View>
+                ) : (
+                  // Regular message with enhanced timestamp
+                  <View
+                    className={`flex-row mb-2 ${
+                      item.senderId === currentUserId
+                        ? "justify-end"
+                        : "justify-start"
+                    }`}
+                  >
+                    {item.senderId !== currentUserId && (
+                      <Image
+                        source={{ uri: recipientImage }}
+                        className="w-8 h-8 rounded-full mr-2 mt-1"
+                      />
+                    )}
+                    <View className="flex-col">
+                      <View
+                        className={`max-w-[90%] rounded-2xl px-4 py-3 ${
+                          item.senderId === currentUserId
+                            ? "bg-primary rounded-tr-none self-end"
+                            : "bg-white rounded-tl-none border border-gray-200"
+                        }`}
+                      >
+                        <Text
+                          className={`${
+                            item.senderId === currentUserId
+                              ? "text-white"
+                              : "text-gray-800"
+                          } text-base`}
+                        >
+                          {item.text}
+                        </Text>
+                      </View>
+
+                      {/* Message status and mini time for sender's messages */}
+                      {item.senderId === currentUserId && (
+                        <View className="flex-row items-center justify-end mt-1 px-1">
+                          {item.read ? (
+                            <Image
+                              source={icons.doubleCheck}
+                              className="w-3 h-3 mr-1"
+                              tintColor="#4285F4"
+                            />
+                          ) : (
+                            <Image
+                              source={icons.singleCheck}
+                              className="w-3 h-3 mr-1"
+                              tintColor="#9CA3AF"
+                            />
+                          )}
+                          <Text className="text-xs text-gray-400">
+                            {item.createdAt
+                              ? format(item.createdAt.toDate(), "h:mm a")
+                              : ""}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </View>
+            );
           }}
           ListEmptyComponent={() => (
             <View className="flex-1 justify-center items-center pt-12">
@@ -1405,7 +1503,7 @@ const ChatScreen = () => {
               return null;
             })()
           ) : (
-            <>
+            <View className="flex-1 flex-row items-center gap-2">
               <TouchableOpacity
                 onPress={() => setShowActionMenu(true)}
                 className="w-12 h-12 bg-gray-200 rounded-full items-center justify-center"
@@ -1422,7 +1520,7 @@ const ChatScreen = () => {
                 onChangeText={setNewMessage}
                 placeholder="Type a message..."
                 multiline
-                className="flex-1 bg-gray-100 rounded-full px-4 py-3 max-h-24"
+                className="flex-1 bg-gray-100 rounded-full p-5 max-h-24"
                 style={{ textAlignVertical: "top" }}
               />
               <TouchableOpacity
@@ -1436,7 +1534,7 @@ const ChatScreen = () => {
                   tintColor="white"
                 />
               </TouchableOpacity>
-            </>
+            </View>
           )}
         </View>
 
