@@ -60,6 +60,10 @@ interface ChatHeaderProps {
     middlename?: string;
   };
   recipientImage?: string;
+  itemDetails?: {
+    name?: string;
+    image?: string;
+  };
   recipientStatus?: any;
   onBack: () => void;
 }
@@ -145,6 +149,7 @@ const MessageActionsModal = ({
 const ChatHeader = ({
   recipientName,
   recipientImage,
+  itemDetails,
   recipientStatus,
   onBack,
 }: ChatHeaderProps) => {
@@ -154,24 +159,6 @@ const ChatHeader = ({
       ? ` ${recipientName.middlename.charAt(0)}.`
       : "";
     return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
-  };
-  console.log("Formatted Full Name:", formatFullName()); // Debug log
-
-  const getStatusText = (status: any) => {
-    if (status?.isOnline) return "Online";
-    if (status?.lastSeen) {
-      const lastSeenDate = status.lastSeen.toDate();
-      const now = new Date();
-      const diffMinutes = Math.floor(
-        (now.getTime() - lastSeenDate.getTime()) / 1000 / 60
-      );
-
-      if (diffMinutes < 1) return "Just now";
-      if (diffMinutes < 60) return `${diffMinutes}m ago`;
-      if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
-      return "Offline";
-    }
-    return "Offline";
   };
 
   return (
@@ -185,19 +172,31 @@ const ChatHeader = ({
       </TouchableOpacity>
       <View className="relative">
         <Image
-          source={{ uri: recipientImage || "https://via.placeholder.com/40" }}
+          source={{
+            uri:
+              itemDetails?.image ||
+              recipientImage ||
+              "https://via.placeholder.com/40",
+          }}
           className="w-10 h-10 rounded-full bg-gray-200"
-        />
-        <View
-          className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-            recipientStatus?.isOnline ? "bg-green-500" : "bg-gray-400"
-          }`}
+          resizeMode="cover"
         />
       </View>
       <View className="ml-3 flex-1">
-        <Text className="text-base font-semibold">{formatFullName()}</Text>
+        <Text
+          className="text-base font-semibold text-gray-900"
+          numberOfLines={1}
+        >
+          {formatFullName()}
+          {itemDetails?.name && (
+            <>
+              <Text className="text-gray-400"> • </Text>
+              <Text className="text-primary">{itemDetails.name}</Text>
+            </>
+          )}
+        </Text>
         <Text className="text-xs text-gray-500">
-          {getStatusText(recipientStatus)}
+          {recipientStatus?.isOnline ? "Online" : "Offline"}
         </Text>
       </View>
     </View>
@@ -978,7 +977,7 @@ const ChatScreen = () => {
           }
 
           const recipientData = recipientSnap.data();
-          setRecipientImage(recipientData.profileImage || "");
+          setRecipientImage(chatData?.itemDetails?.image || "");
           setRecipientName({
             firstname: recipientData.firstname || "", // Changed from firstName
             lastname: recipientData.lastname || "", // Changed from lastName
@@ -1498,6 +1497,7 @@ const ChatScreen = () => {
       <ChatHeader
         recipientName={recipientName}
         recipientImage={recipientImage}
+        itemDetails={chatData?.itemDetails}
         onBack={() => router.back()}
         recipientStatus={{ isOnline: true, lastSeen: new Date() }}
       />
@@ -1618,7 +1618,11 @@ const ChatScreen = () => {
                       </View>
 
                       {/* Message metadata */}
-                      <View className="flex-row items-center justify-end mt-1 px-1">
+                      <View
+                        className={`flex-row items-center  mt-1 px-1 ${
+                          isCurrentUser ? "justify-end" : "justify-start"
+                        }`}
+                      >
                         {isCurrentUser && (
                           <>
                             {item.read ? (

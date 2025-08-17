@@ -377,7 +377,7 @@ const ChatList = () => {
       <View className="flex-1 ml-4">
         <View className="flex-row items-center justify-between mb-1">
           <Text className="text-base font-bold text-gray-900">
-            {formatFullName(item.recipientName)}
+            {formatFullName(item.recipientName)} • {item.itemDetails?.name}
           </Text>
           {item.lastMessageTime && (
             <Text className="text-xs text-gray-500">
@@ -585,7 +585,7 @@ const ChatList = () => {
                   source={{
                     uri: item.isRentRequest
                       ? item.itemDetails?.image
-                      : item.recipientProfileImage,
+                      : item.itemDetails?.image,
                   }}
                   className="w-14 h-14 rounded-2xl bg-gray-200"
                   // Add specific styling for item images
@@ -621,14 +621,15 @@ const ChatList = () => {
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1">
                     <Text
-                      className={`text-lg ${
+                      className={`text-base ${
                         !item.isCurrentUserLastSender && item.unreadCount > 0
                           ? "font-bold text-gray-900"
                           : "font-medium text-gray-800"
                       }`}
                       numberOfLines={1}
                     >
-                      {formatFullName(item.recipientName)}
+                      {formatFullName(item.recipientName)} •{" "}
+                      {item.itemDetails?.name}
                       {item.isRentRequest && item.itemDetails?.name && (
                         <>
                           <Text className="text-gray-400"> • </Text>
