@@ -65,6 +65,7 @@ interface ChatHeaderProps {
     image?: string;
   };
   recipientStatus?: any;
+  recipientId: string;
   onBack: () => void;
 }
 
@@ -152,6 +153,7 @@ const ChatHeader = ({
   itemDetails,
   recipientStatus,
   onBack,
+  recipientId,
 }: ChatHeaderProps) => {
   // Format full name helper function
   const formatFullName = () => {
@@ -170,6 +172,7 @@ const ChatHeader = ({
           tintColor="#6B7280"
         />
       </TouchableOpacity>
+
       <View className="relative">
         <Image
           source={{
@@ -199,6 +202,17 @@ const ChatHeader = ({
           {recipientStatus?.isOnline ? "Online" : "Offline"}
         </Text>
       </View>
+      <TouchableOpacity
+        onPress={() => router.push(`/report/${recipientId}`)}
+        className="mr-3"
+      >
+        <Image
+          source={icons.about}
+          className="w-7 h-7"
+          tintColor="#EF4444"
+          style={{ transform: [{ rotate: "180deg" }] }}
+        />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -274,7 +288,7 @@ interface Message {
   deletedAt?: any;
   isEdited?: boolean;
   editedAt?: any;
-  status: string;
+  status?: string;
   id: string;
   senderId: string;
   text: string;
@@ -318,7 +332,8 @@ const RentRequestMessage = ({
   onAccept,
   onDecline,
   onCancel,
-  chatData, // Add chatData prop
+  chatData,
+  chatId,
 }: {
   item: Message;
   isOwner: boolean;
@@ -326,10 +341,47 @@ const RentRequestMessage = ({
   onDecline?: () => void;
   onCancel?: () => void;
   chatData?: any;
+  chatId: string;
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [rentRequestData, setRentRequestData] = useState<any>(null);
+  const [currentStatus, setCurrentStatus] = useState<string>("pending"); // Add state for current status
   const isSender = item.senderId === auth.currentUser?.uid;
+
+  // Add real-time status listener
+  useEffect(() => {
+    if (!chatId || !item.rentRequestId) return;
+
+    // Listen for changes in the message document itself
+    const messageRef = doc(db, "chat", String(chatId), "messages", item.id);
+    const unsubscribe = onSnapshot(messageRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const messageData = snapshot.data();
+        if (messageData.status) {
+          setCurrentStatus(messageData.status);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [chatId, item.id, item.rentRequestId]);
+
+  // Also listen for chat-level status changes
+  useEffect(() => {
+    if (!chatId) return;
+
+    const chatRef = doc(db, "chat", String(chatId));
+    const unsubscribe = onSnapshot(chatRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.status === "cancelled" || data.status === "declined") {
+          setCurrentStatus(data.status);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [chatId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -340,36 +392,51 @@ const RentRequestMessage = ({
           return;
         }
 
-        // If request is cancelled, use chat data as fallback
-        if (chatData?.status === "cancelled") {
+        // Use current status from state or fallback to item status
+        const effectiveStatus =
+          currentStatus || item.status || chatData?.status || "pending";
+
+        // If request is cancelled or declined, use chat data as fallback
+        if (effectiveStatus === "cancelled" || effectiveStatus === "declined") {
           const fallbackData = {
-            itemName: chatData.itemDetails?.name,
-            itemImage: chatData.itemDetails?.image,
-            totalPrice: chatData.itemDetails?.price,
-            status: "cancelled",
-            // Add other necessary fields from chatData
+            itemName: chatData?.itemDetails?.name || "Unknown Item",
+            itemImage: chatData?.itemDetails?.image || "",
+            totalPrice: chatData?.itemDetails?.price || 0,
+            status: effectiveStatus,
+            rentalDays: 1, // Default fallback
+            pickupTime: 480, // Default fallback (8:00 AM)
+            message: "Request details unavailable",
+            startDate: new Date(),
+            endDate: new Date(),
           };
           setRentRequestData(fallbackData);
           return;
         }
 
-        // Try to fetch from rentRequests collection
+        // Try to fetch from rentRequests collection for active requests
         if (item.rentRequestId) {
           const rentRequestRef = doc(db, "rentRequests", item.rentRequestId);
           const rentRequestSnap = await getDoc(rentRequestRef);
 
           if (rentRequestSnap.exists()) {
-            const requestData = rentRequestSnap.data();
+            const requestData = {
+              ...rentRequestSnap.data(),
+              status: effectiveStatus,
+            };
             setRentRequestData(requestData);
             requestDataCache.set(item.rentRequestId, requestData);
           } else {
             // If request document doesn't exist, fall back to chat data
             const fallbackData = {
-              itemName: chatData.itemDetails?.name,
-              itemImage: chatData.itemDetails?.image,
-              totalPrice: chatData.itemDetails?.price,
-              status: chatData.status,
-              // Add other necessary fields from chatData
+              itemName: chatData?.itemDetails?.name || "Unknown Item",
+              itemImage: chatData?.itemDetails?.image || "",
+              totalPrice: chatData?.itemDetails?.price || 0,
+              status: effectiveStatus,
+              rentalDays: 1,
+              pickupTime: 480,
+              message: "Request details unavailable",
+              startDate: new Date(),
+              endDate: new Date(),
             };
             setRentRequestData(fallbackData);
           }
@@ -379,10 +446,15 @@ const RentRequestMessage = ({
         // Fall back to chat data on error
         if (chatData) {
           const fallbackData = {
-            itemName: chatData.itemDetails?.name,
-            itemImage: chatData.itemDetails?.image,
-            totalPrice: chatData.itemDetails?.price,
-            status: chatData.status,
+            itemName: chatData.itemDetails?.name || "Unknown Item",
+            itemImage: chatData.itemDetails?.image || "",
+            totalPrice: chatData.itemDetails?.price || 0,
+            status: currentStatus || chatData.status || "pending",
+            rentalDays: 1,
+            pickupTime: 480,
+            message: "Error loading request details",
+            startDate: new Date(),
+            endDate: new Date(),
           };
           setRentRequestData(fallbackData);
         }
@@ -390,12 +462,14 @@ const RentRequestMessage = ({
     };
 
     fetchData();
-  }, [item.rentRequestId, chatData]);
+  }, [item.rentRequestId, chatData, currentStatus]);
 
   // Format date helper function
   const formatDate = (date: any) => {
     if (!date) return "";
-    return format(date.toDate(), "MMM d, yyyy");
+    if (date.toDate) return format(date.toDate(), "MMM d, yyyy");
+    if (date instanceof Date) return format(date, "MMM d, yyyy");
+    return "Date unavailable";
   };
 
   if (!rentRequestData) {
@@ -420,12 +494,15 @@ const RentRequestMessage = ({
       case "pending":
         return "bg-blue-100 text-blue-600";
       default:
-        return "bg-gray-100 text-gray-600"; // Default style for undefined or unknown status
+        return "bg-gray-100 text-gray-600";
     }
   };
 
+  // Use currentStatus for all status checks
+  const effectiveStatus = currentStatus || rentRequestData.status || "pending";
+
   const getStatusDisplay = () => {
-    switch (rentRequestData.status.toLowerCase()) {
+    switch (effectiveStatus.toLowerCase()) {
       case "cancelled":
         return (
           <View className="bg-gray-100 p-4 rounded-lg mt-4">
@@ -456,24 +533,18 @@ const RentRequestMessage = ({
             : "bg-white rounded-xl rounded-bl-none border border-gray-200"
         }`}
       >
-        {/* Status Badge */}
+        {/* Status Badge - Use effectiveStatus */}
         <View
           className={`absolute top-4 right-4 px-2 py-1 rounded-full ${getStatusBadge(
-            rentRequestData.status
+            effectiveStatus
           )}`}
         >
-          <Text
-            className={`text-xs font-pmedium capitalize ${isSender ? "" : ""}`}
-          >
-            {rentRequestData.status || "pending"}
+          <Text className="text-xs font-pmedium capitalize">
+            {effectiveStatus}
           </Text>
         </View>
 
-        <Text
-          className={`text-sm font-pmedium mb-2 ${
-            isSender ? "text-gray-500" : "text-gray-500"
-          }`}
-        >
+        <Text className="text-sm font-pmedium mb-2 text-gray-500">
           {isSender ? "Your Request" : "Rental Request"}
         </Text>
 
@@ -485,29 +556,18 @@ const RentRequestMessage = ({
             resizeMode="cover"
           />
           <View className="flex-1">
-            <Text
-              className={`font-pbold text-base mb-1 ${
-                isSender ? "text-gray-900" : "text-gray-900"
-              }`}
-            >
+            <Text className="font-pbold text-base mb-1 text-gray-900">
               {rentRequestData.itemName}
             </Text>
-            <Text
-              className={`text-sm ${
-                isSender ? "text-gray-600" : "text-gray-600"
-              }`}
-            >
+            <Text className="text-sm text-gray-600">
               {formatDate(rentRequestData.startDate)} -{" "}
               {formatDate(rentRequestData.endDate)}
             </Text>
-            <Text
-              className={`font-pmedium mt-1 ${
-                isSender ? "text-primary" : "text-primary"
-              }`}
-            >
+            <Text className="font-pmedium mt-1 text-primary">
               ₱
               {Math.round(
-                rentRequestData.totalPrice / rentRequestData.rentalDays
+                (rentRequestData.totalPrice || 0) /
+                  (rentRequestData.rentalDays || 1)
               )}
               /day
             </Text>
@@ -515,18 +575,10 @@ const RentRequestMessage = ({
         </View>
 
         <View>
-          <Text
-            className={`text-xs font-pbold uppercase ${
-              isSender ? "text-gray-400" : "text-gray-400"
-            }`}
-          >
+          <Text className="text-xs font-pbold uppercase text-gray-400">
             Message
           </Text>
-          <Text
-            className={`text-sm mt-1 ${
-              isSender ? "text-gray-700" : "text-gray-700"
-            }`}
-          >
+          <Text className="text-sm mt-1 text-gray-700">
             {rentRequestData.message}
           </Text>
         </View>
@@ -536,78 +588,45 @@ const RentRequestMessage = ({
           onPress={() => setShowDetails(!showDetails)}
           className="mt-3 py-2 flex-row items-center justify-center"
         >
-          <Text
-            className={`text-sm font-pmedium mr-1 ${
-              isSender ? "text-blue-500" : "text-blue-500"
-            }`}
-          >
+          <Text className="text-sm font-pmedium mr-1 text-blue-500">
             {showDetails ? "Show less" : "Show details"}
           </Text>
-
           <Image
             source={icons.arrowDown}
             className={`w-4 h-4 ${showDetails ? "rotate-180" : ""}`}
-            tintColor={isSender ? "#5C6EF6" : "#5C6EF6"}
+            tintColor="#5C6EF6"
           />
         </TouchableOpacity>
 
         {/* Detailed Info */}
         {showDetails && (
-          <View
-            className={`mt-3 pt-3 ${
-              isSender ? "border-t border-gray-100" : "border-t border-gray-100"
-            }`}
-          >
+          <View className="mt-3 pt-3 border-t border-gray-100">
             <View className="space-y-3">
               <View>
-                <Text
-                  className={`text-xs font-pbold uppercase ${
-                    isSender ? "text-gray-400" : "text-gray-400"
-                  }`}
-                >
+                <Text className="text-xs font-pbold uppercase text-gray-400">
                   Rental Period
                 </Text>
-                <Text
-                  className={`text-sm mt-1 ${
-                    isSender ? "text-gray-700" : "text-gray-700"
-                  }`}
-                >
+                <Text className="text-sm mt-1 text-gray-700">
                   {rentRequestData.rentalDays} days
                 </Text>
               </View>
 
               <View>
-                <Text
-                  className={`text-xs font-pbold uppercase ${
-                    isSender ? "text-gray-400" : "text-gray-400"
-                  }`}
-                >
+                <Text className="text-xs font-pbold uppercase text-gray-400">
                   Total Amount
                 </Text>
-                <Text
-                  className={`text-sm mt-1 ${
-                    isSender ? "text-gray-700" : "text-gray-700"
-                  }`}
-                >
-                  ₱{rentRequestData.totalPrice.toLocaleString()}
+                <Text className="text-sm mt-1 text-gray-700">
+                  ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
                 </Text>
               </View>
 
               <View>
-                <Text
-                  className={`text-xs font-pbold uppercase ${
-                    isSender ? "text-gray-400" : "text-gray-400"
-                  }`}
-                >
+                <Text className="text-xs font-pbold uppercase text-gray-400">
                   Pickup Time
                 </Text>
-                <Text
-                  className={`text-sm mt-1 ${
-                    isSender ? "text-gray-700" : "text-gray-700"
-                  }`}
-                >
-                  {Math.floor(rentRequestData.pickupTime / 60)}:
-                  {(rentRequestData.pickupTime % 60)
+                <Text className="text-sm mt-1 text-gray-700">
+                  {Math.floor((rentRequestData.pickupTime || 480) / 60)}:
+                  {((rentRequestData.pickupTime || 480) % 60)
                     .toString()
                     .padStart(2, "0")}
                 </Text>
@@ -619,9 +638,8 @@ const RentRequestMessage = ({
         {/* Status Display */}
         {getStatusDisplay()}
 
-        {/* Only show action buttons if status is pending */}
-        {rentRequestData.status === "pending" && (
-          /* Action Buttons */
+        {/* Only show action buttons if status is pending - Use effectiveStatus */}
+        {effectiveStatus === "pending" && (
           <>
             {isOwner ? (
               <View className="flex-row gap-2 mt-4">
@@ -647,15 +665,9 @@ const RentRequestMessage = ({
               <View className="mt-4">
                 <TouchableOpacity
                   onPress={onCancel}
-                  className={`py-3 rounded-xl ${
-                    isSender ? "bg-red-400" : "bg-white"
-                  }`}
+                  className="py-3 rounded-xl bg-red-400"
                 >
-                  <Text
-                    className={`font-pbold text-center ${
-                      isSender ? "text-white" : "text-gray-600"
-                    }`}
-                  >
+                  <Text className="font-pbold text-center text-white">
                     CANCEL REQUEST
                   </Text>
                 </TouchableOpacity>
@@ -663,8 +675,9 @@ const RentRequestMessage = ({
             )}
           </>
         )}
-        {/* Show accepted status message when accepted */}
-        {rentRequestData.status === "accepted" && (
+
+        {/* Show accepted status message when accepted - Use effectiveStatus */}
+        {effectiveStatus === "accepted" && (
           <View className="bg-green-50 p-4 rounded-lg mt-4">
             <Text className="text-green-600 text-center font-pmedium">
               ✓ Request accepted! You can now chat freely.
@@ -1053,6 +1066,13 @@ const ChatScreen = () => {
 
         const isOwner = currentUserId === data.ownerId;
         const hasOwnerResponded = data.hasOwnerResponded || false;
+
+        // Updated logic: Disable messaging for cancelled or declined requests
+        if (data.status === "cancelled" || data.status === "declined") {
+          setCanSendMessage(false);
+          return;
+        }
+
         // Allow sending messages if owner, or if status is "accepted"
         const canSend =
           isOwner ||
@@ -1427,6 +1447,26 @@ const ChatScreen = () => {
         itemDetails: itemDetails, // Preserve item details
       });
 
+      // IMPORTANT: Update ALL rent request messages in this chat
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const rentRequestQuery = query(
+        messagesRef,
+        where("type", "==", "rentRequest")
+      );
+
+      const rentRequestMessages = await getDocs(rentRequestQuery);
+      const batch = writeBatch(db);
+
+      // Update all rent request messages to cancelled status
+      rentRequestMessages.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          status: "cancelled",
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+
       // Add status update message
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
         type: "statusUpdate",
@@ -1435,32 +1475,17 @@ const ChatScreen = () => {
         createdAt: serverTimestamp(),
         read: false,
         status: "cancelled",
-        // itemDetails: itemDetails,
       });
 
-      // Update the rent request message if it exists
-      const messagesRef = collection(db, "chat", String(chatId), "messages");
-      const q = query(
-        messagesRef,
-        where("rentRequestId", "==", requestId),
-        where("type", "==", "rentRequest")
-      );
-
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        const rentRequestMessage = querySnapshot.docs[0];
-        await updateDoc(rentRequestMessage.ref, {
-          status: "cancelled",
-          updatedAt: serverTimestamp(),
-        });
+      // Delete from rentRequests collection if it exists
+      try {
+        const requestRef = doc(db, "rentRequests", requestId);
+        await deleteDoc(requestRef);
+      } catch (deleteError) {
+        console.log(
+          "Request document may not exist in rentRequests collection"
+        );
       }
-
-      // Delete from rentRequests collection
-      const requestRef = doc(db, "rentRequests", requestId);
-      await deleteDoc(requestRef);
-
-      // Disable messaging
-      setCanSendMessage(false);
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -1498,6 +1523,11 @@ const ChatScreen = () => {
         recipientName={recipientName}
         recipientImage={recipientImage}
         itemDetails={chatData?.itemDetails}
+        recipientId={
+          (chatData?.ownerId === currentUserId
+            ? chatData?.requesterId
+            : chatData?.ownerId) || ""
+        }
         onBack={() => router.back()}
         recipientStatus={{ isOnline: true, lastSeen: new Date() }}
       />
@@ -1550,6 +1580,7 @@ const ChatScreen = () => {
                     onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
                     onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
                     chatData={chatData}
+                    chatId={String(chatId)}
                   />
                 ) : item.type === "statusUpdate" ? (
                   <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">
@@ -1619,7 +1650,7 @@ const ChatScreen = () => {
 
                       {/* Message metadata */}
                       <View
-                        className={`flex-row items-center  mt-1 px-1 ${
+                        className={`flex-row items-center mt-1 px-1 ${
                           isCurrentUser ? "justify-end" : "justify-start"
                         }`}
                       >
@@ -1652,13 +1683,6 @@ const ChatScreen = () => {
               </View>
             );
           }}
-          ListEmptyComponent={() => (
-            <View className="flex-1 justify-center items-center pt-12">
-              <Text className="text-gray-500">
-                No messages yet. Start the conversation!
-              </Text>
-            </View>
-          )}
           showsVerticalScrollIndicator={false}
           initialNumToRender={15}
           maxToRenderPerBatch={10}
@@ -1693,23 +1717,11 @@ const ChatScreen = () => {
             // Show appropriate message based on status and user role
             (() => {
               if (chatData?.status === "cancelled") {
-                return (
-                  <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
-                    <Text className="text-gray-500 text-center">
-                      Request has been cancelled.
-                    </Text>
-                  </View>
-                );
+                return null;
               }
 
               if (chatData?.status === "declined") {
-                return (
-                  <View className="flex-1 bg-red-100 rounded-full py-3 px-4">
-                    <Text className="text-red-600 text-center">
-                      Request has been declined.
-                    </Text>
-                  </View>
-                );
+                return null;
               }
 
               // For pending status without owner response

@@ -54,7 +54,7 @@ interface Chat {
   lastMessageTime: Date | null;
   isCurrentUserLastSender: boolean;
   isRentRequest?: boolean;
-  requestStatus: "pending" | "accepted" | "rejected";
+  requestStatus: "pending" | "accepted" | "rejected" | "cancelled";
   itemDetails?: {
     id: string;
     name: string;
@@ -564,7 +564,8 @@ const ChatList = () => {
               case "proposed":
                 return chat.requestStatus === "accepted";
               case "closed":
-                return chat.requestStatus === "rejected";
+                // Show both rejected and cancelled requests in closed tab
+                return ["rejected", "cancelled"].includes(chat.requestStatus);
               default:
                 return false;
             }
@@ -595,7 +596,7 @@ const ChatList = () => {
                       : { borderRadius: 28 }
                   }
                 />
-                {/* Status indicators */}
+                {/* Update status indicators to include cancelled state */}
                 <View className="absolute bottom-0 right-0">
                   {item.isRentRequest ? (
                     <View
@@ -604,6 +605,8 @@ const ChatList = () => {
                           ? "bg-yellow-500"
                           : item.requestStatus === "accepted"
                           ? "bg-green-500"
+                          : item.requestStatus === "cancelled"
+                          ? "bg-gray-500"
                           : "bg-red-500"
                       }`}
                     />
