@@ -20,6 +20,9 @@ import {
   getDoc,
   where,
   getDocs,
+  writeBatch,
+  serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 import { db, auth } from "@/lib/firebaseConfig";
@@ -54,15 +57,20 @@ interface Chat {
   lastMessageTime: Date | null;
   isCurrentUserLastSender: boolean;
   isRentRequest?: boolean;
-  requestStatus: "pending" | "accepted" | "rejected" | "cancelled";
+  requestStatus: "pending" | "accepted" | "declined" | "cancelled";
   itemDetails?: {
     id: string;
     name: string;
     price: number;
     image: string;
   };
-  unreadCount: number;
-  lastMessageRead: boolean;
+  status: "pending" | "accepted" | "declined" | "cancelled";
+
+  unreadCounts: {
+    [userId: string]: number; // Store unread counts per user
+  };
+
+  lastSender: string;
 }
 
 interface SearchResult {
@@ -211,12 +219,14 @@ const ChatList = () => {
             const chatData = docSnap.data();
             const chatId = docSnap.id;
 
-            // Get recipient info
             const recipientId = chatData.participants.find(
               (id: string) => id !== userId
             );
             const userDoc = await getDoc(doc(db, "users", recipientId));
             const recipient = userDoc.exists() ? userDoc.data() : null;
+
+            // Calculate unread count for current user
+            const unreadCount = chatData.unreadCounts?.[userId] || 0;
 
             return {
               id: chatId,
@@ -231,25 +241,19 @@ const ChatList = () => {
               lastMessage: chatData.lastMessage || "No messages yet",
               lastMessageTime: chatData.lastMessageTime?.toDate() || null,
               isCurrentUserLastSender: chatData.lastSender === userId,
-              unreadCount: chatData.unreadCount || 0,
-              lastMessageRead: chatData.lastMessageRead || false,
+              lastSender: chatData.lastSender,
+              unreadCount: unreadCount,
+              unreadCounts: chatData.unreadCounts || {},
+              lastReadTimestamps: chatData.lastReadTimestamps || {},
               isRentRequest: chatData.isRentRequest || false,
               requestStatus: chatData.requestStatus || "pending",
               itemDetails: chatData.itemDetails || null,
+              status: chatData.status || "pending",
             } as Chat;
           })
         );
 
-        // Sort chats by lastMessageTime
-        const sortedChats = chatList
-          .filter((chat): chat is Chat => chat !== null)
-          .sort((a, b) => {
-            if (!a.lastMessageTime) return 1;
-            if (!b.lastMessageTime) return -1;
-            return b.lastMessageTime.getTime() - a.lastMessageTime.getTime();
-          });
-
-        setChats(sortedChats);
+        setChats(chatList);
         setLoading(false);
       });
 
@@ -358,29 +362,71 @@ const ChatList = () => {
 
   const renderChatItem = ({ item }: { item: Chat }) => (
     <TouchableOpacity
-      className="flex-row items-center px-6 py-4 mb-2 mx-2 bg-white rounded-2xl shadow-sm border border-gray-50"
+      className="flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border border-gray-50"
       onPress={() => router.push(`/chat/${item.id}`)}
     >
       <View className="relative">
         <Image
-          source={{ uri: item.recipientProfileImage }}
-          className="w-14 h-14 rounded-full bg-gray-200"
+          source={{
+            uri: item.isRentRequest
+              ? item.itemDetails?.image
+              : item.itemDetails?.image,
+          }}
+          className="w-14 h-14 rounded-2xl bg-gray-200"
+          style={
+            item.isRentRequest ? { borderRadius: 12 } : { borderRadius: 28 }
+          }
         />
-        {item.unreadCount > 0 && (
-          <View className="absolute -top-1 -right-1 bg-primary w-5 h-5 rounded-full items-center justify-center">
-            <Text className="text-white text-xs font-bold">
-              {item.unreadCount}
+        {/* Show unread badge only if message is not from current user and has unread count */}
+        {!item.isCurrentUserLastSender &&
+          (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0 && (
+            <View className="absolute -top-1 -right-1 bg-primary w-5 h-5 rounded-full items-center justify-center">
+              <Text className="text-white text-xs font-bold">
+                {item.unreadCounts?.[currentUserId ?? ""]}
+              </Text>
+            </View>
+          )}
+      </View>
+
+      <View className="flex-1 ml-4">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1">
+            <Text
+              className={`text-base ${
+                !item.isCurrentUserLastSender &&
+                (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
+                  ? "font-bold text-gray-900"
+                  : "font-regular text-gray-800"
+              }`}
+              numberOfLines={1}
+            >
+              {formatFullName(item.recipientName)}
+              {item.itemDetails?.name && (
+                <>
+                  <Text className="text-gray-400"> • </Text>
+                  <Text
+                    className={
+                      item.status === "cancelled" || item.status === "declined"
+                        ? "text-red-500"
+                        : "text-primary"
+                    }
+                  >
+                    {item.itemDetails.name}
+                  </Text>
+                </>
+              )}
             </Text>
           </View>
-        )}
-      </View>
-      <View className="flex-1 ml-4">
-        <View className="flex-row items-center justify-between mb-1">
-          <Text className="text-base font-bold text-gray-900">
-            {formatFullName(item.recipientName)} • {item.itemDetails?.name}
-          </Text>
+
           {item.lastMessageTime && (
-            <Text className="text-xs text-gray-500">
+            <Text
+              className={`text-xs ${
+                !item.isCurrentUserLastSender &&
+                (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
+                  ? "font-bold text-primary"
+                  : "text-gray-500"
+              }`}
+            >
               {item.lastMessageTime?.toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -389,19 +435,18 @@ const ChatList = () => {
           )}
         </View>
 
-        {item.isRentRequest && (
-          <View className="flex-row items-center mb-1">
-            <Text className="text-sm font-medium text-primary">
-              {item.itemDetails?.name}
-            </Text>
-            <Text className="text-sm text-gray-600 ml-2">
-              ₱{item.itemDetails?.price}
-            </Text>
-          </View>
-        )}
-
-        <Text className="text-sm text-gray-500" numberOfLines={1}>
-          {item.isCurrentUserLastSender ? "You: " : ""}
+        <Text
+          className={`text-sm ${
+            !item.isCurrentUserLastSender &&
+            (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
+              ? "font-bold text-gray-900"
+              : "text-gray-500"
+          }`}
+          numberOfLines={1}
+        >
+          {item.isCurrentUserLastSender && (
+            <Text className="text-gray-400">You: </Text>
+          )}
           {item.lastMessage}
         </Text>
       </View>
@@ -500,6 +545,8 @@ const ChatList = () => {
     );
   };
 
+  // Removed erroneous useEffect referencing undefined chatId
+
   return (
     <View className="flex-1 mt-6 bg-white p-4">
       {/* Header */}
@@ -582,14 +629,12 @@ const ChatList = () => {
             >
               <View className="relative">
                 <Image
-                  // Show item image for rent requests, fallback to profile image
                   source={{
                     uri: item.isRentRequest
                       ? item.itemDetails?.image
                       : item.itemDetails?.image,
                   }}
                   className="w-14 h-14 rounded-2xl bg-gray-200"
-                  // Add specific styling for item images
                   style={
                     item.isRentRequest
                       ? { borderRadius: 12 }
@@ -610,10 +655,10 @@ const ChatList = () => {
                           : "bg-red-500"
                       }`}
                     />
-                  ) : !item.isCurrentUserLastSender && item.unreadCount > 0 ? (
+                  ) : (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0 ? (
                     <View className="bg-primary w-5 h-5 rounded-full items-center justify-center">
                       <Text className="text-white text-xs font-bold">
-                        {item.unreadCount}
+                        {item.unreadCounts?.[currentUserId ?? ""]}
                       </Text>
                     </View>
                   ) : null}
@@ -621,22 +666,35 @@ const ChatList = () => {
               </View>
 
               <View className="flex-1 ml-4">
+                {/* Name and Item */}
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1">
                     <Text
                       className={`text-base ${
-                        !item.isCurrentUserLastSender && item.unreadCount > 0
+                        (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
                           ? "font-bold text-gray-900"
-                          : "font-medium text-gray-800"
+                          : "font-regular text-gray-800"
                       }`}
                       numberOfLines={1}
                     >
-                      {formatFullName(item.recipientName)} •{" "}
-                      {item.itemDetails?.name}
-                      {item.isRentRequest && item.itemDetails?.name && (
+                      {formatFullName(item.recipientName)}
+                      {item.itemDetails?.name && (
                         <>
                           <Text className="text-gray-400"> • </Text>
-                          <Text className="text-primary font-medium">
+                          <Text
+                            className={`${
+                              (item.unreadCounts?.[currentUserId ?? ""] ?? 0) >
+                              0
+                                ? item.status === "cancelled" ||
+                                  item.status === "declined"
+                                  ? "font-bold text-red-500"
+                                  : "font-bold text-primary"
+                                : item.status === "cancelled" ||
+                                  item.status === "declined"
+                                ? "font-medium text-red-500"
+                                : "font-medium text-primary"
+                            }`}
+                          >
                             {item.itemDetails.name}
                           </Text>
                         </>
@@ -644,51 +702,42 @@ const ChatList = () => {
                     </Text>
                   </View>
 
-                  <View className="flex-row items-center ml-2">
-                    {/* Read indicator - Only show for messages you sent */}
-                    {item.isCurrentUserLastSender && (
-                      <Image
-                        source={
-                          item.lastMessageRead
-                            ? require("@/assets/icons/double-check.png")
-                            : require("@/assets/icons/single-check.png")
-                        }
-                        className={`w-4 h-4 mr-1 ${
-                          item.lastMessageRead
-                            ? "tint-primary"
-                            : "tint-gray-400"
-                        }`}
-                      />
-                    )}
-                    {/* Time */}
-                    {item.lastMessageTime && (
-                      <Text
-                        className={`text-xs ${
-                          !item.isCurrentUserLastSender && item.unreadCount > 0
-                            ? "font-semibold text-primary"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        {item.lastMessageTime?.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </Text>
-                    )}
-                  </View>
+                  {/* Timestamp */}
+                  {item.lastMessageTime && (
+                    <Text
+                      className={`text-xs ${
+                        (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
+                          ? "font-bold text-primary"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {item.lastMessageTime?.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  )}
                 </View>
 
-                {/* Remove the separate item details section since it's now in the title */}
+                {/* Last Message */}
                 <Text
                   className={`text-sm ${
-                    item.unreadCount > 0
-                      ? "font-medium text-gray-900"
+                    (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
+                      ? "font-bold text-gray-900"
                       : "text-gray-500"
                   }`}
                   numberOfLines={1}
                 >
                   {item.isCurrentUserLastSender && (
-                    <Text className="text-gray-400">You: </Text>
+                    <Text
+                      className={`${
+                        (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
+                          ? "font-bold"
+                          : "font-regular"
+                      } text-gray-400`}
+                    >
+                      You:{" "}
+                    </Text>
                   )}
                   {item.lastMessage}
                 </Text>

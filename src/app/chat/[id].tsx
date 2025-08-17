@@ -20,6 +20,7 @@ import {
   Image,
   Modal,
 } from "react-native";
+import { useMemo } from "react";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 import {
@@ -345,44 +346,54 @@ const RentRequestMessage = ({
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [rentRequestData, setRentRequestData] = useState<any>(null);
-  const [currentStatus, setCurrentStatus] = useState<string>("pending"); // Add state for current status
+  const [currentStatus, setCurrentStatus] = useState<string>("pending");
   const isSender = item.senderId === auth.currentUser?.uid;
 
-  // Add real-time status listener
-  useEffect(() => {
-    if (!chatId || !item.rentRequestId) return;
+  // FIXED: Move useMemo outside of useEffect - this calculates the effective status
+  const effectiveStatus = useMemo(() => {
+    // Priority: currentStatus (from message) > item.status > chatData.status > "pending"
+    return currentStatus || item.status || chatData?.status || "pending";
+  }, [currentStatus, item.status, chatData?.status]);
 
-    // Listen for changes in the message document itself
+  // Real-time status listener - SIMPLIFIED VERSION
+  useEffect(() => {
+    if (!chatId || !item.id) return;
+
+    // Listen for changes in the message document itself (PRIMARY SOURCE)
     const messageRef = doc(db, "chat", String(chatId), "messages", item.id);
-    const unsubscribe = onSnapshot(messageRef, (snapshot) => {
+    const unsubscribeMessage = onSnapshot(messageRef, (snapshot) => {
       if (snapshot.exists()) {
         const messageData = snapshot.data();
         if (messageData.status) {
+          console.log(
+            `Message ${item.id} status updated to:`,
+            messageData.status
+          );
           setCurrentStatus(messageData.status);
         }
       }
     });
 
-    return () => unsubscribe();
-  }, [chatId, item.id, item.rentRequestId]);
-
-  // Also listen for chat-level status changes
-  useEffect(() => {
-    if (!chatId) return;
-
+    // Also listen for chat-level status changes (SECONDARY SOURCE)
     const chatRef = doc(db, "chat", String(chatId));
-    const unsubscribe = onSnapshot(chatRef, (snapshot) => {
+    const unsubscribeChat = onSnapshot(chatRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        if (data.status === "cancelled" || data.status === "declined") {
-          setCurrentStatus(data.status);
+        if (data.status) {
+          console.log("Chat status updated to:", data.status);
+          // Only update if message doesn't have its own status
+          setCurrentStatus((prevStatus) => prevStatus || data.status);
         }
       }
     });
 
-    return () => unsubscribe();
-  }, [chatId]);
+    return () => {
+      unsubscribeMessage();
+      unsubscribeChat();
+    };
+  }, [chatId, item.id]);
 
+  // FIXED: Remove the duplicate useEffect and the useMemo inside useEffect
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -392,19 +403,18 @@ const RentRequestMessage = ({
           return;
         }
 
-        // Use current status from state or fallback to item status
-        const effectiveStatus =
-          currentStatus || item.status || chatData?.status || "pending";
+        // Use effectiveStatus directly (no useMemo here)
+        const statusToUse = effectiveStatus;
 
         // If request is cancelled or declined, use chat data as fallback
-        if (effectiveStatus === "cancelled" || effectiveStatus === "declined") {
+        if (statusToUse === "cancelled" || statusToUse === "declined") {
           const fallbackData = {
             itemName: chatData?.itemDetails?.name || "Unknown Item",
             itemImage: chatData?.itemDetails?.image || "",
             totalPrice: chatData?.itemDetails?.price || 0,
-            status: effectiveStatus,
-            rentalDays: 1, // Default fallback
-            pickupTime: 480, // Default fallback (8:00 AM)
+            status: statusToUse,
+            rentalDays: 1,
+            pickupTime: 480,
             message: "Request details unavailable",
             startDate: new Date(),
             endDate: new Date(),
@@ -421,7 +431,7 @@ const RentRequestMessage = ({
           if (rentRequestSnap.exists()) {
             const requestData = {
               ...rentRequestSnap.data(),
-              status: effectiveStatus,
+              status: statusToUse,
             };
             setRentRequestData(requestData);
             requestDataCache.set(item.rentRequestId, requestData);
@@ -431,7 +441,7 @@ const RentRequestMessage = ({
               itemName: chatData?.itemDetails?.name || "Unknown Item",
               itemImage: chatData?.itemDetails?.image || "",
               totalPrice: chatData?.itemDetails?.price || 0,
-              status: effectiveStatus,
+              status: statusToUse,
               rentalDays: 1,
               pickupTime: 480,
               message: "Request details unavailable",
@@ -449,7 +459,7 @@ const RentRequestMessage = ({
             itemName: chatData.itemDetails?.name || "Unknown Item",
             itemImage: chatData.itemDetails?.image || "",
             totalPrice: chatData.itemDetails?.price || 0,
-            status: currentStatus || chatData.status || "pending",
+            status: effectiveStatus,
             rentalDays: 1,
             pickupTime: 480,
             message: "Error loading request details",
@@ -462,7 +472,7 @@ const RentRequestMessage = ({
     };
 
     fetchData();
-  }, [item.rentRequestId, chatData, currentStatus]);
+  }, [item.rentRequestId, chatData, effectiveStatus]); // Use effectiveStatus as dependency
 
   // Format date helper function
   const formatDate = (date: any) => {
@@ -485,7 +495,7 @@ const RentRequestMessage = ({
     switch (status?.toLowerCase()) {
       case "approved":
       case "accepted":
-        return "bg-primary text-green-600";
+        return "bg-green-100 text-green-600";
       case "declined":
       case "rejected":
         return "bg-red-100 text-red-600";
@@ -497,9 +507,6 @@ const RentRequestMessage = ({
         return "bg-gray-100 text-gray-600";
     }
   };
-
-  // Use currentStatus for all status checks
-  const effectiveStatus = currentStatus || rentRequestData.status || "pending";
 
   const getStatusDisplay = () => {
     switch (effectiveStatus.toLowerCase()) {
@@ -593,8 +600,11 @@ const RentRequestMessage = ({
           </Text>
           <Image
             source={icons.arrowDown}
-            className={`w-4 h-4 ${showDetails ? "rotate-180" : ""}`}
+            className="w-4 h-4"
             tintColor="#5C6EF6"
+            style={{
+              transform: [{ rotate: showDetails ? "180deg" : "0deg" }],
+            }}
           />
         </TouchableOpacity>
 
@@ -638,7 +648,7 @@ const RentRequestMessage = ({
         {/* Status Display */}
         {getStatusDisplay()}
 
-        {/* Only show action buttons if status is pending - Use effectiveStatus */}
+        {/* FIXED: Only show action buttons if status is pending */}
         {effectiveStatus === "pending" && (
           <>
             {isOwner ? (
@@ -646,6 +656,7 @@ const RentRequestMessage = ({
                 <TouchableOpacity
                   onPress={onAccept}
                   className="flex-1 bg-primary py-3 rounded-xl"
+                  disabled={effectiveStatus !== "pending"}
                 >
                   <Text className="text-white font-pbold text-center">
                     ACCEPT
@@ -655,6 +666,7 @@ const RentRequestMessage = ({
                 <TouchableOpacity
                   onPress={onDecline}
                   className="flex-1 bg-red-500 py-3 rounded-xl"
+                  disabled={effectiveStatus !== "pending"}
                 >
                   <Text className="text-white font-pbold text-center">
                     DECLINE
@@ -666,6 +678,7 @@ const RentRequestMessage = ({
                 <TouchableOpacity
                   onPress={onCancel}
                   className="py-3 rounded-xl bg-red-400"
+                  disabled={effectiveStatus !== "pending"}
                 >
                   <Text className="font-pbold text-center text-white">
                     CANCEL REQUEST
@@ -676,7 +689,7 @@ const RentRequestMessage = ({
           </>
         )}
 
-        {/* Show accepted status message when accepted - Use effectiveStatus */}
+        {/* Show accepted status message when accepted */}
         {effectiveStatus === "accepted" && (
           <View className="bg-green-50 p-4 rounded-lg mt-4">
             <Text className="text-green-600 text-center font-pmedium">
@@ -1131,10 +1144,15 @@ const ChatScreen = () => {
         return;
       }
 
+      const chatData = chatSnap.data();
+      const recipientId = chatData.participants.find(
+        (id: string) => id !== currentUserId
+      );
+
       const messageData = {
         senderId: currentUserId,
         text: messageText,
-        type: "message", // Add message type
+        type: "message",
         createdAt: serverTimestamp(),
         read: false,
         readAt: null,
@@ -1144,21 +1162,15 @@ const ChatScreen = () => {
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       await addDoc(messagesRef, messageData);
 
-      const updateData: any = {
+      // Update chat document with new message info and increment recipient's unread count
+      const updateData = {
         lastMessage: messageText,
         lastMessageTime: serverTimestamp(),
         lastSender: currentUserId,
-        unreadCount: increment(1),
+        [`unreadCounts.${recipientId}`]: increment(1),
       };
 
-      const isOwner = currentUserId === chatData?.ownerId;
-      if (isOwner) {
-        updateData.hasOwnerResponded = true;
-      }
-
       await updateDoc(chatRef, updateData);
-
-      flatListRef.current?.scrollToEnd({ animated: true });
     } catch (error) {
       console.error("Error sending message:", error);
       Alert.alert("Error", "Failed to send message");
@@ -1174,14 +1186,14 @@ const ChatScreen = () => {
 
     const markMessagesAsRead = async () => {
       try {
+        const chatRef = doc(db, "chat", String(chatId));
         const messagesRef = collection(db, "chat", String(chatId), "messages");
-        // More efficient query
+
+        // Query for unread messages not sent by current user
         const q = query(
           messagesRef,
           where("senderId", "!=", currentUserId),
-          where("read", "==", false),
-          orderBy("senderId"), // Add this to match the composite index
-          orderBy("__name__") // Add this to match the composite index
+          where("read", "==", false)
         );
 
         const unreadSnap = await getDocs(q);
@@ -1196,37 +1208,30 @@ const ChatScreen = () => {
             });
           });
 
-          await batch.commit();
+          // Update chat document to reset unread count for current user
+          batch.update(chatRef, {
+            [`unreadCounts.${currentUserId}`]: 0,
+            [`lastReadTimestamps.${currentUserId}`]: serverTimestamp(),
+          });
 
-          // Reset unread count in chat document
-          const chatRef = doc(db, "chat", String(chatId));
-          await updateDoc(chatRef, { unreadCount: 0 });
+          await batch.commit();
         }
-      } catch (error: any) {
-        if (error.code === "failed-precondition") {
-          console.log("Waiting for index to build...");
-          // Optionally show user-friendly message
-          // Alert.alert('Notice', 'Message read status will be available soon');
-        } else {
-          console.error("Error marking messages as read:", error);
-        }
+      } catch (error) {
+        console.error("Error marking messages as read:", error);
       }
     };
 
-    // Call immediately when entering chat
+    // Mark messages as read when entering chat
     markMessagesAsRead();
 
-    // Also set up listener for new messages
+    // Set up listener for new messages
     const messagesRef = collection(db, "chat", String(chatId), "messages");
     const q = query(messagesRef, orderBy("createdAt", "desc"), limit(1));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
-        const latestMessage = snapshot.docs[0];
-        if (
-          latestMessage.data().senderId !== currentUserId &&
-          !latestMessage.data().read
-        ) {
+        const latestMessage = snapshot.docs[0].data();
+        if (latestMessage.senderId !== currentUserId && !latestMessage.read) {
           markMessagesAsRead();
         }
       }
@@ -1342,8 +1347,28 @@ const ChatScreen = () => {
         status: "accepted",
         lastMessage: "Request accepted by owner",
         lastMessageTime: serverTimestamp(),
-        hasOwnerResponded: true, // Mark that owner has responded
+        hasOwnerResponded: true,
       });
+
+      // ADD THIS: Update ALL rent request messages in this chat to accepted status
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const rentRequestQuery = query(
+        messagesRef,
+        where("type", "==", "rentRequest")
+      );
+
+      const rentRequestMessages = await getDocs(rentRequestQuery);
+      const batch = writeBatch(db);
+
+      // Update all rent request messages to accepted status
+      rentRequestMessages.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          status: "accepted",
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
 
       // Add status update message
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
@@ -1354,11 +1379,14 @@ const ChatScreen = () => {
         read: false,
       });
 
-      const rentRequestRef = doc(db, "rentRequests", requestId);
-      await updateDoc(rentRequestRef, {
-        status: "accepted",
-        updatedAt: serverTimestamp(),
-      });
+      // Update rent request in rentRequests collection (if it exists)
+      if (requestId) {
+        const rentRequestRef = doc(db, "rentRequests", requestId);
+        await updateDoc(rentRequestRef, {
+          status: "accepted",
+          updatedAt: serverTimestamp(),
+        });
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -1384,15 +1412,37 @@ const ChatScreen = () => {
         status: "declined",
         lastMessage: "Request declined by owner",
         lastMessageTime: serverTimestamp(),
-        hasOwnerResponded: true, // Mark that owner has responded
+        hasOwnerResponded: true,
       });
 
-      // Update the rent request in the rentRequests collection
-      const rentRequestRef = doc(db, "rentRequests", requestId);
-      await updateDoc(rentRequestRef, {
-        status: "declined",
-        updatedAt: serverTimestamp(),
+      // ADD THIS: Update ALL rent request messages in this chat to declined status
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const rentRequestQuery = query(
+        messagesRef,
+        where("type", "==", "rentRequest")
+      );
+
+      const rentRequestMessages = await getDocs(rentRequestQuery);
+      const batch = writeBatch(db);
+
+      // Update all rent request messages to declined status
+      rentRequestMessages.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          status: "declined",
+          updatedAt: serverTimestamp(),
+        });
       });
+
+      await batch.commit();
+
+      // Update the rent request in the rentRequests collection (if it exists)
+      if (requestId) {
+        const rentRequestRef = doc(db, "rentRequests", requestId);
+        await updateDoc(rentRequestRef, {
+          status: "declined",
+          updatedAt: serverTimestamp(),
+        });
+      }
 
       // Add status update message
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
@@ -1417,7 +1467,6 @@ const ChatScreen = () => {
       });
     }
   };
-
   const handleCancelRequest = async (requestId?: string) => {
     if (!requestId) return;
 

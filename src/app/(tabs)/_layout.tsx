@@ -6,11 +6,18 @@ import {
   Modal,
   TouchableOpacity,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs, Redirect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
+import { db, auth } from "@/lib/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useCameraPermissions } from "expo-image-picker";
@@ -56,6 +63,7 @@ const TabsLayout = () => {
   const { user } = useAuth();
   const { completionPercentage } = useProfileCompletion();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
 
   // Create a new function to check camera permissions
   const checkCameraPermission = async () => {
@@ -151,6 +159,33 @@ const TabsLayout = () => {
       });
     }
   };
+
+  // Add this useEffect to track unread messages
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const chatsRef = collection(db, "chat");
+    const q = query(
+      chatsRef,
+      where("participants", "array-contains", user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const hasUnread = snapshot.docs.some((doc) => {
+        const chatData = doc.data();
+        // Check if the last message is not from current user and has unread count
+        const isNotCurrentUserLastSender = chatData.lastSender !== user.uid;
+        const userUnreadCount = chatData.unreadCounts?.[user.uid] ?? 0;
+
+        return isNotCurrentUserLastSender && userUnreadCount > 0;
+      });
+
+      setHasUnreadMessages(hasUnread);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <>
@@ -345,7 +380,7 @@ const TabsLayout = () => {
           options={{
             title: "Chats",
             headerShown: false,
-            tabBarBadge: hasNewMessages ? " " : undefined,
+            tabBarBadge: hasUnreadMessages ? " " : undefined,
             tabBarBadgeStyle: {
               backgroundColor: "#FF0000", // Adjust color if needed
               minWidth: 10, // Reduce size
