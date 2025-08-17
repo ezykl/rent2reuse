@@ -88,6 +88,60 @@ const formatTimestamp = (timestamp: any): string => {
     }
   }
 };
+
+const MessageActionsModal = ({
+  visible,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={onClose}
+        className="flex-1 bg-black/10 justify-end"
+      >
+        <View className="bg-white rounded-t-3xl p-4">
+          <TouchableOpacity
+            onPress={onEdit}
+            className="flex-row items-center p-4"
+          >
+            <Image
+              source={icons.edit}
+              className="w-6 h-6 mr-3"
+              tintColor="#3b82f6"
+            />
+            <Text className="text-blue-500 text-base">Edit Message</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onDelete}
+            className="flex-row items-center p-4"
+          >
+            <Image
+              source={icons.trash}
+              className="w-6 h-6 mr-3"
+              tintColor="#EF4444"
+            />
+            <Text className="text-red-500 text-base">Delete Message</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
 const ChatHeader = ({
   recipientName,
   recipientImage,
@@ -217,6 +271,10 @@ const ActionMenu = ({
 
 // First, update the Message interface to match rentRequest data structure
 interface Message {
+  isDeleted?: boolean;
+  deletedAt?: any;
+  isEdited?: boolean;
+  editedAt?: any;
   status: string;
   id: string;
   senderId: string;
@@ -242,6 +300,17 @@ interface Message {
     message: string;
     status: string;
   };
+}
+
+interface MessageSelection {
+  isSelecting: boolean;
+  selectedMessages: string[];
+}
+
+interface MessageAction {
+  label: string;
+  icon: any;
+  action: () => void;
 }
 
 const RentRequestMessage = ({
@@ -638,9 +707,19 @@ const ChatScreen = () => {
   const [requestStatuses, setRequestStatuses] = useState<
     Record<string, string>
   >({});
+  const [showMessageActions, setShowMessageActions] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [canSendMessage, setCanSendMessage] = useState(false);
   const flatListRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
+
+  const [selection, setSelection] = useState<MessageSelection>({
+    isSelecting: false,
+    selectedMessages: [],
+  });
+
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
 
   const [chatData, setChatData] = useState<{
     requesterId: string;
@@ -661,6 +740,109 @@ const ChatScreen = () => {
       </View>
     );
   }
+
+  const handleMessageLongPress = (
+    messageId: string,
+    senderId: string,
+    message: Message
+  ) => {
+    if (senderId !== currentUserId) return;
+
+    setSelectedMessage(message);
+    setShowMessageActions(true);
+  };
+
+  const handleMessageEdit = (messageId: string, currentText: string) => {
+    setEditingMessageId(messageId);
+    setEditText(currentText);
+    setShowMessageActions(false);
+    setSelectedMessage(null);
+  };
+
+  const handleMessageDelete = async (messageId: string) => {
+    Alert.alert(
+      "Delete Message",
+      "Are you sure you want to delete this message?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const messageRef = doc(
+                db,
+                "chat",
+                String(chatId),
+                "messages",
+                messageId
+              );
+
+              await updateDoc(messageRef, {
+                text: "[Message deleted]",
+                isDeleted: true,
+                deletedAt: serverTimestamp(),
+              });
+
+              setShowMessageActions(false);
+              setSelectedMessage(null);
+
+              // Toast.show({
+              //   type: ALERT_TYPE.SUCCESS,
+              //   title: "Success",
+              //   textBody: "Message deleted successfully",
+              // });
+            } catch (error) {
+              // console.error("Error deleting message:", error);
+              // Toast.show({
+              //   type: ALERT_TYPE.DANGER,
+              //   title: "Error",
+              //   textBody: "Failed to delete message",
+              // });
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingMessageId || !editText.trim()) return;
+
+    try {
+      const messageRef = doc(
+        db,
+        "chat",
+        String(chatId),
+        "messages",
+        editingMessageId
+      );
+
+      await updateDoc(messageRef, {
+        text: editText.trim(),
+        isEdited: true,
+        editedAt: serverTimestamp(),
+      });
+
+      setEditingMessageId(null);
+      setEditText("");
+
+      // Toast.show({
+      //   type: ALERT_TYPE.SUCCESS,
+      //   title: "Success",
+      //   textBody: "Message edited successfully",
+      // });
+    } catch (error) {
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to edit message",
+      });
+    }
+  };
 
   const TypingIndicator = ({ isVisible }: { isVisible: boolean }) => {
     if (!isVisible) return null;
@@ -899,22 +1081,18 @@ const ChatScreen = () => {
     if (!chatId) return;
 
     const messagesRef = collection(db, "chat", String(chatId), "messages");
-    const q = query(messagesRef, orderBy("createdAt", "desc")); // Change to desc
+    const q = query(messagesRef, orderBy("createdAt", "asc"));
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const fetchedMessages = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Message[];
-        setMessages(fetchedMessages.reverse()); // Reverse the array for correct display
-      },
-      (error) => {
-        console.error("Error fetching messages:", error);
-      }
-    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedMessages = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Message[];
 
+      setMessages(fetchedMessages);
+    });
+
+    // Clean up listener on unmount
     return () => unsubscribe();
   }, [chatId]);
 
@@ -1333,8 +1511,8 @@ const ChatScreen = () => {
         <FlatList
           ref={flatListRef}
           data={messages}
-          inverted={false} // Change to false
-          keyExtractor={(item) => item.id}
+          inverted={false}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           contentContainerStyle={{
             flexGrow: 1,
             justifyContent: "flex-end",
@@ -1355,18 +1533,15 @@ const ChatScreen = () => {
               item,
               previousMessage
             );
+            const isCurrentUser = item.senderId === currentUserId;
 
             return (
               <View>
-                {/* Day Separator */}
                 {showDaySeparator && (
                   <DaySeparator timestamp={item.createdAt} />
                 )}
-
-                {/* Time Indicator */}
                 {showTimestamp && <TimeIndicator timestamp={item.createdAt} />}
 
-                {/* Message Content */}
                 {item.type === "rentRequest" ? (
                   <RentRequestMessage
                     item={item}
@@ -1383,15 +1558,18 @@ const ChatScreen = () => {
                     </Text>
                   </View>
                 ) : (
-                  // Regular message with enhanced timestamp
-                  <View
+                  // Regular message
+                  <TouchableOpacity
+                    onLongPress={() =>
+                      handleMessageLongPress(item.id, item.senderId, item)
+                    }
+                    delayLongPress={300}
+                    activeOpacity={0.7}
                     className={`flex-row mb-2 ${
-                      item.senderId === currentUserId
-                        ? "justify-end"
-                        : "justify-start"
+                      isCurrentUser ? "justify-end" : "justify-start"
                     }`}
                   >
-                    {item.senderId !== currentUserId && (
+                    {!isCurrentUser && (
                       <Image
                         source={{ uri: recipientImage }}
                         className="w-8 h-8 rounded-full mr-2 mt-1"
@@ -1399,48 +1577,73 @@ const ChatScreen = () => {
                     )}
                     <View className="flex-col">
                       <View
-                        className={`max-w-[90%] rounded-2xl px-4 py-3 ${
-                          item.senderId === currentUserId
+                        className={`max-w-[90%] min-w-[72px] rounded-2xl px-4 py-3 ${
+                          isCurrentUser
                             ? "bg-primary rounded-tr-none self-end"
                             : "bg-white rounded-tl-none border border-gray-200"
+                        } ${
+                          selection.selectedMessages.includes(item.id)
+                            ? "border-2 border-primary"
+                            : ""
                         }`}
                       >
                         <Text
                           className={`${
-                            item.senderId === currentUserId
-                              ? "text-white"
-                              : "text-gray-800"
+                            isCurrentUser ? "text-white" : "text-gray-800"
                           } text-base`}
                         >
-                          {item.text}
+                          {item.isDeleted ? (
+                            <Text
+                              className={`text-base italic ${
+                                isCurrentUser
+                                  ? "text-white/70"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              [Message deleted]
+                            </Text>
+                          ) : (
+                            item.text
+                          )}
                         </Text>
+                        {item.isEdited && (
+                          <Text
+                            className={`text-xs ${
+                              isCurrentUser ? "text-white/70" : "text-gray-500"
+                            }`}
+                          >
+                            (edited)
+                          </Text>
+                        )}
                       </View>
 
-                      {/* Message status and mini time for sender's messages */}
-                      {item.senderId === currentUserId && (
-                        <View className="flex-row items-center justify-end mt-1 px-1">
-                          {item.read ? (
-                            <Image
-                              source={icons.doubleCheck}
-                              className="w-3 h-3 mr-1"
-                              tintColor="#4285F4"
-                            />
-                          ) : (
-                            <Image
-                              source={icons.singleCheck}
-                              className="w-3 h-3 mr-1"
-                              tintColor="#9CA3AF"
-                            />
-                          )}
-                          <Text className="text-xs text-gray-400">
-                            {item.createdAt
-                              ? format(item.createdAt.toDate(), "h:mm a")
-                              : ""}
-                          </Text>
-                        </View>
-                      )}
+                      {/* Message metadata */}
+                      <View className="flex-row items-center justify-end mt-1 px-1">
+                        {isCurrentUser && (
+                          <>
+                            {item.read ? (
+                              <Image
+                                source={icons.doubleCheck}
+                                className="w-3 h-3 mr-1"
+                                tintColor="#4285F4"
+                              />
+                            ) : (
+                              <Image
+                                source={icons.singleCheck}
+                                className="w-3 h-3 mr-1"
+                                tintColor="#9CA3AF"
+                              />
+                            )}
+                          </>
+                        )}
+                        <Text className="text-xs text-gray-400">
+                          {item.createdAt
+                            ? format(item.createdAt.toDate(), "h:mm a")
+                            : ""}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 )}
               </View>
             );
@@ -1456,7 +1659,7 @@ const ChatScreen = () => {
           initialNumToRender={15}
           maxToRenderPerBatch={10}
           windowSize={10}
-          removeClippedSubviews={Platform.OS !== "web"}
+          removeClippedSubviews={true}
           maintainVisibleContentPosition={{
             minIndexForVisible: 0,
             autoscrollToTopThreshold: 10,
@@ -1465,6 +1668,23 @@ const ChatScreen = () => {
 
         {/* Message Input */}
         <View className="flex-row p-2 bg-white border-t border-gray-100 gap-2">
+          {editingMessageId && (
+            <View className="items-center  justify-center">
+              <TouchableOpacity
+                onPress={() => {
+                  setEditingMessageId(null);
+                  setEditText("");
+                }}
+                className="w-12 h-12 bg-red-100 rounded-full items-center justify-center"
+              >
+                <Image
+                  source={icons.close}
+                  className="w-6 h-6"
+                  tintColor="#ef4444"
+                />
+              </TouchableOpacity>
+            </View>
+          )}
           {!canSendMessage ? (
             // Show appropriate message based on status and user role
             (() => {
@@ -1504,32 +1724,39 @@ const ChatScreen = () => {
             })()
           ) : (
             <View className="flex-1 flex-row items-center gap-2">
-              <TouchableOpacity
-                onPress={() => setShowActionMenu(true)}
-                className="w-12 h-12 bg-gray-200 rounded-full items-center justify-center"
-              >
-                <Image
-                  source={icons.bigPlus}
-                  className="w-6 h-6"
-                  tintColor="#6B7280"
-                />
-              </TouchableOpacity>
+              {!editingMessageId && (
+                <TouchableOpacity
+                  onPress={() => setShowActionMenu(true)}
+                  className="w-12 h-12 bg-blue-500 rounded-full items-center justify-center"
+                >
+                  <Image
+                    source={icons.bigPlus}
+                    className="w-6 h-6"
+                    tintColor="#ffffff"
+                  />
+                </TouchableOpacity>
+              )}
 
               <TextInput
-                value={newMessage}
-                onChangeText={setNewMessage}
-                placeholder="Type a message..."
+                value={editingMessageId ? editText : newMessage}
+                onChangeText={editingMessageId ? setEditText : setNewMessage}
+                placeholder={
+                  editingMessageId ? "Edit message..." : "Type a message..."
+                }
                 multiline
-                className="flex-1 bg-gray-100 rounded-full p-5 max-h-24"
+                className="flex-1 bg-gray-100 rounded-full px-5 py-4 max-h-24"
                 style={{ textAlignVertical: "top" }}
               />
+
               <TouchableOpacity
-                onPress={sendMessage}
+                onPress={editingMessageId ? handleEditSubmit : sendMessage}
                 className="w-12 h-12 bg-primary rounded-full items-center justify-center"
-                disabled={newMessage.trim() === ""}
+                disabled={
+                  editingMessageId ? !editText.trim() : !newMessage.trim()
+                }
               >
                 <Image
-                  source={icons.plane}
+                  source={editingMessageId ? icons.check : icons.plane}
                   className="w-6 h-6"
                   tintColor="white"
                 />
@@ -1537,6 +1764,24 @@ const ChatScreen = () => {
             </View>
           )}
         </View>
+
+        <MessageActionsModal
+          visible={showMessageActions}
+          onClose={() => {
+            setShowMessageActions(false);
+            setSelectedMessage(null);
+          }}
+          onEdit={() => {
+            if (selectedMessage) {
+              handleMessageEdit(selectedMessage.id, selectedMessage.text);
+            }
+          }}
+          onDelete={() => {
+            if (selectedMessage) {
+              handleMessageDelete(selectedMessage.id);
+            }
+          }}
+        />
 
         <ActionMenu
           visible={showActionMenu}
