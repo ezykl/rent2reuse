@@ -52,6 +52,8 @@ import {
 } from "date-fns";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
+import { sendPushNotification } from "@/utils/notificationHelper";
+import { useTimeConverter } from "@/hooks/useTimeConverter";
 
 // First fix the ChatHeader props interface
 interface ChatHeaderProps {
@@ -66,6 +68,7 @@ interface ChatHeaderProps {
     image?: string;
   };
   recipientStatus?: any;
+  status: any;
   recipientId: string;
   onBack: () => void;
 }
@@ -153,6 +156,7 @@ const ChatHeader = ({
   recipientImage,
   itemDetails,
   recipientStatus,
+  status,
   onBack,
   recipientId,
 }: ChatHeaderProps) => {
@@ -195,7 +199,15 @@ const ChatHeader = ({
           {itemDetails?.name && (
             <>
               <Text className="text-gray-400"> • </Text>
-              <Text className="text-primary">{itemDetails.name}</Text>
+              <Text
+                className={`${
+                  status === "cancelled" || status === "declined"
+                    ? "text-red-500"
+                    : "text-primary"
+                }`}
+              >
+                {itemDetails.name}
+              </Text>
             </>
           )}
         </Text>
@@ -207,12 +219,7 @@ const ChatHeader = ({
         onPress={() => router.push(`/report/${recipientId}`)}
         className="mr-3"
       >
-        <Image
-          source={icons.about}
-          className="w-7 h-7"
-          tintColor="#EF4444"
-          style={{ transform: [{ rotate: "180deg" }] }}
-        />
+        <Image source={icons.report} className="w-6 h-6" tintColor="#EF4444" />
       </TouchableOpacity>
     </View>
   );
@@ -348,6 +355,7 @@ const RentRequestMessage = ({
   const [rentRequestData, setRentRequestData] = useState<any>(null);
   const [currentStatus, setCurrentStatus] = useState<string>("pending");
   const isSender = item.senderId === auth.currentUser?.uid;
+  const { minutesToTime } = useTimeConverter();
 
   // FIXED: Move useMemo outside of useEffect - this calculates the effective status
   const effectiveStatus = useMemo(() => {
@@ -393,7 +401,6 @@ const RentRequestMessage = ({
     };
   }, [chatId, item.id]);
 
-  // FIXED: Remove the duplicate useEffect and the useMemo inside useEffect
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -635,10 +642,7 @@ const RentRequestMessage = ({
                   Pickup Time
                 </Text>
                 <Text className="text-sm mt-1 text-gray-700">
-                  {Math.floor((rentRequestData.pickupTime || 480) / 60)}:
-                  {((rentRequestData.pickupTime || 480) % 60)
-                    .toString()
-                    .padStart(2, "0")}
+                  {minutesToTime(rentRequestData.pickupTime)}
                 </Text>
               </View>
             </View>
@@ -693,7 +697,7 @@ const RentRequestMessage = ({
         {effectiveStatus === "accepted" && (
           <View className="bg-green-50 p-4 rounded-lg mt-4">
             <Text className="text-green-600 text-center font-pmedium">
-              ✓ Request accepted! You can now chat freely.
+              Request accepted!
             </Text>
           </View>
         )}
@@ -706,6 +710,31 @@ const RentRequestMessage = ({
       </View>
     </View>
   );
+};
+
+// Add this helper function at the top of the file
+const createInAppNotification = async (
+  userId: string,
+  notification: {
+    type: string;
+    title: string;
+    message: string;
+    data?: any;
+  }
+) => {
+  try {
+    const userNotificationsRef = collection(
+      db,
+      `users/${userId}/notifications`
+    );
+    await addDoc(userNotificationsRef, {
+      ...notification,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Error creating notification:", error);
+  }
 };
 
 const requestDataCache = new Map();
@@ -1388,6 +1417,41 @@ const ChatScreen = () => {
         });
       }
 
+      // Get requester's data for notification
+      const requestDoc = await getDoc(doc(db, "rentRequests", requestId));
+      const requestData = requestDoc.data();
+      const requesterId = requestData?.requesterId;
+
+      if (requesterId) {
+        // Create in-app notification for requester
+        await createInAppNotification(requesterId, {
+          type: "RENT_REQUEST_ACCEPTED",
+          title: "Request Accepted",
+          message: `Your rental request for ${chatData?.itemDetails?.name} has been accepted`,
+          data: {
+            route: "/chat",
+            params: {
+              id: chatId,
+              requestId: requestId,
+            },
+          },
+        });
+
+        // Send push notification if available
+        if (requestData?.pushTokens?.token) {
+          await sendPushNotification({
+            to: requestData.pushTokens.token,
+            title: "Request Accepted",
+            body: `Your rental request for ${chatData?.itemDetails?.name} has been accepted`,
+            data: {
+              type: "RENT_REQUEST_ACCEPTED",
+              chatId: String(chatId),
+              requestId,
+            },
+          });
+        }
+      }
+
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
@@ -1452,6 +1516,41 @@ const ChatScreen = () => {
         createdAt: serverTimestamp(),
         read: false,
       });
+
+      // Get requester's data for notification
+      const requestDoc = await getDoc(doc(db, "rentRequests", requestId));
+      const requestData = requestDoc.data();
+      const requesterId = requestData?.requesterId;
+
+      if (requesterId) {
+        // Create in-app notification for requester
+        await createInAppNotification(requesterId, {
+          type: "RENT_REQUEST_DECLINED",
+          title: "Request Declined",
+          message: `Your rental request for ${chatData?.itemDetails?.name} has been declined`,
+          data: {
+            route: "/chat",
+            params: {
+              id: chatId,
+              requestId: requestId,
+            },
+          },
+        });
+
+        // Send push notification if available
+        if (requestData?.pushTokens?.token) {
+          await sendPushNotification({
+            to: requestData.pushTokens.token,
+            title: "Request Declined",
+            body: `Your rental request for ${chatData?.itemDetails?.name} has been declined`,
+            data: {
+              type: "RENT_REQUEST_DECLINED",
+              chatId: String(chatId),
+              requestId,
+            },
+          });
+        }
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -1536,6 +1635,38 @@ const ChatScreen = () => {
         );
       }
 
+      // Only create in-app notification for the current user
+      await createInAppNotification(currentUserId, {
+        type: "RENT_REQUEST_CANCELLED",
+        title: "Request Cancelled",
+        message: `You cancelled your rental request for ${chatData?.itemDetails?.name}`,
+        data: {
+          route: "/chat",
+          params: {
+            id: chatId,
+            requestId: requestId,
+          },
+        },
+      });
+
+      //Update Plan
+      if (auth.currentUser) {
+        const userRef = doc(db, "users", auth.currentUser.uid);
+        const userDoc = await getDoc(userRef);
+
+        if (userDoc.exists()) {
+          const currentPlan = userDoc.data().currentPlan;
+          const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+
+          await updateDoc(userRef, {
+            "currentPlan.rentUsed": newRentUsed,
+            "currentPlan.updatedAt": new Date(),
+          });
+        }
+      }
+
+      // No push notification for cancel since it's user's own action
+
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
@@ -1572,6 +1703,7 @@ const ChatScreen = () => {
         recipientName={recipientName}
         recipientImage={recipientImage}
         itemDetails={chatData?.itemDetails}
+        status={chatData?.status}
         recipientId={
           (chatData?.ownerId === currentUserId
             ? chatData?.requesterId

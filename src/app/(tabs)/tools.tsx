@@ -1105,7 +1105,7 @@ const Tools = () => {
                     <View className="py-10 items-center">
                       <View className=" items-center">
                         <Image
-                          source={icons.about}
+                          source={icons.emptyBox}
                           className="w-16 h-16 mb-4"
                           tintColor="#9CA3AF"
                         />
@@ -1147,7 +1147,7 @@ const Tools = () => {
                   {rentedTools.length === 0 ? (
                     <View className="py-10 items-center">
                       <Image
-                        source={icons.about}
+                        source={icons.emptyBox}
                         className="w-16 h-16 mb-4"
                         tintColor="#9CA3AF"
                       />
@@ -1169,10 +1169,11 @@ const Tools = () => {
                     Tools with Rental Requests
                   </Text>
 
-                  {myListings.length === 0 ? (
+                  {myListings.filter((item) => item.requestCount > 0).length ===
+                  0 ? (
                     <View className="py-10 items-center">
                       <Image
-                        source={icons.about}
+                        source={icons.emptyBox}
                         className="w-16 h-16 mb-4"
                         tintColor="#9CA3AF"
                       />
@@ -1180,22 +1181,24 @@ const Tools = () => {
                         No tools with rental request yet
                       </Text>
                     </View>
-                  ) : null}
-
-                  {myListings
-                    .filter((item) => item.requestCount > 0)
-                    .map((item) => (
-                      <RequestedItemCard
-                        key={item.id}
-                        item={{
-                          ...item,
-                          requestCount: item.requestCount ?? 0,
-                          newRequestCount: item.newRequestCount ?? 0,
-                          requests: item.requests ?? [],
-                        }}
-                        onViewRequests={(id) => router.push(`/requests/${id}`)}
-                      />
-                    ))}
+                  ) : (
+                    myListings
+                      .filter((item) => item.requestCount > 0)
+                      .map((item) => (
+                        <RequestedItemCard
+                          key={item.id}
+                          item={{
+                            ...item,
+                            requestCount: item.requestCount ?? 0,
+                            newRequestCount: item.newRequestCount ?? 0,
+                            requests: item.requests ?? [],
+                          }}
+                          onViewRequests={(id) =>
+                            router.push(`/requests/${id}`)
+                          }
+                        />
+                      ))
+                  )}
                 </View>
               )}
 
@@ -1210,7 +1213,7 @@ const Tools = () => {
                       .length === 0 ? (
                     <View className="py-10 items-center">
                       <Image
-                        source={icons.about}
+                        source={icons.emptyBox}
                         className="w-16 h-16 mb-4"
                         tintColor="#9CA3AF"
                       />

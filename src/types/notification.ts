@@ -2,11 +2,16 @@ export type NotificationType =
   | "WELCOME"
   | "RENT_REQUEST"
   | "RENT_ACCEPTED"
-  | "RENT_REJECTED"
+  | "RENT_REQUEST_CANCELLED"
+  | "RENT_REQUEST_DECLINED"
+  | "RENT_REQUEST_COMPLETED"
+  | "RENT_REQUEST_ACCEPTED"
   | "MESSAGE_RECEIVED"
   | "PAYMENT_RECEIVED"
   | "ITEM_RETURNED"
   | "REVIEW_REMINDER"
+  | "SUPPORT_TICKET"
+  | "REPORT_ISSUE"
   | "SYSTEM_ALERT";
 
 export interface FirestoreNotification {

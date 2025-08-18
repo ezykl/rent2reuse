@@ -89,10 +89,21 @@ import check from "../assets/icons/check.png";
 import box from "../assets/icons/box.png";
 import boxLine from "../assets/icons/box-line.png";
 import clock from "../assets/icons/clock.png";
-
+import ticket from "../assets/icons/ticket.png";
+import emptyBox from "../assets/icons/empty-box.png";
+import report from "../assets/icons/report.png";
+import receipt from "../assets/icons/receipt.png";
 import searchAi from "../assets/icons/searchAi.png";
+import share from "../assets/icons/share.png";
+import cross from "../assets/icons/cross.png";
 
 export default {
+  cross,
+  share,
+  receipt,
+  emptyBox,
+  report,
+  ticket,
   clock,
   boxLine,
   box,

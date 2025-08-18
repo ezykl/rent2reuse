@@ -71,7 +71,7 @@ export const sendRentRequestNotifications = async (
 };
 
 // Helper function to send push notifications
-const sendPushNotification = async ({
+export const sendPushNotification = async ({
   to,
   title,
   body,

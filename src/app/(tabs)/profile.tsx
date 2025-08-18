@@ -828,35 +828,17 @@ const Profile: React.FC = () => {
         {/* Quick Actions */}
         <View className="divide-y divide-gray-100">
           <TouchableOpacity
-            onPress={() => router.push("/create-ticket")}
+            onPress={() => setActiveModal("contact")}
             className="flex-row items-center px-6 py-4"
           >
             <Image
-              source={icons.heart}
+              source={icons.call}
               className="w-6 h-6 mr-3"
               tintColor="#6B7280"
-              resizeMode="contain"
             />
             <Text className="flex-1 font-pmedium text-gray-800">
-              Submit Ticket
+              Contact Number
             </Text>
-            <Image
-              source={icons.arrowRight}
-              className="w-5 h-5"
-              tintColor="#9CA3AF"
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => router.push("/downloads")}
-            className="flex-row items-center px-6 py-4"
-          >
-            <Image
-              source={icons.download}
-              className="w-6 h-6 mr-3"
-              tintColor="#6B7280"
-            />
-            <Text className="flex-1 font-pmedium text-gray-800">Downloads</Text>
             <Image
               source={icons.arrowRight}
               className="w-5 h-5"
@@ -902,16 +884,36 @@ const Profile: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push("/clear-cache")}
+            onPress={() => router.push("/transactions")}
             className="flex-row items-center px-6 py-4"
           >
             <Image
-              source={icons.trash}
+              source={icons.receipt}
               className="w-6 h-6 mr-3"
               tintColor="#6B7280"
             />
             <Text className="flex-1 font-pmedium text-gray-800">
-              Clear Cache
+              Transactions
+            </Text>
+            <Image
+              source={icons.arrowRight}
+              className="w-5 h-5"
+              tintColor="#9CA3AF"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push("/create-ticket")}
+            className="flex-row items-center px-6 py-4"
+          >
+            <Image
+              source={icons.ticket}
+              className="w-6 h-6 mr-3"
+              tintColor="#6B7280"
+              resizeMode="contain"
+            />
+            <Text className="flex-1 font-pmedium text-gray-800">
+              Submit Ticket
             </Text>
             <Image
               source={icons.arrowRight}

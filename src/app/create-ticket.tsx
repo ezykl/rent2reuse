@@ -97,7 +97,6 @@ export default function CreateTicket() {
         isRead: false,
         createdAt: serverTimestamp(),
         data: {
-          route: "/support-details",
           params: {
             ticketId: generatedTicketId,
           },

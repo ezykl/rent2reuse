@@ -101,6 +101,11 @@ const NotificationScreen = () => {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={() => (
             <View className="flex-1 items-center justify-center py-8 px-4">
+              <Image
+                source={icons.emptyBox}
+                className="w-16 h-16 mb-4"
+                tintColor="#9CA3AF"
+              />
               <Text className="text-gray-500 font-pmedium">
                 No notifications yet
               </Text>

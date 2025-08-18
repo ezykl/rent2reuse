@@ -44,7 +44,7 @@ const getPlanColor = (planType: string): string => {
   const colors = {
     free: "#CD7F32", // Bronze
     basic: "#737373", // Silver
-    premium: "#FFD700", // Gold
+    premium: "#eda705", // Gold
     platinum: "#21AEE6", // Platinum/Violet
   };
 
@@ -898,7 +898,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
         presentationStyle="fullScreen"
         statusBarTranslucent
       >
-        <View className="flex-1 bg-gray-50 mt-4">
+        <View className="flex-1 bg-gray-50 mt-8">
           {/* Header */}
           <View className="bg-white border-b border-gray-200 px-6 py-4">
             <View className="flex-row items-center justify-end">
@@ -911,8 +911,8 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
             </View>
 
             {/* Progress Steps */}
-            <View className="flex-row items-center mt-4 space-x-2">
-              <View className="flex-1 flex-row items-center">
+            <View className="flex-row items-center justify-center mt-4 space-x-2">
+              <View className="flex-1 flex-row items-center justify-center">
                 <View className="w-6 h-6 rounded-full bg-blue-500 items-center justify-center mr-2">
                   <Text className="text-white text-xs font-bold">✓</Text>
                 </View>
@@ -920,7 +920,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
                   Select Plan
                 </Text>
               </View>
-              <View className="flex-1 flex-row items-center">
+              <View className="flex-1 flex-row items-center justify-center">
                 <View className="w-6 h-6 rounded-full bg-blue-500 items-center justify-center mr-2">
                   <Text className="text-white text-xs font-bold">2</Text>
                 </View>
@@ -928,7 +928,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
                   Payment
                 </Text>
               </View>
-              <View className="flex-1 flex-row items-center">
+              <View className="flex-1 flex-row items-center justify-center">
                 <View className="w-6 h-6 rounded-full bg-gray-300 items-center justify-center mr-2">
                   <Text className="text-gray-600 text-xs font-bold">3</Text>
                 </View>

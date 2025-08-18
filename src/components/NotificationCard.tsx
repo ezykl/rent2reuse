@@ -34,6 +34,30 @@ const NotificationCard = ({
           bgColor: "bg-red-100",
           iconColor: "#EF4444",
         };
+      case "RENT_REQUEST_DECLINED":
+        return {
+          icon: icons.close,
+          bgColor: "bg-red-100",
+          iconColor: "#EF4444",
+        };
+      case "REPORT_ISSUE":
+        return {
+          icon: icons.report,
+          bgColor: "bg-yellow-100",
+          iconColor: "#FBBF24",
+        };
+      case "RENT_REQUEST_CANCELLED":
+        return {
+          icon: icons.check,
+          bgColor: "bg-red-100",
+          iconColor: "#EF4444",
+        };
+      case "RENT_REQUEST_ACCEPTED":
+        return {
+          icon: icons.check,
+          bgColor: "bg-green-100",
+          iconColor: "#22C55E",
+        };
       case "MESSAGE_RECEIVED":
         return {
           icon: icons.envelope,
@@ -45,6 +69,12 @@ const NotificationCard = ({
           icon: icons.box,
           bgColor: "bg-amber-100",
           iconColor: "#F59E0B",
+        };
+      case "SUPPORT_TICKET":
+        return {
+          icon: icons.ticket,
+          bgColor: "bg-orange-100",
+          iconColor: "#d96c00",
         };
       default:
         return {

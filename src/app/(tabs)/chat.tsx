@@ -34,6 +34,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { icons } from "@/constant";
 
 //typeScript
 interface User {
@@ -746,6 +747,11 @@ const ChatList = () => {
           )}
           ListEmptyComponent={() => (
             <View className="flex-1 items-center justify-center p-4">
+              <Image
+                source={icons.emptyBox}
+                className="w-16 h-16 mb-4"
+                tintColor="#9CA3AF"
+              />
               <Text className="text-gray-500 text-center">
                 No {activeTab} messages
               </Text>
