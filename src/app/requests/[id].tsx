@@ -7,7 +7,7 @@ import {
   ScrollView,
 } from "react-native";
 import React, { useEffect, useState } from "react";
-import { useLocalSearchParams, router } from "expo-router";
+import { Link, useRouter, useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   collection,
@@ -59,6 +59,7 @@ interface RequestType extends Omit<RentRequestData, "createdAt"> {
   id: string;
   createdAt: Date;
   requesterData?: UserData;
+  chatId?: string;
 }
 
 // Compact RequestCard Component with Toggle
@@ -69,6 +70,8 @@ const RequestCard: React.FC<{
   isExpanded: boolean;
   onToggle: (id: string) => void;
 }> = ({ request, onStatusUpdate, minutesToTime, isExpanded, onToggle }) => {
+  const router = useRouter();
+
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp) return "";
     if (timestamp instanceof Timestamp) {
@@ -98,113 +101,144 @@ const RequestCard: React.FC<{
     );
   };
 
+  // Add status color helper
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-100 text-yellow-700";
+      case "approved":
+        return "bg-green-100 text-green-700";
+      case "rejected":
+        return "bg-red-100 text-red-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
+  // Add chat navigation handler
+  const handleChatNavigation = () => {
+    if (request.chatId) {
+      router.push(`/chat/${request.chatId}`);
+    } else {
+      // Create new chat if doesn't exist
+      // You'll need to implement this logic
+      console.log("Chat needs to be created first");
+    }
+  };
+
   return (
     <View className="bg-white rounded-xl mx-4 mb-3 shadow-sm border border-gray-100 overflow-hidden">
-      {/* Header - Always Visible */}
+      {/* Main Card Content */}
       <View className="p-4">
-        {/* User & Price Row */}
-        <View className="flex-row items-center justify-between mb-3">
-          <View className="flex-row items-center flex-1">
-            <Image
-              source={
-                request.requesterData?.profileImage
-                  ? { uri: request.requesterData.profileImage }
-                  : icons.user
-              }
-              className="w-10 h-10 rounded-full mr-3"
-            />
+        {/* User & Price Row - Enhanced */}
+        <View className="flex-row items-center justify-between mb-4">
+          <TouchableOpacity
+            onPress={() => router.push(`/user/${request.requesterId}`)}
+            className="flex-row items-center flex-1"
+          >
+            <View className="relative">
+              <Image
+                source={
+                  request.requesterData?.profileImage
+                    ? { uri: request.requesterData.profileImage }
+                    : icons.user
+                }
+                className="w-12 h-12 rounded-full mr-3"
+              />
+              <View className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-white" />
+            </View>
             <View className="flex-1">
-              <Text className="font-psemibold text-gray-800 text-sm">
+              <Text className="font-pbold text-gray-800 text-base">
                 {getFullName()}
               </Text>
-              <Text className="text-xs font-pregular text-gray-500">
-                {dayjs(request.createdAt).format("MMM D, h:mm A")}
+              <Text className="text-xs font-pregular text-gray-500 mt-1">
+                Joined {dayjs(request.createdAt).format("MMM YYYY")}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
           <View className="items-end">
-            <Text className="font-pbold text-green-600 text-lg">
+            <Text className="font-pbold text-green-600 text-xl">
               ₱{request.totalPrice.toLocaleString()}
             </Text>
-            <Text className="text-xs text-gray-500">
-              {request.rentalDays} day{request.rentalDays !== 1 ? "s" : ""}
+            <Text className="text-xs font-pmedium text-gray-500">
+              for {request.rentalDays} day{request.rentalDays !== 1 ? "s" : ""}
             </Text>
           </View>
         </View>
 
-        {/* Quick Info Row */}
-        <View className="bg-gray-50 rounded-lg p-3 mb-3">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-xs font-pmedium text-gray-600 mb-1">
-                {formatShortDate(request.startDate)} -{" "}
-                {formatShortDate(request.endDate)}
-              </Text>
-              <Text className="text-xs text-gray-500">
-                Pickup: {minutesToTime(Number(request.pickupTime))}
-              </Text>
-            </View>
-            <View className="bg-yellow-100 px-2 py-1 rounded-full">
-              <Text className="text-xs font-pmedium text-yellow-700 capitalize">
-                {request.status}
-              </Text>
-            </View>
+        {/* Status Badge - Enhanced */}
+        <View className="flex-row items-center justify-between bg-gray-50 rounded-lg p-3 mb-4">
+          <View className="flex-row items-center gap-4">
+            <Image
+              source={icons.calendar}
+              className="w-5 h-5"
+              tintColor="#4B5563"
+            />
+            <Text className="text-sm font-pmedium text-gray-600">
+              {formatShortDate(request.startDate)} -{" "}
+              {formatShortDate(request.endDate)}
+            </Text>
+          </View>
+          <View
+            className={`px-3 py-1.5 rounded-full ${getStatusColor(
+              request.status
+            )}`}
+          >
+            <Text className="text-xs font-pbold capitalize">
+              {request.status}
+            </Text>
           </View>
         </View>
 
-        {/* Message */}
-        {request.message && (
-          <View className="mb-2">
-            <Text className="text-xs font-pbold text-gray-400 uppercase tracking-wider mb-2">
-              Message
+        {/* Action Buttons - Enhanced */}
+        <View className="flex-row gap-3 mt-4">
+          <TouchableOpacity
+            onPress={handleChatNavigation}
+            className="flex-1 bg-primary py-3 rounded-xl flex-row items-center justify-center gap-4"
+            activeOpacity={0.8}
+          >
+            <Image
+              source={icons.chat}
+              className="w-6 h-6"
+              tintColor="#FFFFFF"
+              resizeMode="cover"
+            />
+            <Text className="text-white font-pbold text-base">
+              Message Renter
             </Text>
-            <View className="bg-white rounded-lg p-3">
-              <Text className="text-sm text-gray-700 leading-5 italic">
-                "{request.message}"
-              </Text>
-            </View>
-          </View>
-        )}
+          </TouchableOpacity>
 
-        {/* Toggle Button */}
+          <TouchableOpacity
+            onPress={() => onStatusUpdate(request.id, "declined")}
+            className="bg-red-400 p-4 rounded-xl"
+            activeOpacity={0.8}
+          >
+            <Image
+              source={icons.close}
+              className="w-6 h-6"
+              tintColor="#FFFFFF"
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Toggle Details Button - Enhanced */}
         <TouchableOpacity
           onPress={() => onToggle(request.id)}
-          className="flex-row items-center justify-center py-2 mb-3"
+          className="flex-row items-center justify-center mt-4"
           activeOpacity={0.7}
         >
-          <Text className="text-xs font-pmedium text-blue-600 mr-1">
-            {isExpanded ? "Hide details" : "View details"}
+          <Text className="text-sm font-pmedium text-blue-500 mr-1">
+            {isExpanded ? "Hide Details" : "View Details"}
           </Text>
           <Image
             source={icons.arrowDown}
-            className={`w-4 h-4 ${isExpanded ? "rotate-180" : ""}`}
+            className={`w-4 h-4 ${isExpanded ? "" : "-rotate-90"}`}
             tintColor="#2563EB"
+            resizeMode="contain"
           />
         </TouchableOpacity>
-
-        {/* Action Buttons - Always Visible */}
-        <View className="flex-row gap-2">
-          <TouchableOpacity
-            onPress={() => onStatusUpdate(request.id, "approved")}
-            className="flex-1 bg-green-500 py-3 rounded-lg"
-            activeOpacity={0.8}
-          >
-            <Text className="text-white font-pmedium text-center text-sm">
-              Respond
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => onStatusUpdate(request.id, "rejected")}
-            className="flex-1 bg-red-500 py-3 rounded-lg"
-            activeOpacity={0.8}
-          >
-            <Text className="text-white font-pmedium text-center text-sm">
-              Decline
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
 
       {/* Expanded Details */}
@@ -315,6 +349,7 @@ const ViewRequests = () => {
     fetchItemAndRequests();
   }, [id]);
 
+  // Update the fetchItemAndRequests function
   const fetchItemAndRequests = async () => {
     try {
       setIsLoading(true);
@@ -323,7 +358,7 @@ const ViewRequests = () => {
       const q = query(
         requestsRef,
         where("itemId", "==", id),
-        where("status", "==", "pending")
+        where("status", "in", ["pending", "approved"]) // Only show pending and approved requests
       );
 
       const querySnapshot = await getDocs(q);
@@ -368,8 +403,11 @@ const ViewRequests = () => {
     }
   };
 
+  // Update the handleStatusUpdate function
   const handleStatusUpdate = async (requestId: string, newStatus: string) => {
     try {
+      setIsLoading(true); // Add loading state while updating
+
       const requestRef = doc(db, "rentRequests", requestId);
       const requestSnap = await getDoc(requestRef);
 
@@ -389,10 +427,8 @@ const ViewRequests = () => {
           status: newStatus,
           updatedAt: serverTimestamp(),
         });
-      }
 
-      // Add status update message
-      if (requestData.chatId) {
+        // Add status update message to chat
         await addDoc(collection(db, "chat", requestData.chatId, "messages"), {
           type: "statusUpdate",
           text: `Request ${newStatus}`,
@@ -401,6 +437,24 @@ const ViewRequests = () => {
           read: false,
         });
       }
+
+      // Update local state to reflect changes immediately
+      setRequests((prevRequests) =>
+        prevRequests.filter((request) => {
+          // If status is declined, remove it from the list
+          if (newStatus === "declined" || newStatus === "rejected") {
+            return request.id !== requestId;
+          }
+          // Otherwise, update the status
+          if (request.id === requestId) {
+            return {
+              ...request,
+              status: newStatus,
+            };
+          }
+          return request;
+        })
+      );
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -414,6 +468,8 @@ const ViewRequests = () => {
         title: "Error",
         textBody: "Failed to update request",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -425,7 +481,9 @@ const ViewRequests = () => {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
         <LottieActivityIndicator size={80} />
-        <Text className="text-gray-500 font-pregular mt-3 text-sm">s...</Text>
+        <Text className="text-gray-500 font-pmedium mt-3 text-sm">
+          Loading your data...
+        </Text>
       </View>
     );
   }
@@ -454,10 +512,8 @@ const ViewRequests = () => {
             <Text className="text-lg font-pbold text-gray-800">
               Rental Requests
             </Text>
-            <Text className="text-xs font-pregular text-gray-500">
-              {requests.length} pending
-            </Text>
           </View>
+          <View className="w-8" />
         </View>
       </View>
 
@@ -468,14 +524,19 @@ const ViewRequests = () => {
         contentContainerStyle={{ paddingVertical: 12 }}
       >
         {requests.length === 0 ? (
-          <View className="flex-1 justify-center items-center py-16">
-            <Text className="text-4xl mb-3">📋</Text>
+          <View className="flex-1 justify-center items-center py-24">
+            <Image
+              source={icons.emptyBox}
+              className="w-16 h-16 mb-4"
+              tintColor="#9CA3AF"
+            />
+
             <Text className="text-lg font-pmedium text-gray-600 mb-2">
               No Pending Requests
             </Text>
-            <Text className="text-sm font-pregular text-gray-500 text-center px-8">
-              Rental requests will appear here when users want to rent your
-              item.
+            <Text className="text-sm font-pregular text-gray-500 text-center px-8 mx-4">
+              Rental requests will appear here {"\n"}when users want to rent
+              your item.
             </Text>
           </View>
         ) : (

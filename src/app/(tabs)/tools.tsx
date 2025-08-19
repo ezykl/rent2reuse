@@ -32,6 +32,7 @@ import {
   orderBy,
   serverTimestamp,
   addDoc,
+  onSnapshot, // Add this
 } from "firebase/firestore";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -80,12 +81,56 @@ const Tools = () => {
   // Add a state for incoming requests count
   const [incomingRequestsCount, setIncomingRequestsCount] = useState(0);
 
+  // Add these states for real-time listeners
+  const [incomingRequestsListener, setIncomingRequestsListener] = useState<
+    () => void
+  >(() => {});
+  const [outgoingRequestsListener, setOutgoingRequestsListener] = useState<
+    () => void
+  >(() => {});
+
   const params = useLocalSearchParams();
   useEffect(() => {
     if (params.tab && typeof params.tab === "string") {
       setActiveTab(params.tab);
     }
   }, [params.tab]);
+
+  const handleEditRequest = async (requestId: string) => {
+    try {
+      setLoaderIsLoading(true);
+
+      // Fetch the request data
+      const requestDoc = await getDoc(doc(db, "rentRequests", requestId));
+      if (!requestDoc.exists()) {
+        throw new Error("Request not found");
+      }
+
+      const requestData = requestDoc.data();
+
+      // Navigate to edit form with existing data
+      router.push({
+        pathname: `/edit-request/${requestId}`,
+        params: {
+          itemId: requestData.itemId,
+          startDate: requestData.startDate.toDate().toISOString(),
+          endDate: requestData.endDate.toDate().toISOString(),
+          pickupTime: requestData.pickupTime,
+          message: requestData.message,
+          totalPrice: requestData.totalPrice,
+        },
+      });
+    } catch (error) {
+      console.error("Error editing request:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to edit request",
+      });
+    } finally {
+      setLoaderIsLoading(false);
+    }
+  };
 
   const UsageLimitBox = ({
     used,
@@ -145,7 +190,8 @@ const Tools = () => {
           const requestsQuery = query(
             requestsRef,
             where("itemId", "==", doc.id),
-            where("status", "==", "pending")
+            where("status", "in", ["pending", "approved"])
+            //find me later    where("status", "!=", "accepted")
           );
           const requestsSnap = await getDocs(requestsQuery);
           totalIncomingRequests += requestsSnap.size;
@@ -759,6 +805,90 @@ const Tools = () => {
     </TouchableOpacity>
   );
 
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    // Listener for incoming requests (requests for user's listings)
+    const incomingQuery = query(
+      collection(db, "rentRequests"),
+      where("ownerId", "==", auth.currentUser.uid),
+      where("status", "in", ["pending", "accepted"])
+    );
+
+    const unsubscribeIncoming = onSnapshot(incomingQuery, (snapshot) => {
+      const updates = snapshot.docChanges();
+
+      updates.forEach((change) => {
+        if (change.type === "added" || change.type === "modified") {
+          // Update incoming requests count
+          setIncomingRequestsCount((prev) => {
+            const newCount = snapshot.docs.length;
+
+            // Show notification for new requests
+            if (change.type === "added") {
+              Toast.show({
+                type: ALERT_TYPE.INFO,
+                title: "New Rental Request",
+                textBody: "You have received a new rental request",
+              });
+            }
+
+            return newCount;
+          });
+
+          // Refresh listings to update request counts
+          fetchUserListings();
+        }
+      });
+    });
+
+    // Listener for outgoing requests (user's sent requests)
+    const outgoingQuery = query(
+      collection(db, "rentRequests"),
+      where("requesterId", "==", auth.currentUser.uid),
+      where("status", "in", ["pending", "accepted", "rejected", "cancelled"])
+    );
+
+    const unsubscribeOutgoing = onSnapshot(outgoingQuery, (snapshot) => {
+      const updates = snapshot.docChanges();
+
+      updates.forEach((change) => {
+        if (change.type === "modified") {
+          const data = change.doc.data();
+
+          // Show notification for request status changes
+          if (data.status !== "pending") {
+            Toast.show({
+              type: ALERT_TYPE.INFO,
+              title: "Request Update",
+              textBody: `Your rental request has been ${data.status}`,
+            });
+          }
+
+          // Refresh sent requests
+          fetchSentRequests();
+        }
+      });
+    });
+
+    // Cleanup listeners
+    setIncomingRequestsListener(() => unsubscribeIncoming);
+    setOutgoingRequestsListener(() => unsubscribeOutgoing);
+
+    return () => {
+      unsubscribeIncoming();
+      unsubscribeOutgoing();
+    };
+  }, [auth.currentUser]);
+
+  // Add this cleanup in the existing cleanup logic or component unmount
+  useEffect(() => {
+    return () => {
+      if (incomingRequestsListener) incomingRequestsListener();
+      if (outgoingRequestsListener) outgoingRequestsListener();
+    };
+  }, [incomingRequestsListener, outgoingRequestsListener]);
+
   return (
     <SafeAreaView
       className="flex-1 bg-white"
@@ -767,7 +897,7 @@ const Tools = () => {
       {!isDataReady ? (
         <View className="flex-1 justify-center items-center">
           <LottieActivityIndicator size={100} color="#5C6EF6" />
-          <Text className="text-secondary-300 font-pregular mt-4">
+          <Text className="text-secondary-300 font-pmedium mt-4">
             Loading your data...
           </Text>
         </View>
@@ -1245,6 +1375,7 @@ const Tools = () => {
                               router.push(`/chat/${request.chatId}`)
                             }
                             onCancel={handleCancelRequest}
+                            onEdit={handleEditRequest}
                           />
                         ))}
                     </View>

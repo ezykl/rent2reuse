@@ -8,26 +8,68 @@ import { min } from "date-fns";
 interface SentRequestCardProps {
   request: {
     id: string;
+    startDate: any;
+    endDate: any;
+    status: string;
     itemId: string;
     itemName: string;
     itemImage?: string;
     ownerName: string;
-    status: "pending" | "approved" | "rejected" | "completed";
-    startDate: any;
-    endDate: any;
     pickupTime: number;
     totalPrice: number;
     chatId: string;
   };
   onPress: (id: string) => void;
   onCancel: (id: string) => void;
+  onEdit?: (id: string) => void;
 }
+
+const getRequestStatus = (startDate: any, endDate: any, status: string) => {
+  const now = dayjs();
+  const start = dayjs(startDate.toDate?.() ?? startDate);
+  const end = dayjs(endDate.toDate?.() ?? endDate);
+
+  if (status === "rejected" || status === "cancelled") {
+    return {
+      label: status.charAt(0).toUpperCase() + status.slice(1),
+      color: "bg-red-100 text-red-700",
+    };
+  }
+
+  if (now.isAfter(end)) {
+    return {
+      label: "Expired",
+      color: "bg-gray-100 text-gray-700",
+    };
+  }
+
+  if (now.isAfter(start) && status === "pending") {
+    return {
+      label: "Past Due",
+      color: "bg-orange-100 text-orange-700",
+    };
+  }
+
+  return {
+    label: status.charAt(0).toUpperCase() + status.slice(1),
+    color:
+      status === "approved"
+        ? "bg-green-100 text-green-700"
+        : "bg-yellow-100 text-yellow-700",
+  };
+};
 
 const SentRequestCard = ({
   request,
   onPress,
   onCancel,
+  onEdit,
 }: SentRequestCardProps) => {
+  const requestStatus = getRequestStatus(
+    request.startDate,
+    request.endDate,
+    request.status
+  );
   const { minutesToTime } = useTimeConverter();
 
   const getStatusColor = (status: string) => {
@@ -173,28 +215,25 @@ const SentRequestCard = ({
         </View>
 
         {/* Timeline and Cancel Button for pending requests */}
-        {request.status === "pending" && (
-          <View className="mt-3 pt-3 border-t border-gray-100">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center flex-1">
-                <Text className="ml-2 text-sm text-gray-600">
-                  Waiting for owner's approval
-                </Text>
-              </View>
-              <TouchableOpacity
-                className="ml-4 px-3 py-1.5 bg-red-50 rounded-full"
-                onPress={(e) => {
-                  e.stopPropagation(); // Prevent triggering the card's onPress
-                  onCancel(request.id);
-                }}
-              >
-                <Text className="text-sm font-pmedium text-red-600">
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        <View className="flex-row justify-end mt-3 gap-2">
+          {request.status === "pending" &&
+            !dayjs().isAfter(request.startDate) && (
+              <>
+                <TouchableOpacity
+                  onPress={() => onEdit?.(request.id)}
+                  className="px-4 py-2 bg-blue-50 rounded-lg"
+                >
+                  <Text className="text-blue-600 font-psemibold">Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => onCancel(request.id)}
+                  className="px-4 py-2 bg-red-50 rounded-lg"
+                >
+                  <Text className="text-red-600 font-psemibold">Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+        </View>
       </View>
     </TouchableOpacity>
   );

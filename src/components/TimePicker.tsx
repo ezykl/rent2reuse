@@ -176,14 +176,14 @@ const TimePicker = ({
   };
 
   return (
-    <View className="flex-1 p-4">
+    <View className="p-4">
       {/* Selected Time Display */}
-      <Text className="text-4xl font-bold text-center text-gray-800 my-8">
+      <Text className="text-4xl font-bold text-center text-gray-800 my-4">
         {formatTime(selectedTime)}
       </Text>
 
       {/* Time Picker Controls */}
-      <View className="flex-row justify-between gap-4">
+      <View className="flex-row justify-between gap-4 p-4">
         {/* Hours */}
         <View className="flex-1">
           <Text className="text-sm font-medium text-gray-600 text-center mb-2">
@@ -287,13 +287,13 @@ const TimePicker = ({
         <Text className="text-red-500 text-center mt-4">{validationError}</Text>
       )}
       {/* Working Hours Info */}
-      <Text className="text-sm text-gray-500 text-center mt-4">
+      <Text className="text-sm text-gray-500 text-center m-4">
         Suggested meet-up time: 6:00 AM - 6:00 PM.{"\n"}We encourage scheduling
         during these hours.
       </Text>
 
       {/* Done Button - To confirm the time selection */}
-      <View className="absolute left-0 right-0 bottom-4 px-4 pt-4 border-t border-gray-100">
+      <View className=" px-4 pt-4 border-t border-gray-100">
         <TouchableOpacity
           onPress={handleDonePress}
           disabled={!isValid}
