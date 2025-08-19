@@ -135,17 +135,18 @@ export default function CreateTicket() {
       style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
     >
       {/* Header */}
-      <View className="flex-row items-center p-4 border-b border-gray-100">
+      <View className="flex-row items-center justify-between  p-4 border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
           <Image
             source={icons.leftArrow}
-            className="w-6 h-6"
+            className="w-8 h-8"
             tintColor="#374151"
           />
         </TouchableOpacity>
         <Text className="text-xl font-pbold text-gray-900 ml-2">
           Create Support Ticket
         </Text>
+        <View className="w-8" />
       </View>
 
       <ScrollView className="flex-1 p-4">

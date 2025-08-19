@@ -33,6 +33,9 @@ import {
   addDoc,
   serverTimestamp,
   updateDoc,
+  query,
+  where,
+  getDocs,
 } from "firebase/firestore";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -133,6 +136,26 @@ const AddListing = () => {
         "Rental item is heavily used and may have limitations, but is still usable.",
     },
   ];
+
+  type ConditionType =
+    | "Brand New"
+    | "Like New"
+    | "Very Good"
+    | "Good"
+    | "Fair"
+    | "Worn but Usable";
+
+  const getConditionWeight = (condition: string): number => {
+    const weights: Record<ConditionType, number> = {
+      "Brand New": 1,
+      "Like New": 0.9,
+      "Very Good": 0.8,
+      Good: 0.7,
+      Fair: 0.6,
+      "Worn but Usable": 0.5,
+    };
+    return weights[condition as ConditionType] || 0.7;
+  };
 
   const [expanded, setExpanded] = useState(true);
   // Camera permissions
@@ -455,6 +478,13 @@ const AddListing = () => {
     const [permission] = useCameraPermissions();
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
+    const [suggestedPrices, setSuggestedPrices] = useState<{
+      low?: number;
+      mid?: number;
+      high?: number;
+    } | null>(null);
+    const [showNoMarketData, setShowNoMarketData] = useState(false);
+
     const currentUser = auth.currentUser;
 
     useEffect(() => {
@@ -567,15 +597,66 @@ const AddListing = () => {
     };
 
     // Handle Step 1 Continue
-    const handleStep1Continue = () => {
-      if (validateStep1()) {
-        setCurrentStep(2);
-      } else {
+    const handleStep1Continue = async () => {
+      if (!validateStep1()) {
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Validation Error",
           textBody: "Please fill in all required fields",
         });
+        return;
+      }
+
+      try {
+        // Query items with matching name only
+        const q = query(
+          collection(db, "items"),
+          where("itemName", "==", formData.title.trim())
+        );
+
+        const snap = await getDocs(q);
+
+        if (snap.empty) {
+          setShowNoMarketData(true);
+          setCurrentStep(2);
+          return;
+        }
+
+        // Get all prices and sort them
+        const prices = snap.docs
+          .map((doc) => ({
+            price: doc.data().itemPrice,
+            condition: doc.data().itemCondition,
+          }))
+          .filter((item) => typeof item.price === "number");
+
+        if (prices.length === 0) {
+          setShowNoMarketData(true);
+          setCurrentStep(2);
+          return;
+        }
+
+        // Calculate base price (average of all prices)
+        const basePrice =
+          prices.reduce((sum, item) => sum + item.price, 0) / prices.length;
+
+        // Apply condition-based adjustment
+        const conditionWeight = getConditionWeight(formData.condition);
+
+        // Calculate suggested prices with condition adjustment
+        const suggestedPrices = {
+          low: Math.round(basePrice * conditionWeight * 0.8), // 20% below adjusted base
+          mid: Math.round(basePrice * conditionWeight), // At adjusted base
+          high: Math.round(basePrice * conditionWeight * 1.2), // 20% above adjusted base
+        };
+
+        setSuggestedPrices(suggestedPrices);
+        setShowNoMarketData(false);
+        setCurrentStep(2);
+      } catch (error) {
+        console.error("Error calculating price suggestions:", error);
+        setShowNoMarketData(true);
+        setCurrentStep(2);
       }
     };
 
@@ -1056,6 +1137,70 @@ const AddListing = () => {
             Step 2 of 2: Add details and photos to make your listing stand out.
           </Text>
         </View>
+
+        {showNoMarketData && (
+          <View className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-xl mb-4">
+            <Text className="text-yellow-700 font-pmedium">
+              No market data found for this item and condition. Please set a
+              price you think is fair.
+            </Text>
+          </View>
+        )}
+
+        {suggestedPrices && (
+          <View className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-xl mb-4">
+            <Text className="text-blue-700 font-psemibold mb-2">
+              Market Price Suggestions
+            </Text>
+            <View className="flex-row justify-between">
+              <TouchableOpacity
+                className="flex-1 items-center mx-1 bg-blue-100 rounded-lg p-2"
+                onPress={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    price: suggestedPrices.low?.toString() ?? "",
+                  }))
+                }
+              >
+                <Text className="text-blue-700 font-pbold">Low</Text>
+                <Text className="text-lg font-psemibold">
+                  ₱{suggestedPrices.low}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 items-center mx-1 bg-blue-100 rounded-lg p-2"
+                onPress={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    price: suggestedPrices.mid?.toString() ?? "",
+                  }))
+                }
+              >
+                <Text className="text-blue-700 font-pbold">Mid</Text>
+                <Text className="text-lg font-psemibold">
+                  ₱{suggestedPrices.mid}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 items-center mx-1 bg-blue-100 rounded-lg p-2"
+                onPress={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    price: suggestedPrices.high?.toString() ?? "",
+                  }))
+                }
+              >
+                <Text className="text-blue-700 font-pbold">High</Text>
+                <Text className="text-lg font-psemibold">
+                  ₱{suggestedPrices.high}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <Text className="text-xs text-blue-500 mt-2 text-center">
+              Tap a suggestion to autofill your price.
+            </Text>
+          </View>
+        )}
 
         <View className="space-y-4">
           {/* Images Section */}

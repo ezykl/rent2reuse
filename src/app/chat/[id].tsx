@@ -597,57 +597,36 @@ const RentRequestMessage = ({
           </Text>
         </View>
 
-        {/* Show More/Less Button */}
-        <TouchableOpacity
-          onPress={() => setShowDetails(!showDetails)}
-          className="mt-3 py-2 flex-row items-center justify-center"
-        >
-          <Text className="text-sm font-pmedium mr-1 text-blue-500">
-            {showDetails ? "Show less" : "Show details"}
-          </Text>
-          <Image
-            source={icons.arrowDown}
-            className="w-4 h-4"
-            tintColor="#5C6EF6"
-            style={{
-              transform: [{ rotate: showDetails ? "180deg" : "0deg" }],
-            }}
-          />
-        </TouchableOpacity>
+        <View className="mt-3 pt-3 border-t border-gray-100">
+          <View className="space-y-3">
+            <View>
+              <Text className="text-xs font-pbold uppercase text-gray-400">
+                Rental Period
+              </Text>
+              <Text className="text-sm font-pmedium mt-1 text-gray-700">
+                {rentRequestData.rentalDays} days
+              </Text>
+            </View>
 
-        {/* Detailed Info */}
-        {showDetails && (
-          <View className="mt-3 pt-3 border-t border-gray-100">
-            <View className="space-y-3">
-              <View>
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Rental Period
-                </Text>
-                <Text className="text-sm mt-1 text-gray-700">
-                  {rentRequestData.rentalDays} days
-                </Text>
-              </View>
+            <View>
+              <Text className="text-xs font-pbold uppercase text-gray-400">
+                Total Amount
+              </Text>
+              <Text className="text-sm font-pmedium mt-1 text-gray-700">
+                ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
+              </Text>
+            </View>
 
-              <View>
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Total Amount
-                </Text>
-                <Text className="text-sm mt-1 text-gray-700">
-                  ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
-                </Text>
-              </View>
-
-              <View>
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Pickup Time
-                </Text>
-                <Text className="text-sm mt-1 text-gray-700">
-                  {minutesToTime(rentRequestData.pickupTime)}
-                </Text>
-              </View>
+            <View>
+              <Text className="text-xs font-pbold uppercase text-gray-400">
+                Pickup Time
+              </Text>
+              <Text className="text-sm mt-1 font-pmedium text-gray-700">
+                {minutesToTime(rentRequestData.pickupTime)}
+              </Text>
             </View>
           </View>
-        )}
+        </View>
 
         {/* Status Display */}
         {getStatusDisplay()}

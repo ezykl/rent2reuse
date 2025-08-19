@@ -193,6 +193,7 @@ import * as FileSystem from "expo-file-system";
 import { captureRef } from "react-native-view-shot";
 import { TransactionData } from "../types/api";
 import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
+import { useLoader } from "@/context/LoaderContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -236,6 +237,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   const [accessToken, setAccessToken] = useState(null);
   const [transactionId, setTransactionId] = useState("");
   const [isSaving, setIsSaving] = useState(false); // <-- Added state for saving
+  const { isLoading, setIsLoading } = useLoader();
 
   interface TransactionDetails {
     transactionId: string;
@@ -402,6 +404,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
         throw new Error("Missing access token or order ID");
       }
       setLoading(true);
+      setIsLoading(true);
       const captureResult = await capturePayPalOrder(accessToken, orderId);
 
       if (captureResult.status === "COMPLETED") {
@@ -426,6 +429,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
 
         setTransactionDetails(transactionData);
         setResultType("success");
+        setIsLoading(true);
         setShowResultModal(true);
         onPaymentSuccess({
           ...captureResult,
@@ -438,6 +442,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       onPaymentError(error);
     } finally {
       setLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -496,171 +501,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       }
     };
 
-    return (
-      <Modal
-        visible={showResultModal}
-        transparent={true}
-        animationType="none"
-        onRequestClose={() => {
-          /* Don't close on back press */
-        }}
-      >
-        {/* Modal Content */}
-        <View className="flex-1 bg-black/60 justify-center items-center p-2">
-          <Animated.View
-            ref={receiptRef}
-            className="bg-white rounded-3xl w-full max-w-[90%] max-h-[80%] shadow-lg"
-            style={{
-              opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
-            }}
-          >
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              className="p-2"
-              contentContainerStyle={{
-                alignItems: "center",
-                paddingBottom: 20,
-              }}
-            >
-              {/* Status Icon */}
-              <Image
-                source={images.logo} // Make sure you have the logo in your images constant
-                style={{ width: 120, height: 40 }}
-                resizeMode="contain"
-                className="mb-5"
-              />
-
-              <View
-                className={`w-20 h-20 rounded-full justify-center items-center mb-5 ${
-                  resultType === "success"
-                    ? "bg-green-500"
-                    : resultType === "cancel"
-                    ? "bg-orange-500"
-                    : "bg-red-500"
-                }`}
-              >
-                <Text className="text-white text-4xl font-bold">
-                  {resultType === "success"
-                    ? "✓"
-                    : resultType === "cancel"
-                    ? "!"
-                    : "✕"}
-                </Text>
-              </View>
-
-              {/* Amount Container */}
-              <View className="w-full bg-gray-50 p-5 rounded-2xl mb-5 items-center">
-                <Text className="text-gray-600 text-sm mb-2">Amount Paid</Text>
-                <View className="items-center">
-                  <Text className="text-gray-900 text-2xl font-bold">
-                    ₱{plan.price.toFixed(2)} PHP
-                  </Text>
-                  <Text className="text-gray-600 text-base ">
-                    ≈ ${DatabaseHelper.convertToUsd(plan.price)} USD
-                  </Text>
-                </View>
-              </View>
-
-              {/* Transaction Details */}
-              {resultType === "success" && transactionDetails && (
-                <View className="w-full bg-gray-50 p-5 rounded-2xl mb-5">
-                  <Text className="text-gray-900 text-lg font-bold text-center mb-4">
-                    Transaction Details
-                  </Text>
-
-                  <View className="flex-row justify-between py-2 border-b border-gray-200">
-                    <Text className="text-gray-600 flex-1">
-                      Transaction ID:
-                    </Text>
-                    <Text className="text-gray-900 font-semibold flex-1 text-right">
-                      {transactionId}
-                    </Text>
-                  </View>
-
-                  <View className="flex-row justify-between py-2 border-b border-gray-200">
-                    <Text className="text-gray-600 flex-1">
-                      PayPal Order ID:
-                    </Text>
-                    <Text className="text-gray-900 font-semibold flex-1 text-right">
-                      {orderId}
-                    </Text>
-                  </View>
-                  {transactionDetails.paypalTransactionId && (
-                    <View className="flex-row justify-between py-2 border-b border-gray-200">
-                      <Text className="text-gray-600 flex-1">
-                        PayPal Transaction ID:
-                      </Text>
-                      <Text className="text-gray-900 font-semibold flex-1 text-right">
-                        {transactionDetails.paypalTransactionId}
-                      </Text>
-                    </View>
-                  )}
-                  <View className="flex-row justify-between py-2 border-b border-gray-200">
-                    <Text className="text-gray-600 flex-1">Exchange Rate:</Text>
-                    <Text className="text-gray-900 font-semibold flex-1 text-right">
-                      1 USD = ₱
-                      {plan.price / parseFloat(DatabaseHelper.convertToPhp(1))}
-                      {"\n"}
-                      PHP
-                    </Text>
-                  </View>
-                  <View className="flex-row justify-between py-2">
-                    <Text className="text-gray-600 flex-1">Status:</Text>
-                    <Text className="text-gray-900 font-semibold flex-1 text-right">
-                      Completed
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {/* Error Details */}
-              {resultType === "error" && transactionDetails?.error && (
-                <View className="bg-red-50 p-4 rounded-lg mb-4">
-                  <Text className="text-red-600 text-sm">
-                    {transactionDetails.error}
-                  </Text>
-                </View>
-              )}
-              {/* Cancel Message */}
-              {resultType === "cancel" && (
-                <Text className="text-gray-600 text-center font-medium text-base">
-                  You cancelled the payment process. No charges were made.
-                </Text>
-              )}
-              {/* Action Buttons */}
-              <View className="flex-row justify-around w-full mt-2.5">
-                <TouchableOpacity
-                  onPress={saveReceipt}
-                  className="bg-blue-500 py-4 px-8 rounded-full min-w-[120px] items-center"
-                >
-                  {isSaving ? (
-                    <ActivityIndicator color="white" size="small" />
-                  ) : (
-                    <View className="flex-row items-center">
-                      <Image
-                        source={icons.download}
-                        className="w-4 h-4 mr-2"
-                        tintColor="white"
-                      />
-                      <Text className="text-white text-base font-bold">
-                        Save
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={closeResultModal}
-                  className="bg-green-500 py-4 px-8 rounded-full min-w-[120px] items-center"
-                >
-                  <Text className="text-white text-base font-bold">Done</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
-    );
+    return null;
   };
 
   // Convert plan price from PHP to USD

@@ -43,10 +43,22 @@ const NotificationCard = ({
       case "REPORT_ISSUE":
         return {
           icon: icons.report,
-          bgColor: "bg-yellow-100",
+          bgColor: "bg-blue-100",
           iconColor: "#FBBF24",
         };
+      case "REPORT_RESPONSE":
+        return {
+          icon: icons.ringBell,
+          bgColor: "bg-gray-200",
+          iconColor: "#374957",
+        };
       case "RENT_REQUEST_CANCELLED":
+        return {
+          icon: icons.check,
+          bgColor: "bg-red-100",
+          iconColor: "#EF4444",
+        };
+      case "ANNOUNCEMENT":
         return {
           icon: icons.check,
           bgColor: "bg-red-100",
@@ -129,7 +141,7 @@ const NotificationCard = ({
   };
 
   return (
-    <TouchableOpacity onPress={handlePress} className="w-full px-4 ">
+    <TouchableOpacity onPress={handlePress} className="w-full px-4">
       <View
         className={`p-4 rounded-lg border ${
           !notification.isRead
@@ -137,7 +149,7 @@ const NotificationCard = ({
             : "bg-gray-50 border-gray-100"
         }`}
       >
-        <View className="flex-row items-start gap-3">
+        <View className="flex-row items-start gap-3 px-4">
           {/* Type Indicator */}
           <View
             className={`w-10 h-10 rounded-full items-center justify-center ${config.bgColor}`}
@@ -179,7 +191,7 @@ const NotificationCard = ({
 
             {/* Delete Action */}
             <TouchableOpacity
-              className="self-end mt-2 px-3  bg-red-100 rounded-full py-1"
+              className="self-end mt-2 px-3rounded-full py-1"
               onPress={handleDelete}
             >
               <Text className="text-red-500">Delete</Text>

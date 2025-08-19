@@ -10,7 +10,7 @@ import {
   Share,
   Platform,
 } from "react-native";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Stack, router } from "expo-router";
 import Header from "@/components/Header";
 import { useLoader } from "@/context/LoaderContext";
@@ -38,6 +38,7 @@ import { Timestamp } from "firebase/firestore";
 import { Image } from "react-native";
 import { icons, images } from "@/constant";
 import { LogBox } from "react-native";
+import * as Linking from "expo-linking";
 
 LogBox.ignoreLogs(["Text strings must be rendered within a <Text> component"]);
 
@@ -82,7 +83,7 @@ const PlansScreen: React.FC = () => {
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [subscriptionDetails, setSubscriptionDetails] =
     useState<SubscriptionDetails | null>(null);
-  const receiptRef = React.useRef(null);
+  const receiptRef = useRef(null);
 
   // Fetch user profile data
   useEffect(() => {
@@ -366,35 +367,81 @@ const PlansScreen: React.FC = () => {
 
   const saveReceiptAsImage = async () => {
     try {
-      // Request permissions
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== "granted") {
+      // Enhanced permission handling
+      const permissionResult = await MediaLibrary.requestPermissionsAsync();
+
+      if (permissionResult.status !== "granted") {
         Alert.alert(
-          "Permission needed",
-          "Permission to access media library is required to save the receipt."
+          "Permission Required",
+          "Storage permission is needed to save the receipt to your photo gallery.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Grant Permission",
+              onPress: async () => {
+                const secondResult =
+                  await MediaLibrary.requestPermissionsAsync();
+                if (secondResult.status === "granted") {
+                  saveReceiptAsImage(); // Retry
+                }
+              },
+            },
+          ]
         );
         return;
       }
 
-      // Capture the receipt view
-      const uri = await captureRef(receiptRef, {
+      // Validate ref
+      if (!receiptRef.current) {
+        Alert.alert(
+          "Error",
+          "Receipt not ready for capture. Please try again."
+        );
+        return;
+      }
+
+      // Show loading
+      setIsLoading?.(true);
+
+      // Capture the receipt
+      const uri = await captureRef(receiptRef.current, {
         format: "png",
-        quality: 1,
+        quality: 1.0,
+        result: "tmpfile",
       });
 
-      // Save to media library
-      await MediaLibrary.saveToLibraryAsync(uri);
+      // Validate captured file
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (!fileInfo.exists) {
+        throw new Error("Failed to capture receipt image");
+      }
+
+      // Create asset and save to gallery
+      const asset = await MediaLibrary.createAssetAsync(uri);
+
+      // Create/get album
+      const albumName = "Receipts";
+      let album = await MediaLibrary.getAlbumAsync(albumName);
+
+      if (!album) {
+        await MediaLibrary.createAlbumAsync(albumName, asset, false);
+      } else {
+        await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
-        title: "Success",
-        textBody: "Receipt saved to your photo gallery!",
+        title: "Receipt Saved",
+        textBody: "Receipt has been saved to your photo gallery!",
       });
-
-      closePaymentModal();
     } catch (error) {
-      // console.error("Error saving receipt:", error);
-      Alert.alert("Error", "Failed to save receipt. Please try again.");
+      console.error("Error saving receipt:", error);
+      Alert.alert(
+        "Save Failed",
+        "Could not save receipt to gallery. Please check permissions and try again."
+      );
+    } finally {
+      setIsLoading?.(false);
     }
   };
 
@@ -481,116 +528,137 @@ const PlansScreen: React.FC = () => {
     }
   };
 
+  const debugReceiptCapture = async () => {
+    try {
+      console.log("Receipt ref current:", receiptRef.current);
+
+      if (!receiptRef.current) {
+        console.error("Receipt ref is null");
+        return;
+      }
+
+      // Test capture without saving
+      const uri = await captureRef(receiptRef.current, {
+        format: "png",
+        quality: 0.8,
+        result: "tmpfile",
+      });
+
+      console.log("Test capture successful, URI:", uri);
+
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      console.log("File info:", fileInfo);
+    } catch (error) {
+      console.error("Debug capture error:", error);
+    }
+  };
+
   const ReceiptComponent = () => (
-    <View ref={receiptRef}>
-      <View className="bg-white m-4 rounded-2xl shadow-lg border- border-gray-100 ">
-        {/* Header */}
-        <View className="items-center mb-6 p-4  border-b-2 border-dashed  border-gray-200">
-          <View className="w-16 h-16 bg-green-100 rounded-full items-center justify-center mb-3">
-            <Text className="text-green-600 text-2xl font-bold">✓</Text>
-          </View>
-          <Text className="text-xl font-pbold text-gray-800">
-            Payment Receipt
-          </Text>
-          <Text className="text-green-600 font-pmedium text-base">
-            Subscription Activated
-          </Text>
-
-          <View className="relative  w-full"></View>
+    <View className="bg-white m-4 rounded-2xl shadow-lg border- border-gray-100 ">
+      {/* Header */}
+      <View className="items-center mb-6 p-4  border-b-2 border-dashed  border-gray-200">
+        <View className="w-16 h-16 bg-green-100 rounded-full items-center justify-center mb-3">
+          <Text className="text-green-600 text-2xl font-bold">✓</Text>
         </View>
-        <View className="px-4">
-          {/* Receipt Details - Add conditional rendering */}
-          {receiptData && (
-            <View className="space-y-4">
-              <View className="bg-gray-50 p-4 rounded-xl">
-                <Text className="text-gray-600 text-sm font-pmedium mb-1">
-                  Transaction ID
-                </Text>
-                <Text className="text-gray-800 font-pbold">
-                  {receiptData.transactionId || "N/A"}
-                </Text>
-              </View>
+        <Text className="text-xl font-pbold text-gray-800">
+          Payment Receipt
+        </Text>
+        <Text className="text-green-600 font-pmedium text-base">
+          Subscription Activated
+        </Text>
 
-              <View className="flex-row justify-between items-center py-2 px-4">
-                <Text className="text-gray-600 font-pmedium">Plan Type</Text>
-                <Text className="text-gray-800 font-pbold text-lg">
-                  {receiptData?.planType
-                    ? receiptData.planType.charAt(0).toUpperCase() +
-                      receiptData.planType.slice(1).toLowerCase()
-                    : "N/A"}
-                </Text>
-              </View>
+        <View className="relative  w-full"></View>
+      </View>
+      <View className="px-4">
+        {/* Receipt Details - Add conditional rendering */}
+        {receiptData && (
+          <View className="space-y-4">
+            <View className="bg-gray-50 p-4 rounded-xl">
+              <Text className="text-gray-600 text-sm font-pmedium mb-1">
+                Transaction ID
+              </Text>
+              <Text className="text-gray-800 font-pbold">
+                {receiptData.transactionId || "N/A"}
+              </Text>
+            </View>
 
-              <View className="flex-row justify-between items-center py-2 px-4">
-                <Text className="text-gray-600 font-pmedium">Duration</Text>
-                <Text className="text-gray-800 font-pbold capitalize">
-                  {receiptData?.duration || "N/A"}
-                </Text>
-              </View>
+            <View className="flex-row justify-between items-center py-2 px-4">
+              <Text className="text-gray-600 font-pmedium">Plan Type</Text>
+              <Text className="text-gray-800 font-pbold text-lg">
+                {receiptData?.planType
+                  ? receiptData.planType.charAt(0).toUpperCase() +
+                    receiptData.planType.slice(1).toLowerCase()
+                  : "N/A"}
+              </Text>
+            </View>
 
-              <View className="flex-row justify-between items-center py-2 px-4">
-                <Text className="text-gray-600 font-pmedium">Amount</Text>
-                <Text className="text-gray-800 font-pbold text-xl">
-                  ₱{receiptData?.amount ?? 0}
-                </Text>
-              </View>
+            <View className="flex-row justify-between items-center py-2 px-4">
+              <Text className="text-gray-600 font-pmedium">Duration</Text>
+              <Text className="text-gray-800 font-pbold capitalize">
+                {receiptData?.duration || "N/A"}
+              </Text>
+            </View>
 
-              <View className="flex-row justify-between items-center py-2 px-4">
-                <Text className="text-gray-600 font-pmedium">
-                  Payment Method
-                </Text>
-                <Text className="text-blue-600  font-pbold">PayPal</Text>
-              </View>
+            <View className="flex-row justify-between items-center py-2 px-4">
+              <Text className="text-gray-600 font-pmedium">Amount</Text>
+              <Text className="text-gray-800 font-pbold text-xl">
+                ₱{receiptData?.amount ?? 0}
+              </Text>
+            </View>
 
-              <View className="flex-row justify-between items-center py-2 px-4">
-                <Text className="text-gray-600 font-pmedium">Date & Time</Text>
-                <Text className="text-gray-800 font-pmedium">
-                  {receiptData?.date}
-                </Text>
-              </View>
+            <View className="flex-row justify-between items-center py-2 px-4">
+              <Text className="text-gray-600 font-pmedium">Payment Method</Text>
+              <Text className="text-blue-600  font-pbold">PayPal</Text>
+            </View>
 
-              <View className="flex-row justify-between items-center py-2 px-4">
-                <Text className="text-gray-600 font-pmedium">Status</Text>
-                <View className="bg-green-100 px-3 py-1 rounded-full">
-                  <Text className="text-green-700 font-pbold text-sm">
-                    {receiptData?.status}
-                  </Text>
-                </View>
-              </View>
+            <View className="flex-row justify-between items-center py-2 px-4">
+              <Text className="text-gray-600 font-pmedium">Date & Time</Text>
+              <Text className="text-gray-800 font-pmedium">
+                {receiptData?.date}
+              </Text>
+            </View>
 
-              <View className="bg-gray-50 p-4 rounded-xl mt-2">
-                <Text className="text-gray-600 text-sm font-pmedium mb-1">
-                  PayPal Order ID
-                </Text>
-                <Text className="text-gray-800 font-pmedium text-xs">
-                  {receiptData?.paypalOrderId}
+            <View className="flex-row justify-between items-center py-2 px-4">
+              <Text className="text-gray-600 font-pmedium">Status</Text>
+              <View className="bg-green-100 px-3 py-1 rounded-full">
+                <Text className="text-green-700 font-pbold text-sm">
+                  {receiptData?.status}
                 </Text>
               </View>
             </View>
-          )}
-          {/* Footer */}
-          <View className="py-4  items-center">
-            <Text className="text-gray-500 text-xs text-center">
-              Thank you for your subscription!
-            </Text>
-            <Text className="text-gray-500 text-xs text-center">
-              Your plan is now active and ready to use.
-            </Text>
+
+            <View className="bg-gray-50 p-4 rounded-xl mt-2">
+              <Text className="text-gray-600 text-sm font-pmedium mb-1">
+                PayPal Order ID
+              </Text>
+              <Text className="text-gray-800 font-pmedium text-xs">
+                {receiptData?.paypalOrderId}
+              </Text>
+            </View>
           </View>
-          <TouchableOpacity
-            onPress={saveReceiptAsImage}
-            className="bg-white mb-4 py-4 rounded-xl items-center flex-1 border-2 border-gray-300 justify-center flex-row gap-2"
-          >
-            <Image
-              source={icons.download}
-              className="w-5 h-5"
-              tintColor="#4b5563"
-            />
-            <Text className="text-gray-600 font-pmedium text-base">
-              Save Receipt
-            </Text>
-          </TouchableOpacity>
+        )}
+        {/* Footer */}
+        <View className="py-4  items-center">
+          <Text className="text-gray-500 text-xs text-center">
+            Thank you for your subscription!
+          </Text>
+          <Text className="text-gray-500 text-xs text-center">
+            Your plan is now active and ready to use.
+          </Text>
         </View>
+        <TouchableOpacity
+          onPress={saveReceiptAsImage}
+          className="bg-white mb-4 py-4 rounded-xl items-center flex-1 border-2 border-gray-300 justify-center flex-row gap-2"
+        >
+          <Image
+            source={icons.download}
+            className="w-5 h-5"
+            tintColor="#4b5563"
+          />
+          <Text className="text-gray-600 font-pmedium text-base">
+            Save Receipt
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -779,6 +847,9 @@ const PlansScreen: React.FC = () => {
               <ScrollView
                 className="flex-1 bg-primary px-2"
                 showsVerticalScrollIndicator={false}
+                ref={receiptRef}
+                collapsable={false}
+                renderToHardwareTextureAndroid={true}
               >
                 <View className="flex-row justify-between items-center p-4">
                   <TouchableOpacity

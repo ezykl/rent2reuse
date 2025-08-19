@@ -65,7 +65,8 @@ import refresh from "../assets/icons/refresh.png";
 import pencil from "../assets/icons/pencil.png";
 import cDrill from "../assets/icons/cDrill.png";
 import cSafety from "../assets/icons/safety.png";
-
+import ringBell from "../assets/icons/bell-ring.png";
+import megaPhone from "../assets/icons/megaphone.png";
 import cTheater from "../assets/icons/theater.png";
 import cHook from "../assets/icons/hook.png";
 import cPolishier from "../assets/icons/polisher.png";
@@ -98,6 +99,8 @@ import share from "../assets/icons/share.png";
 import cross from "../assets/icons/cross.png";
 
 export default {
+  ringBell,
+  megaPhone,
   cross,
   share,
   receipt,

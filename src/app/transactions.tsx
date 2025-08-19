@@ -108,13 +108,13 @@ const TransactionsScreen = () => {
           <View className="flex-row items-center">
             <View
               className={`w-10 h-10 rounded-full items-center justify-center ${
-                isIncoming ? "bg-green-100" : "bg-blue-100"
+                isIncoming ? "bg-green-100" : "bg-red-100"
               }`}
             >
               <Image
-                source={isIncoming ? icons.arrowDown : icons.leftArrow}
+                source={isIncoming ? icons.arrowRight : icons.leftArrow}
                 className="w-5 h-5"
-                tintColor={isIncoming ? "#059669" : "#2563EB"}
+                tintColor={isIncoming ? "#059669" : "#dc2626"}
               />
             </View>
             <View className="ml-3">
@@ -122,7 +122,7 @@ const TransactionsScreen = () => {
                 {transactionType}
               </Text>
               {item.planDetails && (
-                <Text className="text-sm text-gray-500">
+                <Text className="text-sm text-gray-500 capitalize  ">
                   {item.planDetails.planType} Plan
                 </Text>
               )}
@@ -131,7 +131,7 @@ const TransactionsScreen = () => {
           <View className="items-end">
             <Text
               className={`font-pbold ${
-                isIncoming ? "text-green-600" : "text-blue-600"
+                isIncoming ? "text-green-600" : "text-red-600"
               }`}
             >
               {isIncoming ? "+" : "-"}
@@ -154,7 +154,7 @@ const TransactionsScreen = () => {
             <Text className="text-xs text-gray-500">Status</Text>
             <View
               className={`px-2 py-1 rounded-full ${
-                item.status === "completed"
+                item.status === "success"
                   ? "bg-green-100"
                   : item.status === "pending"
                   ? "bg-yellow-100"
@@ -163,7 +163,7 @@ const TransactionsScreen = () => {
             >
               <Text
                 className={`text-xs font-pmedium ${
-                  item.status === "completed"
+                  item.status === "success"
                     ? "text-green-700"
                     : item.status === "pending"
                     ? "text-yellow-700"
@@ -185,7 +185,7 @@ const TransactionsScreen = () => {
       style={{ paddingTop: insets.top }}
     >
       {/* Header */}
-      <View className="flex-row items-center p-4 bg-white border-b border-gray-200">
+      <View className="flex-row items-center justify-between p-4 bg-white border-b border-gray-200">
         <TouchableOpacity onPress={() => router.back()}>
           <Image
             source={icons.leftArrow}
@@ -196,6 +196,7 @@ const TransactionsScreen = () => {
         <Text className="ml-4 text-xl font-pbold text-gray-900">
           Transactions
         </Text>
+        <View className="w-8" />
       </View>
 
       {loading ? (

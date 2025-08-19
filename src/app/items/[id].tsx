@@ -468,7 +468,7 @@ export default function ItemDetails() {
   // Add handleProfilePress function
   const handleProfilePress = () => {
     if (item?.owner?.id) {
-      router.push(`/profile/${item.owner.id}`);
+      router.push(`/user/${item.owner.id}`);
     }
   };
 
