@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Switch,
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { icons } from "@/constant";
 import LargeButton from "@/components/LargeButton";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db, storage } from "@/lib/firebaseConfig";
 import { TOOL_CATEGORIES } from "@/constant/tool-categories";
 import { CameraView } from "expo-camera";
@@ -23,6 +24,30 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { generateDescriptionTemplate } from "@/constant/item-specifications";
+import { getToolCategory } from "@/constant/tool-categories";
+
+// Update the interface to include all fields
+interface ListingData {
+  itemName: string;
+  itemCategory: string;
+  itemDesc: string;
+  itemPrice: number;
+  itemMinRentDuration: number;
+  itemCondition: string;
+  itemLocation: string;
+  images: string[];
+  paymentSettings?: {
+    downpayment?: {
+      percentage: number;
+      timing: "reservation" | "pickup";
+    };
+  };
+  owner: {
+    id: string;
+    fullname: string;
+  };
+}
 
 const EditListing = () => {
   const { id } = useLocalSearchParams();
@@ -45,6 +70,7 @@ const EditListing = () => {
     { value: "Worn but Usable", details: "Heavy use but still functional" },
   ];
 
+  // Update the form state
   const [formData, setFormData] = useState({
     title: "",
     category: "",
@@ -54,6 +80,9 @@ const EditListing = () => {
     condition: "",
     location: "",
     images: [] as string[],
+    enableDownpayment: false,
+    downpaymentPercentage: "",
+    downpaymentTiming: "reservation" as "reservation" | "pickup",
   });
 
   const [errors, setErrors] = useState({
@@ -87,6 +116,11 @@ const EditListing = () => {
           condition: data.itemCondition || "",
           location: data.itemLocation || "",
           images: data.images || [],
+          enableDownpayment: !!data.paymentSettings?.downpayment,
+          downpaymentPercentage:
+            data.paymentSettings?.downpayment?.percentage?.toString() || "",
+          downpaymentTiming:
+            data.paymentSettings?.downpayment?.timing || "reservation",
         });
       }
     } catch (error) {
@@ -177,6 +211,16 @@ const EditListing = () => {
     try {
       const docRef = doc(db, "items", id as string);
 
+      // Prepare payment settings
+      const paymentSettings = formData.enableDownpayment
+        ? {
+            downpayment: {
+              percentage: Number(formData.downpaymentPercentage),
+              timing: formData.downpaymentTiming,
+            },
+          }
+        : null;
+
       // Update the document
       await updateDoc(docRef, {
         itemName: formData.title,
@@ -186,7 +230,8 @@ const EditListing = () => {
         itemMinRentDuration: Number(formData.minimumDays),
         itemCondition: formData.condition,
         itemLocation: formData.location,
-        updatedAt: new Date(),
+        paymentSettings,
+        updatedAt: serverTimestamp(),
       });
 
       Toast.show({
@@ -467,6 +512,99 @@ const EditListing = () => {
               <Text className="font-pregular text-base">
                 {formData.location || "No location set"}
               </Text>
+            </View>
+          </View>
+
+          {/* Add Payment Settings Section */}
+          <View className="mt-6">
+            <Text className="text-secondary-400 font-psemibold text-lg mb-3">
+              Payment Options
+            </Text>
+
+            <View className="bg-gray-50 rounded-xl p-4 mb-3">
+              <View className="flex-row items-center justify-between mb-2">
+                <View className="flex-1">
+                  <Text className="text-secondary-400 font-pmedium">
+                    Downpayment Requirement
+                  </Text>
+                  <Text className="text-secondary-300 font-pregular text-xs">
+                    Secures reservation and reduces remaining balance
+                  </Text>
+                </View>
+                <Switch
+                  value={formData.enableDownpayment}
+                  onValueChange={(value) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      enableDownpayment: value,
+                      downpaymentPercentage: value
+                        ? prev.downpaymentPercentage || "30"
+                        : "",
+                    }));
+                  }}
+                  trackColor={{ false: "#767577", true: "#5C6EF6" }}
+                  thumbColor={
+                    formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
+                  }
+                />
+              </View>
+
+              {formData.enableDownpayment && (
+                // Add downpayment configuration UI from create listing
+                <View>
+                  {/* Percentage Input */}
+                  <View className="mb-3">
+                    {/* Quick Select Buttons */}
+                    <View className="flex-row gap-2 mb-2">
+                      {["10", "20", "30", "40", "50"].map((percentage) => (
+                        <TouchableOpacity
+                          key={percentage}
+                          onPress={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              downpaymentPercentage: percentage,
+                            }));
+                          }}
+                          className={`px-3 py-2 rounded-lg border ${
+                            formData.downpaymentPercentage === percentage
+                              ? "bg-primary border-primary"
+                              : "bg-white border-gray-300"
+                          }`}
+                        >
+                          <Text
+                            className={`font-pmedium ${
+                              formData.downpaymentPercentage === percentage
+                                ? "text-white"
+                                : "text-secondary-400"
+                            }`}
+                          >
+                            {percentage}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Custom Percentage Input */}
+                    <TextInput
+                      value={formData.downpaymentPercentage}
+                      onChangeText={(text) => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          downpaymentPercentage: text,
+                        }));
+                      }}
+                      className="font-pregular bg-white border rounded-xl p-3 border-gray-200"
+                      keyboardType="numeric"
+                      placeholder="Enter percentage (10-100)"
+                    />
+                  </View>
+
+                  {/* Timing Selection */}
+                  <View className="flex-row gap-2">
+                    {/* Add timing buttons from create listing */}
+                  </View>
+                </View>
+              )}
             </View>
           </View>
 
