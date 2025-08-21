@@ -40,6 +40,7 @@ import {
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
+import { generateDescriptionTemplate } from "@/constant/item-specifications";
 
 const { width } = Dimensions.get("window");
 
@@ -450,11 +451,20 @@ const AddListing = () => {
     onClose,
     initialData,
   }: ManualListingModalProps) => {
+    const getInitialDescription = () => {
+      if (useAI && initialData?.label) {
+        const itemName = initialData.label;
+        const category = getToolCategory(itemName) || "";
+        return generateDescriptionTemplate(itemName, category);
+      }
+      return "";
+    };
+
     const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState({
       title: initialData?.label || "",
       category: getToolCategory(initialData?.label?.toString() ?? "") || "",
-      description: "",
+      description: getInitialDescription(),
       price: "",
       minimumDays: "",
       condition: "",
@@ -464,6 +474,8 @@ const AddListing = () => {
       downpaymentTiming: "reservation", // "reservation" or "pickup"
       enableDownpayment: false,
     });
+
+    const titleSearch = initialData?.label || "";
 
     const [errors, setErrors] = useState({
       title: "",
@@ -626,7 +638,9 @@ const AddListing = () => {
         // Query items with matching name only
         const q = query(
           collection(db, "items"),
-          where("itemName", "==", formData.title.trim())
+
+          where("itemName", "==", titleSearch.trim())
+          //  where("itemName", "==", formData.title.trim())
         );
 
         const snap = await getDocs(q);
@@ -1266,7 +1280,34 @@ const AddListing = () => {
                       ₱{suggestedPrices.low}
                     </Text>
                   </TouchableOpacity>
-                  {/* ... rest of the price suggestion buttons ... */}
+                  <TouchableOpacity
+                    className="flex-1 items-center mx-1 bg-blue-100 rounded-lg p-2"
+                    onPress={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        price: suggestedPrices.mid?.toString() ?? "",
+                      }))
+                    }
+                  >
+                    <Text className="text-blue-700 font-pbold">Mid</Text>
+                    <Text className="text-lg font-psemibold">
+                      ₱{suggestedPrices.mid}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 items-center mx-1 bg-blue-100 rounded-lg p-2"
+                    onPress={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        price: suggestedPrices.high?.toString() ?? "",
+                      }))
+                    }
+                  >
+                    <Text className="text-blue-700 font-pbold">High</Text>
+                    <Text className="text-lg font-psemibold">
+                      ₱{suggestedPrices.high}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
                 <Text className="text-xs text-blue-500 mt-2 text-center">
                   Tap a suggestion to autofill your price.
@@ -1649,22 +1690,54 @@ const AddListing = () => {
             <View className="w-7" />
             <View className="items-center">
               <Text className="text-xl font-psemibold">Create Listing</Text>
-              <View className="flex-row mt-2">
-                <View
-                  className={`w-3 h-3 rounded-full mx-1 ${
-                    currentStep >= 1 ? "bg-primary" : "bg-gray-300"
-                  }`}
-                />
-                <View
-                  className={`w-3 h-3 rounded-full mx-1 ${
-                    currentStep >= 2 ? "bg-primary" : "bg-gray-300"
-                  }`}
-                />
-              </View>
             </View>
             <TouchableOpacity onPress={onClose}>
               <Image source={icons.close} className="w-7 h-7" />
             </TouchableOpacity>
+          </View>
+          {/* Progress Indicator */}
+          <View className="flex-row justify-center items-center mt-2 mb-2">
+            <React.Fragment>
+              <View
+                className={`rounded-full flex items-center justify-center ${
+                  1 <= currentStep
+                    ? "bg-primary w-7 h-7"
+                    : "bg-gray-300 w-6 h-6"
+                }`}
+              >
+                <Text
+                  className={`text-sm ${
+                    1 <= currentStep
+                      ? "text-white font-pbold"
+                      : "text-gray-600 font-pregular"
+                  }`}
+                >
+                  1
+                </Text>
+              </View>
+              <View
+                className={`w-20 h-1 mx-1 ${
+                  1 < currentStep ? "bg-primary" : "bg-gray-300"
+                }`}
+              />
+              <View
+                className={`rounded-full flex items-center justify-center ${
+                  2 <= currentStep
+                    ? "bg-primary w-7 h-7"
+                    : "bg-gray-300 w-6 h-6"
+                }`}
+              >
+                <Text
+                  className={`text-sm ${
+                    2 <= currentStep
+                      ? "text-white font-pbold"
+                      : "text-gray-600 font-pregular"
+                  }`}
+                >
+                  2
+                </Text>
+              </View>
+            </React.Fragment>
           </View>
 
           {/* Render current step */}
