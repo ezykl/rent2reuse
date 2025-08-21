@@ -206,8 +206,32 @@ const AddListing = () => {
         if (photo) {
           setCameraVisible(false);
           setImageUri(photo.uri);
+          setShowCamera(false);
+
+          // Automatically classify image after capture
+          try {
+            setIsLoading(true);
+            setApiPrediction(null);
+            const apiResult = await predictImage(photo.uri);
+
+            if (!apiResult) {
+              Toast.show({
+                type: ALERT_TYPE.DANGER,
+                title: "Error",
+                textBody: "Failed to analyze image. Please try again.",
+              });
+            }
+          } catch (err) {
+            console.error("Classification Error:", err);
+            Toast.show({
+              type: ALERT_TYPE.DANGER,
+              title: "Error",
+              textBody: "Failed to analyze image. Please try again.",
+            });
+          } finally {
+            setIsLoading(false);
+          }
         }
-        setShowCamera(false);
       } catch (error) {
         console.error("Camera Error:", error);
         Alert.alert("Error", "Failed to capture image");
@@ -444,13 +468,20 @@ const AddListing = () => {
     onClose: () => void;
     initialData: PredictionItem | null;
     useAI?: boolean;
+    initialImage?: string;
   }
 
   const ManualListingModal = ({
     visible,
     onClose,
     initialData,
+    useAI,
+    initialImage,
   }: ManualListingModalProps) => {
+    const [aiImages, setAiImages] = useState<string[]>(
+      initialImage ? [initialImage] : []
+    );
+
     const getInitialDescription = () => {
       if (useAI && initialData?.label) {
         const itemName = initialData.label;
@@ -503,6 +534,12 @@ const AddListing = () => {
     const [showNoMarketData, setShowNoMarketData] = useState(false);
 
     const currentUser = auth.currentUser;
+
+    useEffect(() => {
+      if (initialImage && visible && useAI) {
+        setImages([initialImage]);
+      }
+    }, [initialImage, visible]);
 
     useEffect(() => {
       const fetchUserLocation = async () => {
@@ -765,8 +802,7 @@ const AddListing = () => {
       try {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: true,
-          aspect: [4, 3],
+
           quality: 1,
         });
 
@@ -1007,6 +1043,8 @@ const AddListing = () => {
     useEffect(() => {
       if (visible) {
         setCurrentStep(1);
+      } else {
+        setImages([]);
       }
     }, [visible]);
 
@@ -1054,21 +1092,39 @@ const AddListing = () => {
                 </View>
               ))}
               {images.length < 5 && (
-                <TouchableOpacity
-                  onPress={openCamera}
-                  className={`w-24 h-24 rounded-xl bg-gray-100 border items-center justify-center mr-2 ${
-                    errors.images ? "border-red-500" : "border-gray-200"
-                  }`}
-                >
-                  <Image
-                    source={icons.camera}
-                    className="w-5 h-5 mb-2"
-                    tintColor="#666"
-                  />
-                  <Text className="text-secondary-400 font-pregular text-xs text-center">
-                    Take Photo
-                  </Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity
+                    onPress={openCamera}
+                    className={`w-24 h-24 rounded-xl bg-gray-100 border items-center justify-center mr-2 ${
+                      errors.images ? "border-red-500" : "border-gray-200"
+                    }`}
+                  >
+                    <Image
+                      source={icons.camera}
+                      className="w-5 h-5 mb-2"
+                      tintColor="#666"
+                    />
+                    <Text className="text-secondary-400 font-pregular text-xs text-center">
+                      Take Photo
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={pickImage}
+                    className={`w-24 h-24 rounded-xl bg-gray-100 border items-center justify-center ${
+                      errors.images ? "border-red-500" : "border-gray-200"
+                    }`}
+                  >
+                    <Image
+                      source={icons.gallery}
+                      className="w-5 h-5 mb-2"
+                      tintColor="#666"
+                    />
+                    <Text className="text-secondary-400 font-pregular text-xs text-center">
+                      Upload
+                    </Text>
+                  </TouchableOpacity>
+                </>
               )}
             </ScrollView>
             {errors.images ? (
@@ -1422,7 +1478,7 @@ const AddListing = () => {
                     </Text>
                     <View className="flex-row gap-2 mb-2">
                       {/* Quick Select Buttons */}
-                      {["20", "30", "50"].map((percentage) => (
+                      {["10", "20", "30", "40", "50"].map((percentage) => (
                         <TouchableOpacity
                           key={percentage}
                           onPress={() => {
@@ -1846,16 +1902,25 @@ const AddListing = () => {
                     className="w-full h-64 rounded-xl"
                     resizeMode="cover"
                   />
-                  <TouchableOpacity
-                    className="absolute top-2 right-2 bg-white rounded-full p-2"
-                    onPress={handleClearImage}
-                  >
-                    <Image
-                      source={icons.close}
-                      className="w-5 h-5"
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
+                  {isLoading ? (
+                    <View className="absolute inset-0 bg-black/50 rounded-xl items-center justify-center">
+                      <ActivityIndicator size="large" color="#5C6EF6" />
+                      <Text className="text-white mt-4 font-pmedium">
+                        Analyzing image...
+                      </Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      className="absolute top-2 right-2 bg-white rounded-full p-2"
+                      onPress={handleClearImage}
+                    >
+                      <Image
+                        source={icons.close}
+                        className="w-5 h-5"
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
 
@@ -1910,16 +1975,21 @@ const AddListing = () => {
               )}
 
               {/* Actions */}
-              <View className="flex-row gap-3">
-                <LargeButton
-                  title="Identify Image"
-                  handlePress={classifyImage}
-                  isLoading={isLoading}
-                  containerStyles="flex-1"
-                  textStyles="text-white"
-                  disabled={isLoading || !imageUri}
-                />
-              </View>
+              {error && (
+                <View className="flex-row gap-3">
+                  <LargeButton
+                    title="Retry Identification"
+                    handlePress={() => {
+                      if (imageUri) {
+                        classifyImage();
+                      }
+                    }}
+                    isLoading={isLoading}
+                    containerStyles="flex-1"
+                    textStyles="text-white"
+                  />
+                </View>
+              )}
             </View>
           )}
 
@@ -1938,7 +2008,7 @@ const AddListing = () => {
 
       {/* Camera Modal */}
       <Modal visible={cameraVisible} animationType="slide">
-        <View className="flex-1  bg-black/20">
+        <View className="flex-1 bg-black/20">
           <View className="absolute top-0 left-0 right-0 z-20 pt-4 pb-4">
             <View className="flex-row justify-between items-center px-6">
               <TouchableOpacity
@@ -1954,7 +2024,10 @@ const AddListing = () => {
 
               <View className="flex-1 items-center">
                 <Text className="text-white font-pbold text-xl">
-                  Capture to Identify
+                  Capture to Analyze
+                </Text>
+                <Text className="text-white/80 text-sm font-pmedium mt-1">
+                  Image will be analyzed automatically
                 </Text>
               </View>
 
@@ -1973,7 +2046,6 @@ const AddListing = () => {
                 />
               </TouchableOpacity>
             </View>
-
             {/*TIP BOX*/}
             <View className="mx-6 mt-2">
               {/* Tappable Icon Only */}
@@ -2049,6 +2121,7 @@ const AddListing = () => {
         onClose={() => setShowManualModal(false)}
         initialData={selectedItem}
         useAI={useAI}
+        initialImage={imageUri || undefined}
       />
     </SafeAreaView>
   );
