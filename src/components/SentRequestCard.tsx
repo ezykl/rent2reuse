@@ -29,33 +29,41 @@ const getRequestStatus = (startDate: any, endDate: any, status: string) => {
   const start = dayjs(startDate.toDate?.() ?? startDate);
   const end = dayjs(endDate.toDate?.() ?? endDate);
 
+  // First check if request is cancelled or rejected
   if (status === "rejected" || status === "cancelled") {
     return {
       label: status.charAt(0).toUpperCase() + status.slice(1),
       color: "bg-red-100 text-red-700",
+      isActive: false,
     };
   }
 
-  if (now.isAfter(end)) {
-    return {
-      label: "Expired",
-      color: "bg-gray-100 text-gray-700",
-    };
-  }
-
+  // Check if request is expired (past start date)
   if (now.isAfter(start) && status === "pending") {
     return {
-      label: "Past Due",
-      color: "bg-orange-100 text-orange-700",
+      label: "Expired",
+      color: "bg-gray-100 text-gray-500",
+      isActive: false,
     };
   }
 
+  // Check if rental period is over
+  if (now.isAfter(end)) {
+    return {
+      label: "Completed",
+      color: "bg-gray-100 text-gray-700",
+      isActive: false,
+    };
+  }
+
+  // For active requests
   return {
     label: status.charAt(0).toUpperCase() + status.slice(1),
     color:
       status === "approved"
         ? "bg-green-100 text-green-700"
         : "bg-yellow-100 text-yellow-700",
+    isActive: true,
   };
 };
 
@@ -65,12 +73,22 @@ const SentRequestCard = ({
   onCancel,
   onEdit,
 }: SentRequestCardProps) => {
-  const requestStatus = getRequestStatus(
-    request.startDate,
-    request.endDate,
-    request.status
-  );
   const { minutesToTime } = useTimeConverter();
+
+  // Add this function to check if request is expired
+  const isExpired = () => {
+    const now = dayjs();
+    const start = dayjs(request.startDate.toDate?.() ?? request.startDate);
+    return now.isAfter(start) && request.status === "pending";
+  };
+
+  // Get card styles based on status and expiry
+  const getCardStyle = () => {
+    if (isExpired()) {
+      return "border-gray-200 bg-gray-50"; // Faded look for expired
+    }
+    return "border-gray-100 bg-white"; // Normal look
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -126,11 +144,21 @@ const SentRequestCard = ({
 
   return (
     <TouchableOpacity
-      className="bg-white rounded-xl mb-4 shadow-sm border border-gray-100 overflow-hidden"
+      className={`rounded-xl mb-4 shadow-sm border overflow-hidden ${getCardStyle()}`}
       onPress={() => onPress(request.id)}
       activeOpacity={0.7}
     >
       <View className="p-4">
+        {/* Add Expired Banner if expired */}
+        {isExpired() && (
+          <View className="bg-orange-100 px-4 py-2 rounded-lg mb-3">
+            <Text className="text-orange-700 font-pmedium text-sm">
+              This request has passed its start date. Please edit the dates or
+              cancel the request.
+            </Text>
+          </View>
+        )}
+
         {/* Header */}
         <View className="flex-row justify-between items-center mb-3">
           <View className="space-y-1">
@@ -216,23 +244,47 @@ const SentRequestCard = ({
 
         {/* Timeline and Cancel Button for pending requests */}
         <View className="flex-row justify-end mt-3 gap-2">
-          {request.status === "pending" &&
-            !dayjs().isAfter(request.startDate) && (
-              <>
-                <TouchableOpacity
-                  onPress={() => onEdit?.(request.id)}
-                  className="px-4 py-2 bg-blue-50 rounded-lg"
+          {request.status === "pending" && (
+            <>
+              <TouchableOpacity
+                onPress={() => onEdit?.(request.id)}
+                className={`px-4 py-2 rounded-lg ${
+                  isExpired() ? "bg-primary" : "bg-blue-50"
+                }`}
+              >
+                <Text
+                  className={`font-psemibold ${
+                    isExpired() ? "text-white" : "text-blue-600"
+                  }`}
                 >
-                  <Text className="text-blue-600 font-psemibold">Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => onCancel(request.id)}
-                  className="px-4 py-2 bg-red-50 rounded-lg"
-                >
-                  <Text className="text-red-600 font-psemibold">Cancel</Text>
-                </TouchableOpacity>
-              </>
-            )}
+                  {isExpired() ? "Update Dates" : "Edit"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onCancel(request.id)}
+                className="px-4 py-2 bg-red-50 rounded-lg"
+              >
+                <Text className="text-red-600 font-psemibold">
+                  {isExpired() ? "Remove" : "Cancel"}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        {/* Add status badge with expired state */}
+        <View className="absolute top-4 right-4">
+          <View
+            className={`px-3 py-1 rounded-full ${
+              isExpired()
+                ? "bg-orange-100"
+                : getRequestStatus(
+                    request.startDate,
+                    request.endDate,
+                    request.status
+                  ).color
+            }`}
+          ></View>
         </View>
       </View>
     </TouchableOpacity>

@@ -11,7 +11,7 @@ import {
   Alert, // Add this
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
 import { router } from "expo-router";
 import { icons, images } from "../../constant";
@@ -32,7 +32,8 @@ import {
   orderBy,
   serverTimestamp,
   addDoc,
-  onSnapshot, // Add this
+  onSnapshot,
+  QuerySnapshot, // Add this
 } from "firebase/firestore";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -131,6 +132,12 @@ const Tools = () => {
       setLoaderIsLoading(false);
     }
   };
+
+  // Move the updates out of the render cycle
+  const handleRequestUpdates = useCallback((snapshot: QuerySnapshot) => {
+    const newCount = snapshot.docs.length;
+    setIncomingRequestsCount(newCount);
+  }, []);
 
   const UsageLimitBox = ({
     used,
@@ -808,7 +815,7 @@ const Tools = () => {
   useEffect(() => {
     if (!auth.currentUser) return;
 
-    // Listener for incoming requests (requests for user's listings)
+    // Listener for incoming requests
     const incomingQuery = query(
       collection(db, "rentRequests"),
       where("ownerId", "==", auth.currentUser.uid),
@@ -818,31 +825,33 @@ const Tools = () => {
     const unsubscribeIncoming = onSnapshot(incomingQuery, (snapshot) => {
       const updates = snapshot.docChanges();
 
+      // Batch updates instead of updating in the loop
+      let shouldRefreshListings = false;
+
       updates.forEach((change) => {
-        if (change.type === "added" || change.type === "modified") {
-          // Update incoming requests count
-          setIncomingRequestsCount((prev) => {
-            const newCount = snapshot.docs.length;
-
-            // Show notification for new requests
-            if (change.type === "added") {
-              Toast.show({
-                type: ALERT_TYPE.INFO,
-                title: "New Rental Request",
-                textBody: "You have received a new rental request",
-              });
-            }
-
-            return newCount;
+        if (change.type === "added") {
+          Toast.show({
+            type: ALERT_TYPE.INFO,
+            title: "New Rental Request",
+            textBody: "You have received a new rental request",
           });
-
-          // Refresh listings to update request counts
-          fetchUserListings();
+          shouldRefreshListings = true;
+        }
+        if (change.type === "modified") {
+          shouldRefreshListings = true;
         }
       });
+
+      // Update count outside the loop
+      handleRequestUpdates(snapshot);
+
+      // Refresh listings if needed
+      if (shouldRefreshListings) {
+        fetchUserListings();
+      }
     });
 
-    // Listener for outgoing requests (user's sent requests)
+    // Listener for outgoing requests
     const outgoingQuery = query(
       collection(db, "rentRequests"),
       where("requesterId", "==", auth.currentUser.uid),
@@ -851,27 +860,28 @@ const Tools = () => {
 
     const unsubscribeOutgoing = onSnapshot(outgoingQuery, (snapshot) => {
       const updates = snapshot.docChanges();
+      let shouldRefreshRequests = false;
 
       updates.forEach((change) => {
         if (change.type === "modified") {
           const data = change.doc.data();
-
-          // Show notification for request status changes
           if (data.status !== "pending") {
             Toast.show({
               type: ALERT_TYPE.INFO,
               title: "Request Update",
               textBody: `Your rental request has been ${data.status}`,
             });
+            shouldRefreshRequests = true;
           }
-
-          // Refresh sent requests
-          fetchSentRequests();
         }
       });
+
+      // Refresh requests outside the loop
+      if (shouldRefreshRequests) {
+        fetchSentRequests();
+      }
     });
 
-    // Cleanup listeners
     setIncomingRequestsListener(() => unsubscribeIncoming);
     setOutgoingRequestsListener(() => unsubscribeOutgoing);
 
@@ -879,7 +889,7 @@ const Tools = () => {
       unsubscribeIncoming();
       unsubscribeOutgoing();
     };
-  }, [auth.currentUser]);
+  }, [auth.currentUser, handleRequestUpdates]);
 
   // Add this cleanup in the existing cleanup logic or component unmount
   useEffect(() => {
@@ -1063,7 +1073,7 @@ const Tools = () => {
                         }`}
                       >
                         {/* Add notification dot here */}
-                        {myListings.some(
+                        {/* {myListings.some(
                           (item) => item.newRequestCount > 0
                         ) && (
                           <View
@@ -1076,7 +1086,7 @@ const Tools = () => {
                               shadowRadius: 1,
                             }}
                           />
-                        )}
+                        )} */}
 
                         <Image
                           source={icons.envelope}

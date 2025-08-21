@@ -97,8 +97,12 @@ import receipt from "../assets/icons/receipt.png";
 import searchAi from "../assets/icons/searchAi.png";
 import share from "../assets/icons/share.png";
 import cross from "../assets/icons/cross.png";
+import peso from "../assets/icons/peso-sign.png";
+import handshake from "../assets/icons/handshake.png";
 
 export default {
+  handshake,
+  peso,
   ringBell,
   megaPhone,
   cross,
