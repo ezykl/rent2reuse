@@ -494,6 +494,34 @@ const Profile: React.FC = () => {
     }
   };
 
+  const formatFirestoreDate = (firestoreTimestamp: any) => {
+    try {
+      if (!firestoreTimestamp) return "recently";
+
+      // Firestore Timestamps have a .toDate() method
+      if (
+        firestoreTimestamp.toDate &&
+        typeof firestoreTimestamp.toDate === "function"
+      ) {
+        const date = firestoreTimestamp.toDate();
+        return formatDistance(date, new Date(), { addSuffix: true });
+      }
+
+      // Fallback for string dates (shouldn't happen with proper Firestore usage)
+      if (typeof firestoreTimestamp === "string") {
+        const date = new Date(firestoreTimestamp);
+        if (!isNaN(date.getTime())) {
+          return formatDistance(date, new Date(), { addSuffix: true });
+        }
+      }
+
+      return "recently";
+    } catch (error) {
+      console.error("Error formatting Firestore date:", error);
+      return "recently";
+    }
+  };
+
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -780,16 +808,19 @@ const Profile: React.FC = () => {
             onClose={async () => {
               if (auth.currentUser) {
                 await auth.currentUser.reload();
-                // Force refresh status
-                await refreshStatus();
-                // Update completion percentage
-                setRefreshFlag((prev) => prev + 1);
               }
+
+              // Force refresh the profile completion status
+              await refreshStatus();
+
+              // Update other states
+              setRefreshFlag((prev) => prev + 1);
               setActiveModal(null);
             }}
             onVerified={async () => {
-              // Wait for status refresh
+              // Force refresh the profile completion status
               await refreshStatus();
+
               // Force UI update
               setRefreshFlag((prev) => prev + 1);
             }}
@@ -1118,16 +1149,7 @@ const Profile: React.FC = () => {
 
                   {/* Active Since */}
                   <Text className="text-gray-500 text-sm mt-1">
-                    Created{" "}
-                    {profileData?.createdAt
-                      ? formatDistance(
-                          new Date(profileData.createdAt),
-                          new Date(),
-                          {
-                            addSuffix: true,
-                          }
-                        )
-                      : "recently"}
+                    Created {formatFirestoreDate(profileData?.createdAt)}
                   </Text>
 
                   {/* Badges Row */}

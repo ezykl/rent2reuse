@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  SafeAreaView,
 } from "react-native";
 import {
   collection,
@@ -28,6 +29,7 @@ import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 import { db, auth } from "@/lib/firebaseConfig";
 import { router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
+import Header from "@/components/Header";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -35,6 +37,8 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { icons } from "@/constant";
+import { ALERT_TYPE, Toast } from "react-native-alert-notification";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 //typeScript
 interface User {
@@ -66,12 +70,13 @@ interface Chat {
     image: string;
   };
   status: "pending" | "accepted" | "declined" | "cancelled";
-
   unreadCounts: {
-    [userId: string]: number; // Store unread counts per user
+    [userId: string]: number;
   };
-
   lastSender: string;
+  // Add missing properties from your Firestore structure
+  requesterId?: string;
+  ownerId?: string;
 }
 
 interface SearchResult {
@@ -85,71 +90,94 @@ interface SearchResult {
   isCurrentUserLastSender?: boolean;
 }
 
-// Add these UI components at the top
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const TAB_WIDTH = (SCREEN_WIDTH - 32) / 3; // 32 is the total horizontal padding (16 * 2)
+type TabType = "all" | "sent" | "received" | "closed";
 
-const TabButton = ({
-  title,
-  isActive,
-  onPress,
-}: {
+interface TabButtonProps {
   title: string;
   isActive: boolean;
   onPress: () => void;
-}) => {
-  const scale = useSharedValue(0.85);
-  const backgroundColor = useSharedValue("rgba(243, 244, 246, 0.5)");
+  count?: number;
+}
 
-  // Handle animation changes in useEffect
-  useEffect(() => {
-    scale.value = withSpring(isActive ? 0.95 : 0.85, {
-      damping: 10,
-      stiffness: 100,
-    });
-    backgroundColor.value = withTiming(
-      isActive ? "#4BD07F" : "rgba(243, 244, 246, 0.5)",
-      { duration: 150 }
-    );
-  }, [isActive]);
-
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-      backgroundColor: backgroundColor.value,
-      borderRadius: 9999,
-      width: TAB_WIDTH - 8, // Subtract 8 for the gap between tabs
-      zIndex: 10,
-    };
-  });
-
+const TabButton = ({ title, isActive, onPress, count }: TabButtonProps) => {
   return (
-    <Animated.View style={animatedStyle}>
-      <TouchableOpacity onPress={onPress} className="py-2.5">
+    <TouchableOpacity
+      onPress={onPress}
+      className={`mr-3 px-4 py-2.5 rounded-full border ${
+        isActive ? "bg-primary border-primary" : "bg-white border-gray-200"
+      }`}
+    >
+      <View className="flex-row items-center">
         <Text
           className={`${
-            isActive ? "text-white font-bold" : "text-gray-500"
-          } text-center text-sm`}
+            isActive ? "text-white font-pbold" : "text-gray-600 font-pmedium"
+          } text-sm`}
         >
           {title}
         </Text>
-      </TouchableOpacity>
-    </Animated.View>
+        {count !== undefined && (
+          <Text
+            className={`ml-1 text-xs ${
+              isActive ? "text-white/80" : "text-gray-400"
+            } font-pmedium`}
+          >
+            ({count})
+          </Text>
+        )}
+      </View>
+    </TouchableOpacity>
   );
 };
 
-// Update the ChatList component
 const ChatList = () => {
-  // Add new state for tabs
-  const [activeTab, setActiveTab] = useState<
-    "requests" | "proposed" | "closed"
-  >("requests");
+  const [activeTab, setActiveTab] = useState<TabType>("all");
   const [chats, setChats] = useState<Chat[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [selectedChats, setSelectedChats] = useState<string[]>([]);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+
+  // Fixed filtering logic
+  const getFilteredChats = (
+    chats: Chat[],
+    tab: TabType,
+    userId: string | null
+  ) => {
+    if (!userId) return [];
+
+    return chats.filter((chat) => {
+      // Check if this is a rent request (has itemDetails)
+      const isRentRequest = !!chat.itemDetails;
+
+      switch (tab) {
+        case "all":
+          return true;
+        case "sent":
+          // Requests sent by current user (current user is the requester)
+          return isRentRequest && chat.requesterId === userId;
+        case "received":
+          // Requests received by current user (current user is the owner)
+          // Only show active requests (not declined or cancelled)
+          return (
+            isRentRequest &&
+            chat.ownerId === userId &&
+            !["declined", "cancelled"].includes(chat.status)
+          );
+        case "closed":
+          // Show declined/cancelled requests where user is involved
+          return (
+            isRentRequest &&
+            (chat.requesterId === userId || chat.ownerId === userId) &&
+            ["declined", "cancelled"].includes(chat.status)
+          );
+        default:
+          return false;
+      }
+    });
+  };
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -161,10 +189,7 @@ const ChatList = () => {
       const userId = user.uid;
       setCurrentUserId(userId);
 
-      //Load all users for search functionality
       loadAllUsers(userId);
-
-      //Load existing chats
       loadExistingChats(userId);
     });
 
@@ -189,7 +214,7 @@ const ChatList = () => {
               ...doc.data(),
             } as User)
         )
-        .filter((user) => user.id !== currentUserId && user.email); // Filter out users without email
+        .filter((user) => user.id !== currentUserId && user.email);
 
       setAllUsers(usersData);
     } catch (error) {
@@ -198,7 +223,6 @@ const ChatList = () => {
     }
   };
 
-  // Update the loadExistingChats function
   const loadExistingChats = (userId: string) => {
     try {
       const chatsRef = collection(db, "chat");
@@ -226,9 +250,6 @@ const ChatList = () => {
             const userDoc = await getDoc(doc(db, "users", recipientId));
             const recipient = userDoc.exists() ? userDoc.data() : null;
 
-            // Calculate unread count for current user
-            const unreadCount = chatData.unreadCounts?.[userId] || 0;
-
             return {
               id: chatId,
               recipientId,
@@ -243,13 +264,13 @@ const ChatList = () => {
               lastMessageTime: chatData.lastMessageTime?.toDate() || null,
               isCurrentUserLastSender: chatData.lastSender === userId,
               lastSender: chatData.lastSender,
-              unreadCount: unreadCount,
               unreadCounts: chatData.unreadCounts || {},
-              lastReadTimestamps: chatData.lastReadTimestamps || {},
-              isRentRequest: chatData.isRentRequest || false,
-              requestStatus: chatData.requestStatus || "pending",
+              isRentRequest: !!chatData.itemDetails,
+              requestStatus: chatData.status || "pending",
               itemDetails: chatData.itemDetails || null,
               status: chatData.status || "pending",
+              requesterId: chatData.requesterId,
+              ownerId: chatData.ownerId,
             } as Chat;
           })
         );
@@ -265,7 +286,6 @@ const ChatList = () => {
     }
   };
 
-  //start a new chat with a user
   const createNewChat = async (userId: string) => {
     try {
       router.push(`/chat/${userId}`);
@@ -275,7 +295,6 @@ const ChatList = () => {
     }
   };
 
-  // Add this helper function at the top with your other interfaces
   const formatFullName = (name: {
     firstname: string;
     lastname: string;
@@ -287,7 +306,6 @@ const ChatList = () => {
     return `${name.firstname}${middleInitial} ${name.lastname}`;
   };
 
-  // Update the search useEffect
   useEffect(() => {
     if (!search || search.trim() === "") {
       setSearchResults([]);
@@ -295,7 +313,6 @@ const ChatList = () => {
     }
     const searchLower = search.toLowerCase();
 
-    // Search in existing chats
     const matchingChats = chats.filter((chat) => {
       const fullName = formatFullName(chat.recipientName).toLowerCase();
       const firstName = chat.recipientName.firstname.toLowerCase();
@@ -308,12 +325,10 @@ const ChatList = () => {
       );
     });
 
-    // Get IDs of users we already have chats with
     const existingChatUserIds = new Set(
       matchingChats.map((chat) => chat.recipientId)
     );
 
-    // Search in all users who don't have existing chats
     const matchingUsers: SearchResult[] = allUsers
       .filter((user) => {
         if (existingChatUserIds.has(user.id)) return false;
@@ -343,7 +358,6 @@ const ChatList = () => {
         profilePic: user.profileImage || "https://via.placeholder.com/50",
       }));
 
-    // Combine existing chats and new users
     const combinedResults: SearchResult[] = [
       ...matchingChats.map((chat) => ({
         isExistingChat: true,
@@ -361,101 +375,310 @@ const ChatList = () => {
     setSearchResults(combinedResults);
   }, [search, chats, allUsers]);
 
-  const renderChatItem = ({ item }: { item: Chat }) => (
-    <TouchableOpacity
-      className="flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border border-gray-50"
-      onPress={() => router.push(`/chat/${item.id}`)}
-    >
-      <View className="relative">
-        <Image
-          source={{
-            uri: item.isRentRequest
-              ? item.itemDetails?.image
-              : item.itemDetails?.image,
-          }}
-          className="w-14 h-14 rounded-2xl bg-gray-200"
-          style={
-            item.isRentRequest ? { borderRadius: 12 } : { borderRadius: 28 }
+  const handleLongPress = (chatId: string) => {
+    if (activeTab !== "closed") return;
+    setIsSelectMode(true);
+    setSelectedChats([chatId]);
+  };
+
+  const handleSelect = (chatId: string) => {
+    if (selectedChats.includes(chatId)) {
+      setSelectedChats(selectedChats.filter((id) => id !== chatId));
+      if (selectedChats.length === 1) {
+        setIsSelectMode(false);
+      }
+    } else {
+      setSelectedChats([...selectedChats, chatId]);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    try {
+      const batch = writeBatch(db);
+
+      // Delete chats and their messages
+      for (const chatId of selectedChats) {
+        // Delete chat document
+        batch.delete(doc(db, "chat", chatId));
+
+        // Get chat messages
+        const messagesRef = collection(db, "chat", chatId, "messages");
+        const messagesSnap = await getDocs(messagesRef);
+        messagesSnap.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+
+        // Delete associated rent request
+        const chat = chats.find((c) => c.id === chatId);
+        if (chat?.itemDetails?.id) {
+          batch.delete(doc(db, "rentRequests", chat.itemDetails.id));
+        }
+      }
+
+      await batch.commit();
+
+      // Reset selection mode
+      setSelectedChats([]);
+      setIsSelectMode(false);
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Selected conversations deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting chats:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to delete conversations",
+      });
+    }
+  };
+
+  const handleDeleteAll = () => {
+    Alert.alert(
+      "Delete All Closed Chats",
+      "Are you sure you want to delete all closed conversations? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            const closedChats = getFilteredChats(
+              chats,
+              "closed",
+              currentUserId
+            );
+            setSelectedChats(closedChats.map((chat) => chat.id));
+            await handleDeleteSelected();
+          },
+        },
+      ]
+    );
+  };
+
+  const renderChatItem = ({ item }: { item: Chat }) => {
+    const unreadCount = item.unreadCounts?.[currentUserId ?? ""] || 0;
+    const hasUnreadMessages = !item.isCurrentUserLastSender && unreadCount > 0;
+    const isUserSender = currentUserId === item.requesterId; // User sent the request
+    const isUserReceiver = currentUserId === item.ownerId; // User received the request
+    const isSelected = selectedChats.includes(item.id);
+    const isClosed = ["declined", "cancelled"].includes(item.status);
+
+    return (
+      <TouchableOpacity
+        className={`flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border ${
+          isSelected ? "border-primary" : "border-gray-50"
+        }`}
+        onPress={() => {
+          if (isSelectMode && activeTab === "closed") {
+            handleSelect(item.id);
+          } else {
+            router.push(`/chat/${item.id}`);
           }
-        />
-        {/* Show unread badge only if message is not from current user and has unread count */}
-        {!item.isCurrentUserLastSender &&
-          (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0 && (
-            <View className="absolute -top-1 -right-1 bg-primary w-5 h-5 rounded-full items-center justify-center">
+        }}
+        onLongPress={() => isClosed && handleLongPress(item.id)}
+        delayLongPress={500}
+      >
+        <View className="relative">
+          <Image
+            source={{
+              uri:
+                item.isRentRequest && item.itemDetails?.image
+                  ? item.itemDetails.image
+                  : item.recipientProfileImage,
+            }}
+            className="w-14 h-14 rounded-full bg-gray-200"
+            style={
+              item.isRentRequest ? { borderRadius: 12 } : { borderRadius: 28 }
+            }
+          />
+
+          {/* Request Direction Indicator */}
+          {item.isRentRequest && (
+            <View
+              className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center ${
+                isUserSender ? "bg-blue-500" : "bg-green-500"
+              }`}
+            >
+              <Image
+                source={icons.leftArrow}
+                className={`w-5 h-5 ${
+                  isUserSender ? "rotate-90" : "-rotate-90"
+                }`}
+                tintColor="#fff"
+              />
+            </View>
+          )}
+
+          {/* Unread Badge */}
+          {hasUnreadMessages && (
+            <View className="absolute -top-1 -right-1 bg-red-500 min-w-[20px] h-5 rounded-full items-center justify-center z-10">
               <Text className="text-white text-xs font-bold">
-                {item.unreadCounts?.[currentUserId ?? ""]}
+                {unreadCount > 99 ? "99+" : unreadCount}
               </Text>
             </View>
           )}
-      </View>
-
-      <View className="flex-1 ml-4">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1">
-            <Text
-              className={`text-base ${
-                !item.isCurrentUserLastSender &&
-                (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-                  ? "font-bold text-gray-900"
-                  : "font-regular text-gray-800"
-              }`}
-              numberOfLines={1}
-            >
-              {formatFullName(item.recipientName)}
-              {item.itemDetails?.name && (
-                <>
-                  <Text className="text-gray-400"> • </Text>
-                  <Text
-                    className={
-                      item.status === "cancelled" || item.status === "declined"
-                        ? "text-red-500"
-                        : "text-primary"
-                    }
-                  >
-                    {item.itemDetails.name}
-                  </Text>
-                </>
-              )}
-            </Text>
-          </View>
-
-          {item.lastMessageTime && (
-            <Text
-              className={`text-xs ${
-                !item.isCurrentUserLastSender &&
-                (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-                  ? "font-bold text-primary"
-                  : "text-gray-500"
-              }`}
-            >
-              {item.lastMessageTime?.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </Text>
-          )}
         </View>
 
-        <Text
-          className={`text-sm ${
-            !item.isCurrentUserLastSender &&
-            (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-              ? "font-bold text-gray-900"
-              : "text-gray-500"
-          }`}
-          numberOfLines={1}
-        >
-          {item.isCurrentUserLastSender && (
-            <Text className="text-gray-400">You: </Text>
-          )}
-          {item.lastMessage}
-        </Text>
-      </View>
-    </TouchableOpacity>
+        <View className="flex-1 ml-4">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1">
+              <Text
+                className={`text-base ${
+                  hasUnreadMessages
+                    ? "font-bold text-gray-900"
+                    : "font-regular text-gray-800"
+                }`}
+                numberOfLines={1}
+                style={{
+                  textTransform: hasUnreadMessages ? "uppercase" : "none",
+                }}
+              >
+                {formatFullName(item.recipientName)}
+                {item.itemDetails?.name && (
+                  <>
+                    <Text className="text-gray-400"> • </Text>
+                    <Text
+                      className={
+                        item.status === "declined" ||
+                        item.status === "cancelled"
+                          ? "text-red-500"
+                          : "text-primary"
+                      }
+                    >
+                      {item.itemDetails.name}
+                    </Text>
+                  </>
+                )}
+              </Text>
+            </View>
+
+            {item.lastMessageTime && (
+              <Text
+                className={`text-xs ${
+                  hasUnreadMessages ? "font-bold text-primary" : "text-gray-500"
+                }`}
+              >
+                {item.lastMessageTime?.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            )}
+          </View>
+
+          <View className="flex-row items-center">
+            <Text
+              className={`text-sm flex-1 ${
+                hasUnreadMessages ? "font-bold text-gray-900" : "text-gray-500"
+              }`}
+              numberOfLines={1}
+              style={{
+                textTransform: hasUnreadMessages ? "uppercase" : "none",
+              }}
+            >
+              {item.isCurrentUserLastSender && (
+                <Text className="text-gray-400">You: </Text>
+              )}
+              {item.lastMessage}
+            </Text>
+
+            {/* Request Status Badge */}
+            {item.isRentRequest && (
+              <View
+                className={`ml-2 px-2 py-1 rounded-full ${
+                  item.status === "pending"
+                    ? "bg-yellow-100"
+                    : item.status === "accepted"
+                    ? "bg-green-100"
+                    : item.status === "declined" || item.status === "cancelled"
+                    ? "bg-red-100"
+                    : "bg-gray-100"
+                }`}
+              >
+                <Text
+                  className={`text-xs font-medium ${
+                    item.status === "pending"
+                      ? "text-yellow-800"
+                      : item.status === "accepted"
+                      ? "text-green-800"
+                      : item.status === "declined" ||
+                        item.status === "cancelled"
+                      ? "text-red-800"
+                      : "text-gray-800"
+                  }`}
+                >
+                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {isSelectMode && activeTab === "closed" && (
+          <View className="absolute right-2 top-2">
+            <View
+              className={`w-6 h-6 rounded-full border-2 items-center justify-center ${
+                isSelected ? "bg-primary border-primary" : "border-gray-300"
+              }`}
+            >
+              {isSelected && (
+                <Image
+                  source={icons.check}
+                  className="w-4 h-4"
+                  tintColor="#fff"
+                />
+              )}
+            </View>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const renderHeader = () => (
+    <View className="flex-row items-center justify-between py-2">
+      <Text className="text-2xl font-bold text-secondary-900">
+        {isSelectMode
+          ? `Selected ${selectedChats.length} ${
+              selectedChats.length === 1 ? "chat" : "chats"
+            }`
+          : "Messages"}
+      </Text>
+      {activeTab === "closed" &&
+        (isSelectMode ? (
+          <View className="flex-row">
+            <TouchableOpacity
+              onPress={() => {
+                setIsSelectMode(false);
+                setSelectedChats([]);
+              }}
+              className="mr-4"
+            >
+              <Text className="text-gray-500 font-pmedium">Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleDeleteSelected}
+              className="bg-red-500 px-4 py-2 rounded-lg"
+            >
+              <Text className="text-white font-pbold">Delete</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={handleDeleteAll}
+            className="bg-gray-100 px-4 py-2 rounded-lg"
+          >
+            <Text className="text-gray-600 font-pmedium">Delete All</Text>
+          </TouchableOpacity>
+        ))}
+    </View>
   );
 
   const renderChatList = () => {
-    //show search results
     if (search.trim() !== "") {
       if (searchResults.length === 0) {
         return (
@@ -475,7 +698,7 @@ const ChatList = () => {
           }
           renderItem={({ item }) => (
             <TouchableOpacity
-              className="flex-row items-center border-b border-gray-200"
+              className="flex-row items-center px-4 py-4 border-b border-gray-200"
               onPress={() => {
                 if (item.isExistingChat) {
                   router.push(`/chat/${item.chatId}`);
@@ -512,51 +735,52 @@ const ChatList = () => {
               )}
             </TouchableOpacity>
           )}
+          contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
         />
       );
     }
 
-    //show existing chats or the Chat List
-    if (chats.length === 0) {
+    const filteredChats = getFilteredChats(chats, activeTab, currentUserId);
+
+    if (filteredChats.length === 0) {
       return (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-gray-500">No messages yet</Text>
+        <View className="flex-1 items-center justify-center p-4">
+          <Image
+            source={icons.emptyBox}
+            className="w-16 h-16 mb-4"
+            tintColor="#9CA3AF"
+          />
+          <Text className="text-gray-500 text-center">
+            No {activeTab === "all" ? "messages" : `${activeTab} requests`}
+          </Text>
         </View>
       );
     }
 
     return (
       <FlatList
-        data={chats}
+        data={filteredChats}
         keyExtractor={(item) => item.id}
         renderItem={renderChatItem}
-        ListHeaderComponent={() => (
-          <View className="mb-2">
-            <Text className="text-sm font-medium text-gray-500 mb-1">
-              {chats.filter((chat) => chat.isRentRequest).length} Active Rent
-              Requests
-            </Text>
-          </View>
-        )}
         contentContainerStyle={{
-          paddingBottom: 120, // Add bottom padding to prevent overlap
-          flexGrow: 1, // Ensure list takes full height
+          paddingBottom: 120,
+          flexGrow: 1,
         }}
+        showsVerticalScrollIndicator={false}
       />
     );
   };
-
-  // Removed erroneous useEffect referencing undefined chatId
+  const insets = useSafeAreaInsets();
 
   return (
-    <View className="flex-1 mt-6 bg-white p-4">
-      {/* Header */}
-      <View className=" pt-6 pb-2">
-        <Text className="text-2xl font-bold text-secondary-900">Messages</Text>
-      </View>
-
+    <SafeAreaView
+      className="flex-1 bg-white px-4"
+      style={{ paddingTop: insets.top }}
+    >
+      <Header />
+      {renderHeader()}
       {/* Search Bar */}
-      <View className=" py-2">
+      <View className="py-2">
         <View className="flex-row items-center bg-gray-100 rounded-xl px-4 h-12 py-2">
           <Image
             source={require("@/assets/icons/search.png")}
@@ -572,195 +796,39 @@ const ChatList = () => {
       </View>
 
       {/* Tabs */}
-      <View className="bg-gray-100 rounded-3xl">
-        <View className="flex-row justify-between px-1 py-1">
-          <TabButton
-            title="Requests"
-            isActive={activeTab === "requests"}
-            onPress={() => setActiveTab("requests")}
-          />
-          <TabButton
-            title="Proposed"
-            isActive={activeTab === "proposed"}
-            onPress={() => setActiveTab("proposed")}
-          />
-          <TabButton
-            title="Closed"
-            isActive={activeTab === "closed"}
-            onPress={() => setActiveTab("closed")}
-          />
-        </View>
+      <View className="py-2">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 2 }}
+        >
+          <View className="flex-row">
+            {[
+              { key: "all" as TabType, label: "All" },
+              { key: "sent" as TabType, label: "Sent" },
+              { key: "received" as TabType, label: "Received" },
+              { key: "closed" as TabType, label: "Closed" },
+            ].map((tab) => (
+              <TabButton
+                key={tab.key}
+                title={tab.label}
+                isActive={activeTab === tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                count={getFilteredChats(chats, tab.key, currentUserId).length}
+              />
+            ))}
+          </View>
+        </ScrollView>
       </View>
-
       {/* Chat List */}
       {loading ? (
         <View className="flex-1 items-center justify-center">
           <LottieActivityIndicator size={100} color="#5C6EF6" />
         </View>
       ) : (
-        <FlatList
-          data={chats.filter((chat) => {
-            // For regular chats (non-rent requests), only show in "requests" tab
-            if (!chat.isRentRequest) {
-              return activeTab === "requests";
-            }
-
-            // For rent requests, filter by status
-            switch (activeTab) {
-              case "requests":
-                return chat.requestStatus === "pending";
-              case "proposed":
-                return chat.requestStatus === "accepted";
-              case "closed":
-                // Show both rejected and cancelled requests in closed tab
-                return ["rejected", "cancelled"].includes(chat.requestStatus);
-              default:
-                return false;
-            }
-          })}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{
-            paddingBottom: 120,
-            flexGrow: 1,
-          }}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border border-gray-50"
-              onPress={() => router.push(`/chat/${item.id}`)}
-            >
-              <View className="relative">
-                <Image
-                  source={{
-                    uri: item.isRentRequest
-                      ? item.itemDetails?.image
-                      : item.itemDetails?.image,
-                  }}
-                  className="w-14 h-14 rounded-2xl bg-gray-200"
-                  style={
-                    item.isRentRequest
-                      ? { borderRadius: 12 }
-                      : { borderRadius: 28 }
-                  }
-                />
-                {/* Update status indicators to include cancelled state */}
-                <View className="absolute bottom-0 right-0">
-                  {item.isRentRequest ? (
-                    <View
-                      className={`w-4 h-4 rounded-full border-2 border-white ${
-                        item.requestStatus === "pending"
-                          ? "bg-yellow-500"
-                          : item.requestStatus === "accepted"
-                          ? "bg-green-500"
-                          : item.requestStatus === "cancelled"
-                          ? "bg-gray-500"
-                          : "bg-red-500"
-                      }`}
-                    />
-                  ) : (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0 ? (
-                    <View className="bg-primary w-5 h-5 rounded-full items-center justify-center">
-                      <Text className="text-white text-xs font-bold">
-                        {item.unreadCounts?.[currentUserId ?? ""]}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-
-              <View className="flex-1 ml-4">
-                {/* Name and Item */}
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-1">
-                    <Text
-                      className={`text-base ${
-                        (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-                          ? "font-bold text-gray-900"
-                          : "font-regular text-gray-800"
-                      }`}
-                      numberOfLines={1}
-                    >
-                      {formatFullName(item.recipientName)}
-                      {item.itemDetails?.name && (
-                        <>
-                          <Text className="text-gray-400"> • </Text>
-                          <Text
-                            className={`${
-                              (item.unreadCounts?.[currentUserId ?? ""] ?? 0) >
-                              0
-                                ? item.status === "cancelled" ||
-                                  item.status === "declined"
-                                  ? "font-bold text-red-500"
-                                  : "font-bold text-primary"
-                                : item.status === "cancelled" ||
-                                  item.status === "declined"
-                                ? "font-medium text-red-500"
-                                : "font-medium text-primary"
-                            }`}
-                          >
-                            {item.itemDetails.name}
-                          </Text>
-                        </>
-                      )}
-                    </Text>
-                  </View>
-
-                  {/* Timestamp */}
-                  {item.lastMessageTime && (
-                    <Text
-                      className={`text-xs ${
-                        (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-                          ? "font-bold text-primary"
-                          : "text-gray-500"
-                      }`}
-                    >
-                      {item.lastMessageTime?.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Last Message */}
-                <Text
-                  className={`text-sm ${
-                    (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-                      ? "font-bold text-gray-900"
-                      : "text-gray-500"
-                  }`}
-                  numberOfLines={1}
-                >
-                  {item.isCurrentUserLastSender && (
-                    <Text
-                      className={`${
-                        (item.unreadCounts?.[currentUserId ?? ""] ?? 0) > 0
-                          ? "font-bold"
-                          : "font-regular"
-                      } text-gray-400`}
-                    >
-                      You:{" "}
-                    </Text>
-                  )}
-                  {item.lastMessage}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={() => (
-            <View className="flex-1 items-center justify-center p-4">
-              <Image
-                source={icons.emptyBox}
-                className="w-16 h-16 mb-4"
-                tintColor="#9CA3AF"
-              />
-              <Text className="text-gray-500 text-center">
-                No {activeTab} messages
-              </Text>
-            </View>
-          )}
-          showsVerticalScrollIndicator={false}
-        />
+        renderChatList()
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 

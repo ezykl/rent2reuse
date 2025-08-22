@@ -82,11 +82,14 @@ export const EmailVerificationContent = ({
     try {
       const user = auth.currentUser;
       if (user) {
-        // Force reload user
+        // Force reload user to get the latest emailVerified status
         await user.reload();
 
-        if (user.emailVerified) {
-          // First call onVerified to update the parent state
+        // Get the updated user after reload
+        const updatedUser = auth.currentUser;
+
+        if (updatedUser && updatedUser.emailVerified) {
+          // Call onVerified callback first
           if (onVerified) {
             await onVerified();
           }
@@ -98,10 +101,12 @@ export const EmailVerificationContent = ({
             textBody: "Your email has been successfully verified!",
           });
 
-          // Close modal after verification
-          if (onClose) {
-            onClose();
-          }
+          // Small delay to ensure state updates propagate
+          setTimeout(() => {
+            if (onClose) {
+              onClose();
+            }
+          }, 500);
         } else {
           Toast.Toast.show({
             type: ALERT_TYPE.WARNING,
@@ -151,23 +156,28 @@ export const EmailVerificationContent = ({
       if (user) {
         // Force refresh the user to get the latest emailVerified status
         await user.reload();
+        const refreshedUser = auth.currentUser;
 
-        if (user.emailVerified) {
+        if (refreshedUser && refreshedUser.emailVerified) {
           // Email has been verified
           if (onVerified) {
-            onVerified();
+            await onVerified();
+
+            Alert.alert(
+              "Email Verified",
+              "Your email has been successfully verified!",
+              [
+                {
+                  text: "OK",
+                  onPress: () => {
+                    if (onClose) {
+                      onClose();
+                    }
+                  },
+                },
+              ]
+            );
           }
-          // Show success message before closing
-          Alert.alert(
-            "Email Verified",
-            "Your email has been successfully verified!",
-            [
-              {
-                text: "OK",
-                onPress: () => onClose && onClose(),
-              },
-            ]
-          );
         }
       }
     });
@@ -175,8 +185,8 @@ export const EmailVerificationContent = ({
     // Cleanup subscription
     return () => unsubscribe();
   }, [onVerified, onClose]);
-
   // Update the checkVerificationStatus function
+
   const updatedCheckVerificationStatus = async () => {
     try {
       const user = auth.currentUser;

@@ -55,6 +55,7 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { sendPushNotification } from "@/utils/notificationHelper";
 import { useTimeConverter } from "@/hooks/useTimeConverter";
 import RentalProgressIndicator from "@/components/RentalProgressIndicator";
+import { useLoader } from "@/context/LoaderContext";
 
 // First fix the ChatHeader props interface
 interface ChatHeaderProps {
@@ -196,7 +197,7 @@ const ChatHeader = ({
   const isRentalConversation = itemDetails && status;
 
   return (
-    <View className="bg-white border-b border-gray-100">
+    <View className="bg-white border-b  border-gray-100">
       {/* Main Header */}
       <View className="flex-row items-center p-4">
         <TouchableOpacity onPress={onBack} className="mr-3">
@@ -290,14 +291,13 @@ const ChatHeader = ({
             onPress={onToggleProgress}
             className="mr-3 flex-row items-center gap-2"
           >
-            <Text className="text-blue-500 text-sm">
+            <Text className="text-gray-500 font-pmedium text-sm">
               {showFullProgress ? "Hide Progress" : "View Progress"}
             </Text>
             <Image
               source={icons.arrowDown}
-              className={`w-5 h-5 ${
-                showFullProgress ? "transform rotate-180" : ""
-              }`}
+              className={`w-5 h-5 ${showFullProgress ? " rotate-180" : ""}`}
+              tintColor={"#6b7280"}
             />
           </TouchableOpacity>
         </View>
@@ -849,7 +849,7 @@ const ChatScreen = () => {
     isSelecting: false,
     selectedMessages: [],
   });
-
+  const { setIsLoading } = useLoader();
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
 
@@ -1501,15 +1501,54 @@ const ChatScreen = () => {
     if (!requestId) return;
 
     try {
-      // Update chat metadata with accepted status
+      setIsLoading(true); // Add loading state
+
+      // Update rent request status
+      const requestRef = doc(db, "rentRequests", requestId);
+      await updateDoc(requestRef, {
+        status: "accepted",
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update chat metadata
       await updateDoc(doc(db, "chat", String(chatId)), {
-        status: "accepted", // This will show the payment step as current
+        status: "accepted",
         lastMessage: "Request accepted by owner",
         lastMessageTime: serverTimestamp(),
         hasOwnerResponded: true,
       });
 
-      // Rest of your existing code...
+      // Update the specific rent request message in chat
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const rentRequestQuery = query(
+        messagesRef,
+        where("rentRequestId", "==", requestId)
+      );
+
+      const rentRequestMessages = await getDocs(rentRequestQuery);
+      rentRequestMessages.forEach(async (doc) => {
+        await updateDoc(doc.ref, {
+          status: "accepted",
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      // Add status update message
+      await addDoc(messagesRef, {
+        type: "statusUpdate",
+        text: "Request accepted by owner",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+        status: "accepted",
+      });
+
+      // Show success notification
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Request accepted successfully",
+      });
     } catch (error) {
       console.error("Error accepting request:", error);
       Toast.show({
@@ -1517,6 +1556,8 @@ const ChatScreen = () => {
         title: "Error",
         textBody: "Failed to accept request",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 

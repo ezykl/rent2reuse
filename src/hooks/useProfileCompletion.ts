@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, onSnapshot } from "firebase/firestore"; // <-- use onSnapshot
+import { getDoc, doc, onSnapshot } from "firebase/firestore";
 
 export interface ProfileCompletionStatus {
   isComplete: boolean;
@@ -41,17 +41,20 @@ const useProfileCompletion = () => {
     },
   });
 
-  useEffect(() => {
+  // Function to check and update profile completion status
+  const checkProfileCompletion = async (userData: any) => {
     const user = auth.currentUser;
     if (!user) return;
 
-    const unsub = onSnapshot(doc(db, "users", user.uid), (userDoc) => {
-      if (!userDoc.exists()) return;
+    try {
+      // IMPORTANT: Reload user to get latest emailVerified status
+      await user.reload();
 
-      const userData = userDoc.data();
+      // Now get the updated user
+      const updatedUser = auth.currentUser;
 
       const details = {
-        isEmailVerified: user.emailVerified,
+        isEmailVerified: updatedUser?.emailVerified || false, // ← Now using fresh data
         hasLocation: !!(
           userData.location?.latitude &&
           userData.location?.longitude &&
@@ -120,14 +123,46 @@ const useProfileCompletion = () => {
         missingFields,
         details,
       });
+    } catch (error) {
+      console.error("Error checking profile completion:", error);
+    }
+  };
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const unsub = onSnapshot(doc(db, "users", user.uid), (userDoc) => {
+      if (!userDoc.exists()) return;
+
+      const userData = userDoc.data();
+      checkProfileCompletion(userData);
     });
 
     return () => unsub();
   }, []);
 
+  // Manual refresh function that can be called from components
+  const refreshStatus = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      // Import getDoc since it's not imported at the top
+
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+
+      if (userDoc.exists()) {
+        await checkProfileCompletion(userDoc.data());
+      }
+    } catch (error) {
+      console.error("Error refreshing profile status:", error);
+    }
+  };
+
   return {
     ...status,
-    refreshStatus: () => {}, // No-op, since updates are now real-time
+    refreshStatus,
   };
 };
 

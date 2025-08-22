@@ -283,7 +283,7 @@ const RentalProgressIndicator: React.FC<RentalProgressIndicatorProps> = ({
 
       {/* Sub Steps if available */}
       {currentStep.subSteps && (
-        <View className="ml-12 mt-2">
+        <View className="flex-row gap-2 justify-center">
           {currentStep.subSteps.map((subStep, index) => (
             <View
               key={subStep.id}

@@ -271,21 +271,6 @@ const SentRequestCard = ({
             </>
           )}
         </View>
-
-        {/* Add status badge with expired state */}
-        <View className="absolute top-4 right-4">
-          <View
-            className={`px-3 py-1 rounded-full ${
-              isExpired()
-                ? "bg-orange-100"
-                : getRequestStatus(
-                    request.startDate,
-                    request.endDate,
-                    request.status
-                  ).color
-            }`}
-          ></View>
-        </View>
       </View>
     </TouchableOpacity>
   );
