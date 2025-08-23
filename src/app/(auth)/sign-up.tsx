@@ -22,6 +22,7 @@ import { Checkbox, useTheme } from "react-native-paper"; // Ensure you have this
 import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
 import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContext";
 
 import { createUserWithEmailAndPassword } from "@firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
@@ -42,7 +43,7 @@ const SignUp = () => {
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 2;
-
+  const { setSignupMode } = useAuth();
   const [form, setForm] = useState<{
     firstname: string;
     middlename?: string;
@@ -262,6 +263,7 @@ const SignUp = () => {
     setIsLoading(true);
 
     try {
+      setSignupMode(true);
       // 1. Create user account
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -282,35 +284,17 @@ const SignUp = () => {
         createdAt: new Date().toISOString(),
       });
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // 3. Sign out and show success dialog
-      await new Promise((resolve) => {
-        setIsLoading(false);
-        // First show the success dialog
-        Dialog.show({
-          type: ALERT_TYPE.SUCCESS,
-          title: "Account Created",
-          textBody:
-            "Your account has been created successfully! Please log in with your credentials.",
-          button: "Go to Login",
-          onPressButton: () => {
-            Dialog.hide();
-            resolve(true);
-          },
-          closeOnOverlayTap: false,
-        });
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Account Created",
+        textBody:
+          "Your account has been created successfully! Please log in with your credentials.",
       });
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
 
       await createWelcomeNotification(uid);
 
       // 4. Sign out and redirect
       await auth.signOut();
-
-      // 5. Small delay to ensure signout completes
-      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // 6. Redirect to sign-in
       router.replace("/sign-in");
@@ -334,6 +318,7 @@ const SignUp = () => {
         });
       }
     } finally {
+      setSignupMode(false);
       setIsSubmitting(false);
       setIsLoading(false);
     }

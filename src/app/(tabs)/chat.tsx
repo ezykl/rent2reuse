@@ -154,6 +154,12 @@ const ChatList = () => {
 
       switch (tab) {
         case "all":
+          if (
+            isRentRequest &&
+            ["declined", "cancelled"].includes(chat.status)
+          ) {
+            return false;
+          }
           return true;
         case "sent":
           // Requests sent by current user (current user is the requester)

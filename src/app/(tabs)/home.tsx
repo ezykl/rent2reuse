@@ -366,7 +366,6 @@ const Home = () => {
                             recyclingKey={`announcement-${item.id}-${
                               refreshing ? Date.now() : ""
                             }`}
-                            placeholder={images.logo} // Use imported placeholder image
                             onError={(error) => {
                               console.error("Image loading error:", error);
                             }}

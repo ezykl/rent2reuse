@@ -92,6 +92,9 @@ export const EmailVerificationContent = ({
           // Call onVerified callback first
           if (onVerified) {
             await onVerified();
+            if (onClose) {
+              onClose();
+            }
           }
 
           // Show success message
@@ -162,21 +165,6 @@ export const EmailVerificationContent = ({
           // Email has been verified
           if (onVerified) {
             await onVerified();
-
-            Alert.alert(
-              "Email Verified",
-              "Your email has been successfully verified!",
-              [
-                {
-                  text: "OK",
-                  onPress: () => {
-                    if (onClose) {
-                      onClose();
-                    }
-                  },
-                },
-              ]
-            );
           }
         }
       }
@@ -186,43 +174,6 @@ export const EmailVerificationContent = ({
     return () => unsubscribe();
   }, [onVerified, onClose]);
   // Update the checkVerificationStatus function
-
-  const updatedCheckVerificationStatus = async () => {
-    try {
-      const user = auth.currentUser;
-      if (user) {
-        await user.reload();
-        if (user.emailVerified) {
-          // Show success message
-          Alert.alert(
-            "Email Verified",
-            "Your email has been successfully verified!",
-            [
-              {
-                text: "OK",
-                onPress: async () => {
-                  if (onVerified) {
-                    await onVerified(); // Wait for onVerified to complete
-                  }
-                  if (onClose) {
-                    onClose();
-                  }
-                },
-              },
-            ]
-          );
-        } else {
-          Alert.alert(
-            "Not Verified",
-            "Your email is not yet verified. Please check your inbox and click the verification link."
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Error checking verification status:", error);
-      Alert.alert("Error", "Failed to check verification status");
-    }
-  };
 
   // Add a refresh button in the UI
   const renderRefreshButton = () => {

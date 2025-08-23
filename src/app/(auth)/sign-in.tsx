@@ -44,6 +44,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePushNotifications } from "@/utils/userPushNotifications";
 import { manageUserToken } from "@/utils/tokenManagement";
+import { useAuth } from "@/context/AuthContext";
 
 // Type definitions
 interface FormData {
@@ -86,6 +87,7 @@ const SignIn = () => {
   const [suspendedModalVisible, setSuspendedModalVisible] =
     useState<boolean>(false);
   const { expoPushToken } = usePushNotifications();
+  const { setSignupMode } = useAuth();
 
   // Email validation function
   const validateEmail = (email: string): string => {
@@ -152,12 +154,14 @@ const SignIn = () => {
       const userDoc = await getDoc(userDocRef);
 
       if (!userDoc.exists()) {
+        setSignupMode(true);
         console.log("User document does not exist");
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Account Not Found",
           textBody: "Your account setup is incomplete.",
         });
+        await auth.signOut();
         return false;
       }
 
@@ -357,7 +361,9 @@ const SignIn = () => {
 
       console.log("Account is valid - proceeding with session management");
       // Account is valid, proceed with session management
-      await completeSignIn(userCredential);
+      if (isAccountValid) {
+        await completeSignIn(userCredential);
+      }
     } catch (error: any) {
       // console.log(error);
       const errorCode = error.code;
@@ -390,6 +396,7 @@ const SignIn = () => {
             title: "Account Not Found",
             textBody: "No account found with this email.",
           });
+          await auth.signOut();
           break;
         default:
           Toast.show({

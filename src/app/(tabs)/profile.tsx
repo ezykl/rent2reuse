@@ -785,7 +785,7 @@ const Profile: React.FC = () => {
           onPress={claimFreePlan}
           disabled={isClaiming}
           className={`w-full ${
-            isClaiming ? "bg-gray-300" : "bg-orange-400"
+            isClaiming ? "bg-orange-300" : "bg-orange-400"
           } py-4 rounded-xl`}
         >
           <Text className="text-white text-center font-pbold text-lg">

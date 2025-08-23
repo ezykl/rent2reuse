@@ -209,7 +209,7 @@ const RequestCard: React.FC<{
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
+          {/* <TouchableOpacity
             onPress={() => onStatusUpdate(request.id, "declined")}
             className="bg-red-400 p-4 rounded-xl"
             activeOpacity={0.8}
@@ -220,7 +220,7 @@ const RequestCard: React.FC<{
               tintColor="#FFFFFF"
               resizeMode="contain"
             />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
 
         {/* Toggle Details Button - Enhanced */}
@@ -357,8 +357,8 @@ const ViewRequests = () => {
       const requestsRef = collection(db, "rentRequests");
       const q = query(
         requestsRef,
-        where("itemId", "==", id),
-        where("status", "in", ["pending", "approved"]) // Only show pending and approved requests
+        where("itemId", "==", id)
+        // where("status", "in", ["pending", "approved"])
       );
 
       const querySnapshot = await getDocs(q);
@@ -442,7 +442,7 @@ const ViewRequests = () => {
       setRequests((prevRequests) =>
         prevRequests.filter((request) => {
           // If status is declined, remove it from the list
-          if (newStatus === "declined" || newStatus === "rejected") {
+          if (newStatus === "declined" || newStatus === "cancelled") {
             return request.id !== requestId;
           }
           // Otherwise, update the status

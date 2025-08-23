@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useState, useEffect } from "react";
+import { formatDistance, set } from "date-fns";
 import {
   collection,
   query,
@@ -26,11 +27,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface UserProfile {
   id: string;
-  fullname: string;
+  firstname: string;
+  middlename?: string;
+  lastname: string;
   email: string;
   profileImage?: string;
   averageRating?: number;
   totalRatings?: number;
+  createdAt: any;
   location?: {
     address: string;
     coordinates: {
@@ -85,6 +89,44 @@ export default function UserProfile() {
       fetchUserProfileAndItems();
     }
   }, [id]);
+
+  const getInitials = (name: string) => {
+    return name
+      ? name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+      : "?";
+  };
+
+  const formatFirestoreDate = (firestoreTimestamp: any) => {
+    try {
+      if (!firestoreTimestamp) return "recently";
+
+      // Firestore Timestamps have a .toDate() method
+      if (
+        firestoreTimestamp.toDate &&
+        typeof firestoreTimestamp.toDate === "function"
+      ) {
+        const date = firestoreTimestamp.toDate();
+        return formatDistance(date, new Date(), { addSuffix: true });
+      }
+
+      // Fallback for string dates (shouldn't happen with proper Firestore usage)
+      if (typeof firestoreTimestamp === "string") {
+        const date = new Date(firestoreTimestamp);
+        if (!isNaN(date.getTime())) {
+          return formatDistance(date, new Date(), { addSuffix: true });
+        }
+      }
+
+      return "recently";
+    } catch (error) {
+      console.error("Error formatting Firestore date:", error);
+      return "recently";
+    }
+  };
 
   // Render item card
   const renderItemCard = ({ item }: { item: Item }) => (
@@ -153,19 +195,21 @@ export default function UserProfile() {
       style={{ paddingTop: insets.top + 10 }}
     >
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 py-2 bg-white">
+      <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
         <TouchableOpacity
           onPress={() => router.back()}
           className="items-center justify-center"
         >
-          <Image source={icons.leftArrow} className="w-8 h-8" />
+          <Image
+            source={icons.leftArrow}
+            className="w-8 h-8"
+            tintColor="#6B7280"
+          />
         </TouchableOpacity>
         <View className="flex-1 items-center">
-          <Text className="text-lg font-semibold text-gray-900">
-            User Profile
-          </Text>
+          <Text className="text-xl font-pbold text-gray-800">Item Details</Text>
         </View>
-        <View className="w-10" />
+        <View className="w-8" />
       </View>
 
       <FlatList
@@ -182,7 +226,7 @@ export default function UserProfile() {
           <View className="p-4">
             {/* Profile Section */}
             <View className="items-center mb-6">
-              <View className="w-24 h-24 rounded-full bg-gray-100 mb-4 overflow-hidden">
+              <View className="w-24 h-24 rounded-full bg-gray-100  overflow-hidden">
                 {userProfile?.profileImage ? (
                   <Image
                     source={{ uri: userProfile.profileImage }}
@@ -190,16 +234,34 @@ export default function UserProfile() {
                     resizeMode="cover"
                   />
                 ) : (
-                  <View className="w-full h-full bg-primary/20 items-center justify-center">
-                    <Text className="text-primary text-3xl font-pbold">
-                      {userProfile?.fullname?.charAt(0)?.toUpperCase()}
+                  <View className="w-full h-full bg-primary justify-center items-center">
+                    <Text className="font-pbold text-2xl text-white">
+                      {getInitials(userProfile?.firstname || "")}
                     </Text>
                   </View>
                 )}
               </View>
-              <Text className="text-2xl font-pbold text-gray-900 mb-2">
-                {userProfile?.fullname}
+              <Text className="mt-2 font-pbold text-xl text-gray-900 ">
+                {userProfile?.firstname}{" "}
+                {userProfile?.middlename &&
+                  ` ${getInitials(userProfile.middlename)}.`}{" "}
+                {userProfile?.lastname}
               </Text>
+              <Text className="text-gray-500 text-sm ">
+                Created {formatFirestoreDate(userProfile?.createdAt)}
+              </Text>
+
+              <View className="flex-row items-center bg-blue-50 px-2 py-1 rounded-full">
+                <Image
+                  source={icons.verified}
+                  className="w-4 h-4"
+                  resizeMode="contain"
+                />
+                <Text className="text-xs font-pmedium text-blue-600 ml-1">
+                  Verified
+                </Text>
+              </View>
+
               {userProfile?.averageRating ? (
                 <View className="flex-row items-center mb-2">
                   <View className="flex-row mr-2">
@@ -237,7 +299,7 @@ export default function UserProfile() {
         ListEmptyComponent={() => (
           <View className="flex-1 items-center justify-center p-8">
             <Image
-              source={images.empty}
+              source={icons.emptyBox}
               className="w-20 h-20 opacity-30 mb-4"
             />
             <Text className="text-gray-500 text-center">

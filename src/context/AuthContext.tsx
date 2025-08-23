@@ -24,12 +24,14 @@ interface AuthContextType {
   user: ExtendedUser | null;
   loading: boolean;
   logout: () => Promise<void>;
+  setSignupMode: (inSignup: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   logout: async () => {},
+  setSignupMode: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -38,7 +40,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [sessionCheckInterval, setSessionCheckInterval] =
     useState<NodeJS.Timeout | null>(null);
   const { expoPushToken } = usePushNotifications();
+  const [isSigningUp, setIsSigningUp] = useState(false);
 
+  const setSignupMode = (inSignup: boolean) => {
+    setIsSigningUp(inSignup);
+  };
   // Function to handle user logout with session cleanup
   const logout = async () => {
     try {
@@ -63,6 +69,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (isSigningUp && currentUser) {
+        console.log("Skipping user set during signup");
+        return;
+      }
+
       if (currentUser) {
         try {
           const docRef = doc(db, "users", currentUser.uid);
@@ -97,7 +108,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               }
             }
           } else {
-            setUser(currentUser); // fallback to basic user if no profile data
+            setUser(null); // fallback to basic user if no profile data
           }
         } catch (error) {
           console.error("Failed to fetch Firestore user data:", error);
@@ -122,7 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         clearInterval(sessionCheckInterval);
       }
     };
-  }, []);
+  }, [isSigningUp]);
 
   // Listen for session termination (e.g., when logged in on another device)
   useEffect(() => {
@@ -205,7 +216,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout, setSignupMode }}>
       {children}
     </AuthContext.Provider>
   );

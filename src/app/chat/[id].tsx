@@ -214,7 +214,7 @@ const ChatHeader = ({
               uri:
                 itemDetails?.image ||
                 recipientImage ||
-                "https://via.placeholder.com/40",
+                "https://placehold.co/40x40@2x.png",
             }}
             className="w-10 h-10 rounded-full bg-gray-200"
             resizeMode="cover"
@@ -222,26 +222,28 @@ const ChatHeader = ({
         </View>
 
         <View className="ml-3 flex-1">
-          <Text
-            className="text-base font-semibold text-gray-900"
-            numberOfLines={1}
-          >
-            {formatFullName()}
-            {itemDetails?.name && (
-              <>
-                <Text className="text-gray-400"> • </Text>
-                <Text
-                  className={`${
-                    status === "cancelled" || status === "declined"
-                      ? "text-red-500"
-                      : "text-primary"
-                  }`}
-                >
-                  {itemDetails.name}
-                </Text>
-              </>
-            )}
-          </Text>
+          <TouchableOpacity onPress={() => router.push(`/user/${recipientId}`)}>
+            <Text
+              className="text-base font-semibold text-gray-900"
+              numberOfLines={1}
+            >
+              {formatFullName()}
+              {itemDetails?.name && (
+                <>
+                  <Text className="text-gray-400"> • </Text>
+                  <Text
+                    className={`${
+                      status === "cancelled" || status === "declined"
+                        ? "text-red-500"
+                        : "text-primary"
+                    }`}
+                  >
+                    {itemDetails.name}
+                  </Text>
+                </>
+              )}
+            </Text>
+          </TouchableOpacity>
 
           {/* Show progress indicator or online status */}
           {isRentalConversation ? (
@@ -729,7 +731,7 @@ const RentRequestMessage = ({
                         ACCEPT
                       </Text>
                     </TouchableOpacity>
-
+                    {/* 
                     <TouchableOpacity
                       onPress={onDecline}
                       className="flex-1 bg-red-500 py-3 rounded-xl"
@@ -737,7 +739,7 @@ const RentRequestMessage = ({
                       <Text className="text-white font-pbold text-center">
                         DECLINE
                       </Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                   </>
                 ) : (
                   <View className="w-full bg-gray-100 p-4 rounded-lg">

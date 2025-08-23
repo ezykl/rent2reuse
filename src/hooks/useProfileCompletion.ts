@@ -148,8 +148,6 @@ const useProfileCompletion = () => {
     if (!user) return;
 
     try {
-      // Import getDoc since it's not imported at the top
-
       const userDoc = await getDoc(doc(db, "users", user.uid));
 
       if (userDoc.exists()) {
