@@ -5,10 +5,12 @@ import {
   Pressable,
   Modal,
   TouchableOpacity,
+  TouchableOpacityProps,
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import { Tabs, Redirect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import LottieView from "lottie-react-native";
 import {
   doc,
   getDoc,
@@ -274,15 +276,20 @@ const TabsLayout = () => {
             tabBarButton: (props) => (
               <>
                 <TouchableOpacity
-                  {...props}
+                  activeOpacity={0.6}
                   onPress={() => setIsOptionsVisible(true)}
-                  android_ripple={{
-                    color: "#CFE0D9",
-                    radius: 25,
-                  }}
-                  className="items-center justify-center "
+                  className="items-center justify-center"
                 >
-                  <Image source={images.logoSmall} className="w-12 h-12" />
+                  {/* <Image
+                    source={images.logoSmall}
+                    className=" mt-2 w-12 h-12"
+                  /> */}
+                  <LottieView
+                    source={require("../../assets/logoBlink.json")}
+                    autoPlay
+                    loop
+                    style={{ width: 45, height: 45, marginTop: 4 }}
+                  />
                 </TouchableOpacity>
 
                 {/* Options Modal */}
@@ -382,21 +389,19 @@ const TabsLayout = () => {
             headerShown: false,
             tabBarBadge: hasUnreadMessages ? " " : undefined,
             tabBarBadgeStyle: {
-              backgroundColor: "#FF0000", // Adjust color if needed
-              minWidth: 10, // Reduce size
+              backgroundColor: "#FF0000",
+              minWidth: 10,
               minHeight: 10,
               width: 10,
               height: 10,
-              borderRadius: 10, // Makes it a small circle
+              borderRadius: 10,
               right: 10,
             },
             tabBarButton: (props) => (
-              <Pressable
-                {...props}
-                android_ripple={{
-                  color: "#CFE0D9",
-                  radius: 25,
-                }}
+              <TouchableOpacity
+                {...(props as TouchableOpacityProps)}
+                activeOpacity={0.7}
+                style={props.style}
               />
             ),
             tabBarIcon: ({ color, focused }) => (
@@ -416,12 +421,10 @@ const TabsLayout = () => {
             title: "Profile",
             headerShown: false,
             tabBarButton: (props) => (
-              <Pressable
-                {...props}
-                android_ripple={{
-                  color: "#CFE0D9",
-                  radius: 25,
-                }}
+              <TouchableOpacity
+                {...(props as TouchableOpacityProps)}
+                activeOpacity={0.7}
+                style={props.style}
               />
             ),
             tabBarIcon: ({ color, focused }) => (

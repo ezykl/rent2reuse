@@ -502,7 +502,6 @@ const AddListing = () => {
       location: userLocation || "",
       owner: { id: "", fullname: "" },
       downpaymentPercentage: "",
-      downpaymentTiming: "reservation", // "reservation" or "pickup"
       enableDownpayment: false,
     });
 
@@ -887,14 +886,10 @@ const AddListing = () => {
           },
           createdAt: serverTimestamp(),
           itemStatus: "Available",
-          paymentSettings: {
-            downpayment: formData.enableDownpayment
-              ? {
-                  percentage: Number(formData.downpaymentPercentage),
-                  timing: formData.downpaymentTiming,
-                }
-              : null,
+          downPayment: {
+            percentage: Number(formData.downpaymentPercentage),
           },
+          enableAI: useAI,
         };
 
         Toast.show({
@@ -1310,14 +1305,14 @@ const AddListing = () => {
         {useAI && (
           <>
             {showNoMarketData ? (
-              <View className="bg-yellow-50 border-l-4 border-yellow-400 p-3 rounded-xl mb-4">
+              <View className="bg-yellow-50 border border-yellow-400 p-3 rounded-xl mb-4">
                 <Text className="text-yellow-700 font-pmedium">
                   No market data found for this item and condition. Please set a
                   price you think is fair.
                 </Text>
               </View>
             ) : suggestedPrices ? (
-              <View className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded-xl mb-4">
+              <View className="bg-blue-50 border border-blue-400 p-3 rounded-xl mb-4">
                 <Text className="text-blue-700 font-psemibold mb-2">
                   Market Price Suggestions
                 </Text>
@@ -1439,10 +1434,11 @@ const AddListing = () => {
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-1">
                   <Text className="text-secondary-400 font-pmedium">
-                    Downpayment Requirement (Optional)
+                    Require Downpayment
                   </Text>
                   <Text className="text-secondary-300 font-pregular text-xs">
-                    Secures reservation and reduces remaining balance
+                    Secures rental and must be paid at pickup before handing
+                    over the item
                   </Text>
                 </View>
                 <Switch
@@ -1474,7 +1470,7 @@ const AddListing = () => {
                   {/* Percentage Input */}
                   <View className="mb-3">
                     <Text className="text-secondary-400 font-pmedium mb-2">
-                      Downpayment Percentage
+                      Downpayment Amount
                     </Text>
                     <View className="flex-row gap-2 mb-2">
                       {/* Quick Select Buttons */}
@@ -1547,80 +1543,6 @@ const AddListing = () => {
                     )}
                   </View>
 
-                  {/* Downpayment Collection Timing */}
-                  <View className="mb-3">
-                    <Text className="text-secondary-400 font-pmedium mb-2">
-                      Collect downpayment at:
-                    </Text>
-                    <View className="flex-row gap-2">
-                      <TouchableOpacity
-                        onPress={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            downpaymentTiming: "reservation",
-                          }))
-                        }
-                        className={`flex-1 py-3 px-3 rounded-xl border ${
-                          formData.downpaymentTiming === "reservation"
-                            ? "bg-primary border-primary"
-                            : "bg-white border-gray-300"
-                        }`}
-                      >
-                        <Text
-                          className={`text-center font-pmedium ${
-                            formData.downpaymentTiming === "reservation"
-                              ? "text-white"
-                              : "text-secondary-400"
-                          }`}
-                        >
-                          At Reservation
-                        </Text>
-                        <Text
-                          className={`text-center font-pregular text-xs mt-1 ${
-                            formData.downpaymentTiming === "reservation"
-                              ? "text-white/80"
-                              : "text-secondary-300"
-                          }`}
-                        >
-                          Secures booking immediately
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            downpaymentTiming: "pickup",
-                          }))
-                        }
-                        className={`flex-1 py-3 px-3 rounded-xl border ${
-                          formData.downpaymentTiming === "pickup"
-                            ? "bg-primary border-primary"
-                            : "bg-white border-gray-300"
-                        }`}
-                      >
-                        <Text
-                          className={`text-center font-pmedium ${
-                            formData.downpaymentTiming === "pickup"
-                              ? "text-white"
-                              : "text-secondary-400"
-                          }`}
-                        >
-                          At Pickup
-                        </Text>
-                        <Text
-                          className={`text-center font-pregular text-xs mt-1 ${
-                            formData.downpaymentTiming === "pickup"
-                              ? "text-white/80"
-                              : "text-secondary-300"
-                          }`}
-                        >
-                          Pay when collecting item
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
                   {/* Payment Example */}
                   {formData.downpaymentPercentage &&
                     formData.price &&
@@ -1640,7 +1562,8 @@ const AddListing = () => {
                           ).toLocaleString()}
                         </Text>
                         <Text className="text-blue-600 font-pregular text-sm mb-1">
-                          • Downpayment ({formData.downpaymentPercentage}%): ₱
+                          • Required Downpayment (
+                          {formData.downpaymentPercentage}%): ₱
                           {Math.round(
                             (Number(formData.price) *
                               Number(formData.minimumDays) *
@@ -1660,9 +1583,8 @@ const AddListing = () => {
                           ).toLocaleString()}
                         </Text>
                         <Text className="text-blue-500 font-pregular text-xs mt-2">
-                          {formData.downpaymentTiming === "reservation"
-                            ? "Downpayment collected when renter books your item"
-                            : "Downpayment collected when renter picks up the item"}
+                          Downpayment must be paid at pickup before item
+                          handover
                         </Text>
                       </View>
                     )}
@@ -1675,17 +1597,17 @@ const AddListing = () => {
               <View className="flex-row items-center mb-2">
                 <Text className="text-2xl mr-2">💡</Text>
                 <Text className="text-green-700 font-psemibold">
-                  Why use downpayment?
+                  Why require a downpayment?
                 </Text>
               </View>
               <Text className="text-green-600 font-pregular text-sm mb-1">
-                • Reduces no-shows and cancellations
-              </Text>
-              <Text className="text-green-600 font-pregular text-sm mb-1">
                 • Ensures serious renters only
               </Text>
+              <Text className="text-green-600 font-pregular text-sm mb-1">
+                • Acts as security deposit
+              </Text>
               <Text className="text-green-600 font-pregular text-sm">
-                • Provides upfront payment security
+                • Reduces risk of item damage/loss
               </Text>
             </View>
           </View>

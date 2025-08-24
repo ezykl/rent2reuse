@@ -32,6 +32,10 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import LottieView from "lottie-react-native";
+import DateTimePicker, {
+  DateType,
+  useDefaultClassNames,
+} from "react-native-ui-datepicker";
 
 dayjs.extend(isSameOrAfter);
 dayjs.extend(relativeTime);
@@ -72,214 +76,16 @@ interface RequestType extends Omit<RentRequestData, "createdAt"> {
 
 interface RequestFilters {
   duration: number | null;
-  startDate: Date | null;
+  dateRange: {
+    startDate: Date | null;
+    endDate: Date | null;
+  };
   sortBy: "newest" | "oldest" | "price_asc" | "price_desc" | "duration";
   priceRange: {
     min: number;
     max: number;
   };
 }
-
-// Simple Date Picker Component
-const SimpleDatePicker: React.FC<{
-  value: Date | null;
-  onSelect: (date: Date) => void;
-  onClear: () => void;
-}> = ({ value, onSelect, onClear }) => {
-  const [showPicker, setShowPicker] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-
-  const months = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-
-  const getDaysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (month: number, year: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-
-  const renderCalendar = () => {
-    const daysInMonth = getDaysInMonth(selectedMonth, selectedYear);
-    const firstDay = getFirstDayOfMonth(selectedMonth, selectedYear);
-    const today = new Date();
-    const days = [];
-
-    // Empty cells for days before month starts
-    for (let i = 0; i < firstDay; i++) {
-      days.push(<View key={`empty-${i}`} className="w-10 h-10" />);
-    }
-
-    // Days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(selectedYear, selectedMonth, day);
-      const isToday = date.toDateString() === today.toDateString();
-      const isSelected = value && date.toDateString() === value.toDateString();
-      const isPast = date < today && !isToday;
-
-      days.push(
-        <TouchableOpacity
-          key={day}
-          onPress={() => {
-            if (!isPast) {
-              onSelect(date);
-              setShowPicker(false);
-            }
-          }}
-          disabled={isPast}
-          className={`w-10 h-10 items-center justify-center rounded-full ${
-            isSelected
-              ? "bg-primary"
-              : isToday
-              ? "bg-blue-100"
-              : isPast
-              ? "opacity-30"
-              : ""
-          }`}
-        >
-          <Text
-            className={`text-sm ${
-              isSelected
-                ? "text-white font-pbold"
-                : isToday
-                ? "text-primary font-psemibold"
-                : isPast
-                ? "text-gray-300"
-                : "text-gray-700"
-            }`}
-          >
-            {day}
-          </Text>
-        </TouchableOpacity>
-      );
-    }
-
-    return days;
-  };
-
-  return (
-    <View>
-      <TouchableOpacity
-        onPress={() => setShowPicker(true)}
-        className="flex-row items-center justify-between bg-gray-100 rounded-lg px-4 py-3"
-      >
-        <Text
-          className={`${
-            value ? "text-gray-800" : "text-gray-500"
-          } font-pmedium`}
-        >
-          {value ? dayjs(value).format("MMM D, YYYY") : "Select date"}
-        </Text>
-        <Image
-          source={icons.calendar}
-          className="w-5 h-5"
-          tintColor="#6B7280"
-        />
-      </TouchableOpacity>
-
-      {value && (
-        <TouchableOpacity onPress={onClear} className="mt-2">
-          <Text className="text-primary font-pmedium text-center">
-            Clear Date
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <Modal
-        visible={showPicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPicker(false)}
-      >
-        <View className="flex-1 bg-black/50 justify-center items-center">
-          <View className="bg-white rounded-2xl p-4 mx-6 w-100">
-            {/* Header */}
-            <View className="flex-row items-center justify-between mb-4">
-              <TouchableOpacity
-                onPress={() => {
-                  if (selectedMonth === 0) {
-                    setSelectedMonth(11);
-                    setSelectedYear(selectedYear - 1);
-                  } else {
-                    setSelectedMonth(selectedMonth - 1);
-                  }
-                }}
-                className="p-2"
-              >
-                <Image
-                  source={icons.leftArrow}
-                  className="w-6 h-6"
-                  tintColor="#374151"
-                />
-              </TouchableOpacity>
-
-              <Text className="font-pbold text-lg">
-                {months[selectedMonth]} {selectedYear}
-              </Text>
-
-              <TouchableOpacity
-                onPress={() => {
-                  if (selectedMonth === 11) {
-                    setSelectedMonth(0);
-                    setSelectedYear(selectedYear + 1);
-                  } else {
-                    setSelectedMonth(selectedMonth + 1);
-                  }
-                }}
-                className="p-2"
-              >
-                <Image
-                  source={icons.rightArrow}
-                  className="w-6 h-6"
-                  tintColor="#374151"
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Days of week */}
-            <View className="flex-row justify-between mb-2">
-              {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
-                <Text
-                  key={index}
-                  className="w-10 text-center font-psemibold text-gray-600 text-xs"
-                >
-                  {day}
-                </Text>
-              ))}
-            </View>
-
-            {/* Calendar Grid */}
-            <View className="flex-row flex-wrap">{renderCalendar()}</View>
-
-            {/* Close Button */}
-            <TouchableOpacity
-              onPress={() => setShowPicker(false)}
-              className="mt-4 bg-gray-100 py-3 rounded-lg"
-            >
-              <Text className="text-center font-pmedium text-gray-600">
-                Close
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-};
 
 // Compact RequestCard Component with Toggle
 const RequestCard: React.FC<{
@@ -576,33 +382,41 @@ const ViewRequests = () => {
   const [allRequests, setAllRequests] = useState<RequestType[]>([]); // Store original data
   const [filteredRequests, setFilteredRequests] = useState<RequestType[]>([]); // Store filtered data
   const [expandedCard, setExpandedCard] = useState<string | null>(null);
-
+  const defaultClassNames = useDefaultClassNames();
+  const [showCalendar, setShowCalendar] = useState(false);
   const toggleCardExpansion = (requestId: string) => {
     setExpandedCard(expandedCard === requestId ? null : requestId);
   };
   const { minutesToTime } = useTimeConverter();
-
+  const today = dayjs().add(1, "day").startOf("day");
+  const minimumDate = today.toDate();
   // Add filter states
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<RequestFilters>({
     duration: null,
-    startDate: null,
+    dateRange: {
+      startDate: null,
+      endDate: null,
+    },
+    sortBy: "newest",
     priceRange: {
       min: 0,
       max: 10000,
     },
-    sortBy: "newest",
   });
 
   // Add a new state for temporary filters
   const [tempFilters, setTempFilters] = useState<RequestFilters>({
     duration: null,
-    startDate: null,
+    dateRange: {
+      startDate: null,
+      endDate: null,
+    },
+    sortBy: "newest",
     priceRange: {
       min: 0,
       max: 10000,
     },
-    sortBy: "newest",
   });
 
   useEffect(() => {
@@ -626,14 +440,38 @@ const ViewRequests = () => {
       );
     }
 
-    // Apply start date filter
-    if (currentFilters.startDate) {
-      filtered = filtered.filter((request) =>
-        dayjs(request.startDate.toDate()).isSameOrAfter(
-          currentFilters.startDate,
-          "day"
-        )
-      );
+    // Apply date range filter
+    if (
+      currentFilters.dateRange.startDate ||
+      currentFilters.dateRange.endDate
+    ) {
+      filtered = filtered.filter((request) => {
+        const requestStart = dayjs(request.startDate.toDate());
+
+        if (
+          currentFilters.dateRange.startDate &&
+          currentFilters.dateRange.endDate
+        ) {
+          // Check if request start date falls within the selected range
+          return (
+            requestStart.isAfter(
+              dayjs(currentFilters.dateRange.startDate).startOf("day")
+            ) &&
+            requestStart.isBefore(
+              dayjs(currentFilters.dateRange.endDate).endOf("day")
+            )
+          );
+        } else if (currentFilters.dateRange.startDate) {
+          return requestStart.isAfter(
+            dayjs(currentFilters.dateRange.startDate).startOf("day")
+          );
+        } else if (currentFilters.dateRange.endDate) {
+          return requestStart.isBefore(
+            dayjs(currentFilters.dateRange.endDate).endOf("day")
+          );
+        }
+        return true;
+      });
     }
 
     // Apply sorting
@@ -666,17 +504,15 @@ const ViewRequests = () => {
   const fetchItemAndRequests = async () => {
     try {
       setIsLoading(true);
-
       const requestsRef = collection(db, "rentRequests");
       const q = query(requestsRef, where("itemId", "==", id));
-
       const querySnapshot = await getDocs(q);
 
       const requestsData = await Promise.all(
         querySnapshot.docs.map(async (document) => {
           const data = document.data() as RentRequestData;
-
           let requesterData: UserData | undefined;
+
           try {
             const userDoc = await getDoc(doc(db, "users", data.requesterId));
             if (userDoc.exists()) {
@@ -695,13 +531,14 @@ const ViewRequests = () => {
         })
       );
 
-      // Sort by newest first by default
-      const sortedData = [...requestsData].sort(
+      // Store original data
+      setAllRequests(requestsData);
+
+      // Apply initial sorting without filters
+      const initialSorted = [...requestsData].sort(
         (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
       );
-
-      setAllRequests(sortedData);
-      setFilteredRequests(sortedData); // Set filtered requests with default sorting
+      setFilteredRequests(initialSorted);
     } catch (error) {
       console.error("Error:", error);
       Toast.show({
@@ -782,13 +619,100 @@ const ViewRequests = () => {
   const getActiveFiltersCount = () => {
     let count = 0;
     if (filters.duration !== null) count++;
-    if (filters.startDate !== null) count++;
+    if (
+      filters.dateRange.startDate !== null ||
+      filters.dateRange.endDate !== null
+    )
+      count++;
     if (filters.sortBy !== "newest") count++;
     if (filters.priceRange.min !== 0 || filters.priceRange.max !== 10000)
       count++;
     return count;
   };
 
+  // First, update the date picker modal to be a separate component
+  const DatePickerModal = ({
+    visible,
+    onClose,
+    tempFilters,
+    setTempFilters,
+  }: {
+    visible: boolean;
+    onClose: () => void;
+    tempFilters: RequestFilters;
+    setTempFilters: (filters: RequestFilters) => void;
+  }) => {
+    return (
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <View className="flex-1 bg-black/50">
+          <View className="bg-white mt-auto rounded-t-3xl">
+            <View className="flex-row justify-between items-center p-4 border-b border-gray-200">
+              <Text className="text-lg font-pbold">Select Dates</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Image source={icons.close} className="w-6 h-6" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="p-4">
+              <DateTimePicker
+                mode="range"
+                startDate={tempFilters.dateRange.startDate}
+                endDate={tempFilters.dateRange.endDate}
+                disableMonthPicker
+                disableYearPicker
+                onChange={(date: any) => {
+                  setTempFilters({
+                    ...tempFilters,
+                    dateRange: {
+                      startDate: date.startDate as Date,
+                      endDate: date.endDate as Date,
+                    },
+                  });
+                }}
+                showOutsideDays={true}
+                classNames={{
+                  ...useDefaultClassNames(),
+                  weekday_label: "text-secondary-300 font-pregular",
+                  year_selector_label: "font-pbold text-xl text-primary",
+                  month_selector_label: "font-pbold text-xl text-primary",
+                  day_label: "font-pregular text-lg",
+                  month_label: "font-pregular text-lg",
+                  year_label: "font-pregular text-lg",
+                  selected_month_label: "text-white",
+                  selected_year_label: "text-white",
+                  outside_label: "text-gray-400",
+                  range_fill: "bg-primary/20",
+                  range_middle_label: "text-gray-600",
+                  range_start_label: "text-white font-pmedium",
+                  range_end_label: "text-white font-pmedium",
+                  range_start: "bg-primary border-2 border-primary",
+                  range_end: "bg-primary border-2 border-primary",
+                  day: `${defaultClassNames.day} hover:bg-amber-100`,
+                  disabled: "opacity-50",
+                }}
+              />
+            </View>
+
+            <View className="p-4 border-t border-gray-200">
+              <TouchableOpacity
+                onPress={onClose}
+                className="bg-primary py-3 rounded-lg"
+              >
+                <Text className="text-white text-center font-pbold">Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // Then update the FilterSheet component to use the new DatePickerModal
   const FilterSheet = () => (
     <>
       {showFilters && (
@@ -857,20 +781,139 @@ const ViewRequests = () => {
                 </Text>
               </View>
 
-              {/* Start Date Filter */}
+              {/* Date Range Filter */}
               <View className="mb-6">
-                <Text className="text-base font-psemibold mb-3 ">
-                  Start From
+                <Text className="text-base font-psemibold mb-3">
+                  Request Date Range
                 </Text>
-                <SimpleDatePicker
-                  value={tempFilters.startDate}
-                  onSelect={(date) =>
-                    setTempFilters((prev) => ({ ...prev, startDate: date }))
-                  }
-                  onClear={() =>
-                    setTempFilters((prev) => ({ ...prev, startDate: null }))
-                  }
-                />
+
+                {/* Date Range Display Button */}
+                <TouchableOpacity
+                  onPress={() => setShowCalendar(true)}
+                  className="bg-gray-100 rounded-lg px-4 py-3 flex-row justify-between items-center"
+                >
+                  <Text className="font-pmedium text-gray-800">
+                    {tempFilters.dateRange.startDate
+                      ? dayjs(tempFilters.dateRange.startDate).format(
+                          "MMM D, YYYY"
+                        )
+                      : "Start Date"}
+                    {" - "}
+                    {tempFilters.dateRange.endDate
+                      ? dayjs(tempFilters.dateRange.endDate).format(
+                          "MMM D, YYYY"
+                        )
+                      : "End Date"}
+                  </Text>
+                  <Image
+                    source={icons.calendar}
+                    className="w-5 h-5"
+                    tintColor="#374151"
+                  />
+                </TouchableOpacity>
+
+                {/* Clear Dates Button */}
+                {(tempFilters.dateRange.startDate ||
+                  tempFilters.dateRange.endDate) && (
+                  <TouchableOpacity
+                    onPress={() =>
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        dateRange: { startDate: null, endDate: null },
+                      }))
+                    }
+                    className="mt-2"
+                  >
+                    <Text className="text-primary font-pmedium">
+                      Clear Dates
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Date Picker Modal */}
+                {showCalendar && (
+                  <Modal
+                    visible={showCalendar}
+                    transparent
+                    animationType="fade"
+                    onRequestClose={() => setShowCalendar(false)}
+                  >
+                    <View className="flex-1 bg-black/50">
+                      <View className="bg-white mt-auto rounded-t-3xl">
+                        {/* Header */}
+                        <View className="flex-row justify-between items-center p-4 border-b border-gray-200">
+                          <Text className="text-lg font-pbold">
+                            Select Dates
+                          </Text>
+                          <TouchableOpacity
+                            onPress={() => setShowCalendar(false)}
+                            hitSlop={{
+                              top: 10,
+                              bottom: 10,
+                              left: 10,
+                              right: 10,
+                            }}
+                          >
+                            <Image source={icons.close} className="w-6 h-6" />
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Date Picker */}
+                        <View className="p-4">
+                          <DateTimePicker
+                            mode="range"
+                            startDate={tempFilters.dateRange.startDate}
+                            endDate={tempFilters.dateRange.endDate}
+                            onChange={(date: any) => {
+                              setTempFilters((prev) => ({
+                                ...prev,
+                                dateRange: {
+                                  startDate: date.startDate as Date,
+                                  endDate: date.endDate as Date,
+                                },
+                              }));
+                            }}
+                            showOutsideDays={true}
+                            classNames={{
+                              ...useDefaultClassNames(),
+                              weekday_label: "text-secondary-300 font-pregular",
+                              year_selector_label:
+                                "font-pbold text-xl text-primary",
+                              month_selector_label:
+                                "font-pbold text-xl text-primary",
+                              day_label: "font-pregular text-lg",
+                              month_label: "font-pregular text-lg",
+                              year_label: "font-pregular text-lg",
+                              selected_month_label: "text-white",
+                              selected_year_label: "text-white",
+                              outside_label: "text-gray-400",
+                              range_fill: "bg-primary/20",
+                              range_middle_label: "text-gray-600",
+                              range_start_label: "text-white font-pmedium",
+                              range_end_label: "text-white font-pmedium",
+                              range_start: "bg-primary border-2 border-primary",
+                              range_end: "bg-primary border-2 border-primary",
+                              day: `${defaultClassNames.day} hover:bg-amber-100`,
+                              disabled: "opacity-50",
+                            }}
+                          />
+                        </View>
+
+                        {/* Footer */}
+                        <View className="p-4 border-t border-gray-200">
+                          <TouchableOpacity
+                            onPress={() => setShowCalendar(false)}
+                            className="bg-primary py-3 rounded-lg"
+                          >
+                            <Text className="text-white text-center font-pbold">
+                              Done
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </Modal>
+                )}
               </View>
 
               {/* Sort Options */}
@@ -920,12 +963,16 @@ const ViewRequests = () => {
             <View className="flex-row gap-3 mt-4 pt-4 border-t border-gray-100">
               <TouchableOpacity
                 onPress={() => {
-                  setTempFilters({
+                  const resetFilters: RequestFilters = {
                     duration: null,
-                    startDate: null,
-                    sortBy: "newest",
+                    dateRange: {
+                      startDate: null,
+                      endDate: null,
+                    },
+                    sortBy: "newest" as const,
                     priceRange: { min: 0, max: 10000 },
-                  });
+                  };
+                  setTempFilters(resetFilters);
                 }}
                 className="flex-1 py-4 rounded-xl border border-gray-200"
               >
@@ -936,7 +983,7 @@ const ViewRequests = () => {
               <TouchableOpacity
                 onPress={() => {
                   setFilters(tempFilters);
-                  applyFilters(tempFilters);
+                  applyFilters(tempFilters); // Pass tempFilters directly
                   setShowFilters(false);
                 }}
                 className="flex-1 bg-primary py-4 rounded-xl"
@@ -990,7 +1037,7 @@ const ViewRequests = () => {
             className="relative"
           >
             <Image
-              source={icons.filter || icons.setting}
+              source={icons.filter}
               className="w-8 h-8"
               tintColor="#374151"
             />
@@ -1016,9 +1063,11 @@ const ViewRequests = () => {
                     {filters.duration} day{filters.duration !== 1 ? "s" : ""}
                   </Text>
                   <TouchableOpacity
-                    onPress={() =>
-                      setFilters((prev) => ({ ...prev, duration: null }))
-                    }
+                    onPress={() => {
+                      const newFilters = { ...filters, duration: null };
+                      setFilters(newFilters);
+                      applyFilters(newFilters); // Apply filters immediately after removing
+                    }}
                   >
                     <Image
                       source={icons.close}
@@ -1029,15 +1078,22 @@ const ViewRequests = () => {
                 </View>
               )}
 
-              {filters.startDate && (
+              {filters.dateRange.startDate && (
                 <View className="bg-primary px-3 py-2 rounded-full flex-row items-center">
                   <Text className="text-white text-sm font-pmedium mr-1">
-                    From {dayjs(filters.startDate).format("MMM D")}
+                    {dayjs(filters.dateRange.startDate).format("MMM D")}
+                    {filters.dateRange.endDate &&
+                      ` - ${dayjs(filters.dateRange.endDate).format("MMM D")}`}
                   </Text>
                   <TouchableOpacity
-                    onPress={() =>
-                      setFilters((prev) => ({ ...prev, startDate: null }))
-                    }
+                    onPress={() => {
+                      const newFilters = {
+                        ...filters,
+                        dateRange: { startDate: null, endDate: null },
+                      };
+                      setFilters(newFilters);
+                      applyFilters(newFilters);
+                    }}
                   >
                     <Image
                       source={icons.close}
@@ -1062,9 +1118,14 @@ const ViewRequests = () => {
                       : ""}
                   </Text>
                   <TouchableOpacity
-                    onPress={() =>
-                      setFilters((prev) => ({ ...prev, sortBy: "newest" }))
-                    }
+                    onPress={() => {
+                      const newFilters: RequestFilters = {
+                        ...filters,
+                        sortBy: "newest",
+                      };
+                      setFilters(newFilters);
+                      applyFilters(newFilters);
+                    }}
                   >
                     <Image
                       source={icons.close}
@@ -1074,6 +1135,25 @@ const ViewRequests = () => {
                   </TouchableOpacity>
                 </View>
               )}
+
+              {/* Clear All button */}
+              <TouchableOpacity
+                onPress={() => {
+                  const resetFilters: RequestFilters = {
+                    duration: null,
+                    dateRange: { startDate: null, endDate: null },
+                    sortBy: "newest" as const,
+                    priceRange: { min: 0, max: 10000 },
+                  };
+                  setFilters(resetFilters);
+                  applyFilters(resetFilters);
+                }}
+                className="bg-gray-200 px-3 py-2 rounded-full"
+              >
+                <Text className="text-gray-600 text-sm font-pmedium">
+                  Clear All
+                </Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
@@ -1137,7 +1217,10 @@ const ViewRequests = () => {
                 onPress={() => {
                   setFilters({
                     duration: null,
-                    startDate: null,
+                    dateRange: {
+                      startDate: null,
+                      endDate: null,
+                    },
                     sortBy: "newest",
                     priceRange: { min: 0, max: 10000 },
                   });

@@ -25,6 +25,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import dayjs from "dayjs";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 import { db, auth } from "@/lib/firebaseConfig";
 import { router } from "expo-router";
@@ -539,9 +540,6 @@ const ChatList = () => {
                     : "font-regular text-gray-800"
                 }`}
                 numberOfLines={1}
-                style={{
-                  textTransform: hasUnreadMessages ? "uppercase" : "none",
-                }}
               >
                 {formatFullName(item.recipientName)}
                 {item.itemDetails?.name && (
@@ -563,16 +561,23 @@ const ChatList = () => {
             </View>
 
             {item.lastMessageTime && (
+              // <View className="gap-2 flex-row">
               <Text
                 className={`text-xs ${
                   hasUnreadMessages ? "font-bold text-primary" : "text-gray-500"
                 }`}
               >
+                {" "}
                 {item.lastMessageTime?.toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
+                {/*
+                </Text>
+                <Text className="text-xs text-gray-500"> */}
+                {/* {dayjs(item.lastMessageTime).fromNow()} */}
               </Text>
+              // </View>
             )}
           </View>
 
@@ -582,9 +587,6 @@ const ChatList = () => {
                 hasUnreadMessages ? "font-bold text-gray-900" : "text-gray-500"
               }`}
               numberOfLines={1}
-              style={{
-                textTransform: hasUnreadMessages ? "uppercase" : "none",
-              }}
             >
               {item.isCurrentUserLastSender && (
                 <Text className="text-gray-400">You: </Text>
