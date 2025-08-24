@@ -953,24 +953,25 @@ const Profile: React.FC = () => {
             />
           </TouchableOpacity>
 
-          {/* <TouchableOpacity
-            onPress={() => router.push("/clear-history")}
+          <TouchableOpacity
+            onPress={() => router.push("/setting")}
             className="flex-row items-center px-6 py-4"
           >
             <Image
-              source={icons.history}
+              source={icons.faq}
               className="w-6 h-6 mr-3"
               tintColor="#6B7280"
+              resizeMode="contain"
             />
             <Text className="flex-1 font-pmedium text-gray-800">
-              Clear history
+              Help and Info
             </Text>
             <Image
               source={icons.arrowRight}
               className="w-5 h-5"
               tintColor="#9CA3AF"
             />
-          </TouchableOpacity> */}
+          </TouchableOpacity>
 
           {/* <TouchableOpacity
             onPress={handleLogout}
@@ -999,7 +1000,7 @@ const Profile: React.FC = () => {
       className="bg-white h-full px-4"
       style={{ paddingBottom: insets.bottom, paddingTop: insets.top }}
     >
-      {!showProfileCompletion && <Header variant="setting" />}
+      {!showProfileCompletion && <Header />}
       <KeyboardAvoidingView
         behavior={Platform.OS === "android" ? "height" : "padding"}
         style={{ flex: 1 }}

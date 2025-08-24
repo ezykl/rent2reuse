@@ -23,20 +23,18 @@ const Setting = () => {
   const [showFAQ, setShowFAQ] = useState(false);
 
   return (
-    <SafeAreaView className="bg-white h-full px-4 pt-8">
+    <SafeAreaView className="bg-white h-full px-4 pt-10">
       {/* HEADER */}
       <View className="flex-row items-center justify-between my-4">
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Image
             source={icons.leftArrow}
-            className="h-[28px] w-[28px]"
-            resizeMode="contain"
+            className="w-8 h-8"
+            tintColor="#374151"
           />
         </TouchableOpacity>
 
-        <Text className="text-center font-psemibold text-2xl flex-1">
-          Settings
-        </Text>
+        <Text className="text-xl font-psemibold">Help & Info</Text>
 
         <View className="w-[28px]" />
       </View>
@@ -69,26 +67,27 @@ const Setting = () => {
       {/* Terms Modal */}
       <Modal
         visible={showTerms}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         onRequestClose={() => setShowTerms(false)}
       >
         <SafeAreaView className="flex-1 bg-white">
           <View className="bg-white border-b border-gray-200 px-4 py-4">
             <View className="flex-row items-center">
+              <View className="w-8 h-8" />
+              <Text className="flex-1 text-center text-xl font-semibold text-gray-900">
+                Terms & Conditions
+              </Text>
               <TouchableOpacity
                 onPress={() => setShowTerms(false)}
                 className="w-10 h-10 items-center justify-center"
               >
                 <Image
-                  source={icons.leftArrow}
-                  className="w-6 h-6"
-                  tintColor="#374151"
+                  source={icons.close}
+                  className="w-8 h-8"
+                  tintColor="#ef4444"
                 />
               </TouchableOpacity>
-              <Text className="flex-1 text-center text-lg font-semibold text-gray-900 mr-10">
-                Terms & Conditions
-              </Text>
             </View>
           </View>
 
@@ -216,26 +215,26 @@ const Setting = () => {
       {/* Privacy Policy WebView Modal */}
       <Modal
         visible={showPrivacyPolicy}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         onRequestClose={() => setShowPrivacyPolicy(false)}
       >
         <SafeAreaView className="flex-1 bg-white">
           <View className="bg-white border-b border-gray-200 px-4 py-4">
             <View className="flex-row items-center">
-              <TouchableOpacity
-                onPress={() => setShowPrivacyPolicy(false)}
-                className="w-10 h-10 items-center justify-center"
-              >
-                <Image
-                  source={icons.leftArrow}
-                  className="w-6 h-6"
-                  tintColor="#374151"
-                />
-              </TouchableOpacity>
-              <Text className="flex-1 text-center text-lg font-semibold text-gray-900 mr-10">
+              <Text className="flex-1 text-center text-xl font-semibold text-gray-900">
                 Privacy Policy
               </Text>
+              <TouchableOpacity
+                onPress={() => setShowPrivacyPolicy(false)}
+                className=" items-center justify-center"
+              >
+                <Image
+                  source={icons.close}
+                  className="w-8 h-8"
+                  tintColor="#ef4444"
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -267,26 +266,27 @@ const Setting = () => {
       {/* About Us Modal */}
       <Modal
         visible={showAbout}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         onRequestClose={() => setShowAbout(false)}
       >
         <SafeAreaView className="flex-1 bg-white">
           <View className="bg-white border-b border-gray-200 px-4 py-4">
             <View className="flex-row items-center">
-              <TouchableOpacity
-                onPress={() => setShowAbout(false)}
-                className="w-10 h-10 items-center justify-center"
-              >
-                <Image
-                  source={icons.leftArrow}
-                  className="w-6 h-6"
-                  tintColor="#374151"
-                />
-              </TouchableOpacity>
-              <Text className="flex-1 text-center text-lg font-semibold text-gray-900 mr-10">
+              <View className="w-8 h-8" />
+              <Text className="flex-1 text-center text-xl font-semibold text-gray-900">
                 About Us
               </Text>
+              <TouchableOpacity
+                onPress={() => setShowAbout(false)}
+                className=" items-center justify-center"
+              >
+                <Image
+                  source={icons.close}
+                  className="w-8 h-8"
+                  tintColor="#ef4444"
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -351,26 +351,27 @@ const Setting = () => {
       {/* FAQ Modal */}
       <Modal
         visible={showFAQ}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="fullScreen"
         onRequestClose={() => setShowFAQ(false)}
       >
         <SafeAreaView className="flex-1 bg-white">
           <View className="bg-white border-b border-gray-200 px-4 py-4">
             <View className="flex-row items-center">
-              <TouchableOpacity
-                onPress={() => setShowFAQ(false)}
-                className="w-10 h-10 items-center justify-center"
-              >
-                <Image
-                  source={icons.leftArrow}
-                  className="w-6 h-6"
-                  tintColor="#374151"
-                />
-              </TouchableOpacity>
-              <Text className="flex-1 text-center text-lg font-semibold text-gray-900 mr-10">
+              <View className="w-8 h-8" />
+              <Text className="flex-1 text-center text-xl font-semibold text-gray-900 ">
                 Frequently Asked Questions
               </Text>
+              <TouchableOpacity
+                onPress={() => setShowFAQ(false)}
+                className="items-center justify-center"
+              >
+                <Image
+                  source={icons.close}
+                  className="w-8 h-8"
+                  tintColor="#ef4444"
+                />
+              </TouchableOpacity>
             </View>
           </View>
 

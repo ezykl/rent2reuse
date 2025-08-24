@@ -207,9 +207,21 @@ export default function UserProfile() {
           />
         </TouchableOpacity>
         <View className="flex-1 items-center">
-          <Text className="text-xl font-pbold text-gray-800">Item Details</Text>
+          <Text className="text-xl font-pbold text-gray-800">User Details</Text>
         </View>
-        <View className="w-8" />
+        <View className="flex-row items-center">
+          {/* Report button */}
+          <TouchableOpacity
+            onPress={() => router.push(`/report/${userProfile?.id}`)}
+            className="mr-3"
+          >
+            <Image
+              source={icons.report}
+              className="w-6 h-6"
+              tintColor="#EF4444"
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -248,7 +260,7 @@ export default function UserProfile() {
                 {userProfile?.lastname}
               </Text>
               <Text className="text-gray-500 text-sm ">
-                Created {formatFirestoreDate(userProfile?.createdAt)}
+                Joined {formatFirestoreDate(userProfile?.createdAt)}
               </Text>
 
               <View className="flex-row items-center bg-blue-50 px-2 py-1 rounded-full">
@@ -275,10 +287,10 @@ export default function UserProfile() {
                 <Text className="text-gray-500 mb-2">No ratings yet</Text>
               )}
               {userProfile?.location?.address && (
-                <View className="flex-row items-center">
+                <View className=" gap-4 px-6 flex-row items-center">
                   <Image
                     source={icons.location}
-                    className="w-4 h-4 mr-2"
+                    className="w-6 h-6"
                     tintColor="#6B7280"
                   />
                   <Text className="text-gray-600">

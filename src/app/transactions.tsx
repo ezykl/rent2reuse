@@ -112,8 +112,10 @@ const TransactionsScreen = () => {
               }`}
             >
               <Image
-                source={isIncoming ? icons.arrowRight : icons.leftArrow}
-                className="w-5 h-5"
+                source={icons.leftArrow}
+                className={`w-5 h-5 ${
+                  !isIncoming ? "rotate-90" : "-rotate-90"
+                }`}
                 tintColor={isIncoming ? "#059669" : "#dc2626"}
               />
             </View>
