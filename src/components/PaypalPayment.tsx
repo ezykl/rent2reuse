@@ -194,7 +194,9 @@ import { captureRef } from "react-native-view-shot";
 import { TransactionData } from "../types/api";
 import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
 import { useLoader } from "@/context/LoaderContext";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
+import { db, auth as firebaseAuth } from "@/lib/firebaseConfig";
 const { width, height } = Dimensions.get("window");
 
 interface PayPalPaymentProps {
@@ -263,6 +265,25 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   // Animation values
   const fadeAnim = new Animated.Value(0);
   const scaleAnim = new Animated.Value(0.8);
+
+  const createPlanActivatedNotification = async () => {
+    try {
+      const currentUser = firebaseAuth.currentUser;
+      const userNotificationsRef = collection(
+        db,
+        `users/${currentUser?.uid}/notifications`
+      );
+      await addDoc(userNotificationsRef, {
+        type: "PLAN_ACTIVATED",
+        title: "Plan Activated Successfully! 🎉",
+        message: `Your ${plan.planType} plan is now active. You can now list up to ${plan.list} items and rent up to ${plan.rent} items.`,
+        isRead: false,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error creating welcome notification:", error);
+    }
+  };
 
   const getDurationInMs = (duration: string | undefined): number => {
     if (!duration) {
@@ -427,6 +448,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
           },
         };
 
+        await createPlanActivatedNotification();
         setTransactionDetails(transactionData);
         setResultType("success");
         setIsLoading(true);

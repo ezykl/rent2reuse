@@ -497,44 +497,53 @@ const Tools = () => {
                 const chatId = requestData.chatId; // Assuming chatId is stored in request
 
                 if (chatId) {
-                  // Update chat status
+                  // Check if chat exists first
                   const chatRef = doc(db, "chat", chatId);
-                  await updateDoc(chatRef, {
-                    status: "cancelled",
-                    lastMessage: "Request cancelled by requester",
-                    lastMessageTime: serverTimestamp(),
-                  });
+                  const chatDoc = await getDoc(chatRef);
 
-                  // Add status update message
-                  await addDoc(collection(db, "chat", chatId, "messages"), {
-                    type: "statusUpdate",
-                    text: "Request cancelled by requester",
-                    senderId: auth.currentUser?.uid,
-                    createdAt: serverTimestamp(),
-                    read: false,
-                    status: "cancelled",
-                  });
-
-                  // Update rent request message in chat
-                  const messagesRef = collection(
-                    db,
-                    "chat",
-                    chatId,
-                    "messages"
-                  );
-                  const q = query(
-                    messagesRef,
-                    where("rentRequestId", "==", requestId),
-                    where("type", "==", "rentRequest")
-                  );
-
-                  const querySnapshot = await getDocs(q);
-                  if (!querySnapshot.empty) {
-                    const rentRequestMessage = querySnapshot.docs[0];
-                    await updateDoc(rentRequestMessage.ref, {
+                  if (chatDoc.exists()) {
+                    // Chat exists, proceed with updates
+                    await updateDoc(chatRef, {
                       status: "cancelled",
-                      updatedAt: serverTimestamp(),
+                      lastMessage: "Request cancelled by requester",
+                      lastMessageTime: serverTimestamp(),
                     });
+
+                    // Add status update message
+                    await addDoc(collection(db, "chat", chatId, "messages"), {
+                      type: "statusUpdate",
+                      text: "Request cancelled by requester",
+                      senderId: auth.currentUser?.uid,
+                      createdAt: serverTimestamp(),
+                      read: false,
+                      status: "cancelled",
+                    });
+
+                    // Update rent request message in chat
+                    const messagesRef = collection(
+                      db,
+                      "chat",
+                      chatId,
+                      "messages"
+                    );
+                    const q = query(
+                      messagesRef,
+                      where("rentRequestId", "==", requestId),
+                      where("type", "==", "rentRequest")
+                    );
+
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                      const rentRequestMessage = querySnapshot.docs[0];
+                      await updateDoc(rentRequestMessage.ref, {
+                        status: "cancelled",
+                        updatedAt: serverTimestamp(),
+                      });
+                    }
+                  } else {
+                    console.log(
+                      "Chat document does not exist, skipping chat updates"
+                    );
                   }
                 }
 
@@ -1362,7 +1371,7 @@ const Tools = () => {
                       </Text>
                     </View>
                   ) : (
-                    <View className="gap-4">
+                    <View className="gap-2">
                       {rentRequests
                         .filter((req) => req.type === "outgoing")
                         .map((request) => (

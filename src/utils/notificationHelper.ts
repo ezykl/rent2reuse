@@ -206,3 +206,123 @@ export const sendPushNotification = async ({
     console.error("Error sending push notification:", error);
   }
 };
+
+export const sendItemUnavailableNotifications = async (
+  declinedUserIds: string[],
+  itemData: {
+    itemId: string;
+    itemName: string;
+    acceptedRequesterName: string;
+  }
+) => {
+  const promises = declinedUserIds.map(async (userId) => {
+    try {
+      // 1. Create in-app notification
+      const uniqueId = `ITEM_UNAVAILABLE_${
+        itemData.itemId
+      }_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      await setDoc(doc(db, `users/${userId}/notifications`, uniqueId), {
+        type: "ITEM_UNAVAILABLE",
+        title: "Item No Longer Available",
+        message: `Sorry, "${itemData.itemName}" is no longer available. It has been rented to another user.`,
+        isRead: false,
+        createdAt: serverTimestamp(),
+        data: {
+          itemId: itemData.itemId,
+          reason: "rented_to_other_user",
+          route: "/tools",
+          params: { tab: "outgoing" },
+        },
+      });
+
+      // 2. Get user data for push notification
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (!userDoc.exists()) return;
+
+      const userData = userDoc.data();
+      if (userData.pushTokens?.token) {
+        // 3. Send push notification
+        await sendPushNotification({
+          to: userData.pushTokens.token,
+          title: "Item No Longer Available",
+          body: `"${itemData.itemName}" has been rented to another user.`,
+          data: {
+            type: "ITEM_UNAVAILABLE",
+            itemId: itemData.itemId,
+            reason: "rented_to_other_user",
+            route: "/tools",
+            params: { tab: "outgoing" },
+          },
+        });
+      }
+
+      console.log(`📱 Item unavailable notification sent to user: ${userId}`);
+    } catch (error) {
+      console.error(`Error sending notification to user ${userId}:`, error);
+    }
+  });
+
+  // Send all notifications concurrently
+  await Promise.allSettled(promises);
+};
+
+// Helper to send acceptance notification
+export const sendRequestAcceptedNotification = async (
+  acceptedUserId: string,
+  requestData: {
+    itemId: string;
+    itemName: string;
+    requestId: string;
+    chatId: string;
+    ownerName: string;
+  }
+) => {
+  try {
+    // 1. Create in-app notification
+    const uniqueId = `REQUEST_ACCEPTED_${requestData.requestId}_${Date.now()}`;
+
+    await setDoc(doc(db, `users/${acceptedUserId}/notifications`, uniqueId), {
+      type: "RENT_REQUEST_ACCEPTED",
+      title: "Request Accepted! 🎉",
+      message: `Great news! ${requestData.ownerName} has accepted your rental request for "${requestData.itemName}".`,
+      isRead: false,
+      createdAt: serverTimestamp(),
+      data: {
+        itemId: requestData.itemId,
+        requestId: requestData.requestId,
+        chatId: requestData.chatId,
+        route: "/chat",
+        params: { id: requestData.chatId },
+      },
+    });
+
+    // 2. Get user data for push notification
+    const userDoc = await getDoc(doc(db, "users", acceptedUserId));
+    if (!userDoc.exists()) return;
+
+    const userData = userDoc.data();
+    if (userData.pushTokens?.token) {
+      // 3. Send push notification
+      await sendPushNotification({
+        to: userData.pushTokens.token,
+        title: "Request Accepted! 🎉",
+        body: `Your rental request for "${requestData.itemName}" has been accepted!`,
+        data: {
+          type: "RENT_REQUEST_ACCEPTED",
+          itemId: requestData.itemId,
+          requestId: requestData.requestId,
+          chatId: requestData.chatId,
+          route: "/chat",
+          params: { id: requestData.chatId },
+        },
+      });
+    }
+
+    console.log(
+      `📱 Request accepted notification sent to user: ${acceptedUserId}`
+    );
+  } catch (error) {
+    console.error("Error sending acceptance notification:", error);
+  }
+};

@@ -201,7 +201,7 @@ const RentalProgressIndicator: React.FC<RentalProgressIndicatorProps> = ({
       <View className="flex-row items-center">
         {/* Progress bar */}
         <View className="flex-row items-center mr-2">
-          <View className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+          <View className="w-20 h-1 bg-gray-200 rounded-full overflow-hidden">
             <View
               className="h-full bg-primary rounded-full"
               style={{
@@ -324,7 +324,7 @@ const RentalProgressIndicator: React.FC<RentalProgressIndicatorProps> = ({
       )}
 
       {/* Next Step Preview */}
-      {currentStep.id !== "rate" && (
+      {/* {currentStep.id !== "rate" && (
         <View className="mt-4 pt-4 border-t border-gray-100">
           <Text className="text-xs font-pmedium text-gray-400 mb-2">
             NEXT STEP
@@ -348,7 +348,7 @@ const RentalProgressIndicator: React.FC<RentalProgressIndicatorProps> = ({
             </Text>
           </View>
         </View>
-      )}
+      )} */}
     </View>
   );
 };

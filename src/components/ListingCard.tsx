@@ -82,7 +82,8 @@ const ListingCard = ({ item, onEdit, onDelete, onPress }: ListingCardProps) => {
                     : "text-orange-700"
                 }`}
               >
-                {item.itemStatus}
+                {item.itemStatus.charAt(0).toUpperCase() +
+                  item.itemStatus.slice(1).toLowerCase()}
               </Text>
             </View>
           </View>

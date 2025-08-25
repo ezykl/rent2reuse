@@ -29,8 +29,12 @@ const getRequestStatus = (startDate: any, endDate: any, status: string) => {
   const start = dayjs(startDate.toDate?.() ?? startDate);
   const end = dayjs(endDate.toDate?.() ?? endDate);
 
-  // First check if request is cancelled or rejected
-  if (status === "rejected" || status === "cancelled") {
+  // First check if request is cancelled, rejected, or declined
+  if (
+    status === "rejected" ||
+    status === "cancelled" ||
+    status === "declined"
+  ) {
     return {
       label: status.charAt(0).toUpperCase() + status.slice(1),
       color: "bg-red-100 text-red-700",
@@ -84,7 +88,12 @@ const SentRequestCard = ({
 
   // Get card styles based on status and expiry
   const getCardStyle = () => {
-    if (isExpired()) {
+    if (
+      isExpired() ||
+      request.status === "declined" ||
+      request.status === "rejected" ||
+      request.status === "cancelled"
+    ) {
       return "border-gray-200 bg-gray-50"; // Faded look for expired
     }
     return "border-gray-100 bg-white"; // Normal look
@@ -98,13 +107,20 @@ const SentRequestCard = ({
           text: "text-yellow-700",
           icon: "#EAB308",
         };
-      case "approved":
+      case "accepted":
         return {
           bg: "bg-green-100",
           text: "text-green-700",
           icon: "#22C55E",
         };
       case "rejected":
+      case "declined": // Add this case
+        return {
+          bg: "bg-red-100",
+          text: "text-red-700",
+          icon: "#EF4444",
+        };
+      case "cancelled":
         return {
           bg: "bg-red-100",
           text: "text-red-700",
@@ -118,7 +134,6 @@ const SentRequestCard = ({
         };
     }
   };
-
   const convertFirestoreTimestamp = (timestamp: any) => {
     if (!timestamp) return null;
 
@@ -144,7 +159,7 @@ const SentRequestCard = ({
 
   return (
     <TouchableOpacity
-      className={`rounded-xl mb-4 shadow-sm border overflow-hidden ${getCardStyle()}`}
+      className={`rounded-xl mb-2 shadow-sm border overflow-hidden ${getCardStyle()}`}
       onPress={() => onPress(request.id)}
       activeOpacity={0.7}
     >
@@ -243,7 +258,7 @@ const SentRequestCard = ({
         </View>
 
         {/* Timeline and Cancel Button for pending requests */}
-        <View className="flex-row justify-end mt-3 gap-2">
+        <View className="flex-row justify-end  gap-2">
           {request.status === "pending" && (
             <>
               <TouchableOpacity
@@ -260,6 +275,7 @@ const SentRequestCard = ({
                   {isExpired() ? "Update Dates" : "Edit"}
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={() => onCancel(request.id)}
                 className="px-4 py-2 bg-red-50 rounded-lg"
@@ -269,6 +285,14 @@ const SentRequestCard = ({
                 </Text>
               </TouchableOpacity>
             </>
+          )}
+          {request.status === "declined" && (
+            <TouchableOpacity
+              onPress={() => onCancel(request.id)}
+              className="px-4 py-2 bg-red-50 rounded-lg"
+            >
+              <Text className="text-red-600 font-psemibold">Remove</Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>
