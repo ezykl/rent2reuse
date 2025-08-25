@@ -88,6 +88,12 @@ const NotificationCard = ({
           bgColor: "bg-orange-100",
           iconColor: "#d96c00",
         };
+      case "PLAN_ACTIVATED":
+        return {
+          icon: icons.platinumPlan,
+          bgColor: "bg-orange-100",
+          iconColor: "#d96c00",
+        };
       default:
         return {
           icon: icons.notificationOff,
@@ -157,6 +163,7 @@ const NotificationCard = ({
             <Image
               source={config.icon}
               className="w-5 h-5"
+              resizeMode="contain"
               tintColor={config.iconColor}
             />
           </View>

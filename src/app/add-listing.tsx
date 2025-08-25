@@ -1048,7 +1048,8 @@ const AddListing = () => {
       <ScrollView className="p-4">
         <View className="w-full mb-4 bg-blue-400/10 p-2 rounded-xl border border-blue-300">
           <Text className="text-blue-500 text-xs font-pmedium">
-            Step 1 of 2: Let's start with the basic information about your item.
+            Step 1 of 2: Add photos, item name, category, condition and
+            description
           </Text>
         </View>
 
@@ -1298,7 +1299,8 @@ const AddListing = () => {
       <ScrollView className="p-4">
         <View className="w-full mb-4 bg-green-400/10 p-2 rounded-xl border border-green-300">
           <Text className="text-green-600 text-xs font-pmedium">
-            Step 2 of 2: Add details and photos to make your listing stand out.
+            Step 2 of 2: Enter pricing details and payment requirements for your
+            item.
           </Text>
         </View>
 
