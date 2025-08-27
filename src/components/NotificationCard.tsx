@@ -88,6 +88,12 @@ const NotificationCard = ({
           bgColor: "bg-orange-100",
           iconColor: "#d96c00",
         };
+      case "REPORT_RESPOSE":
+        return {
+          icon: icons.report,
+          bgColor: "bg-orange-100",
+          iconColor: "#d96c00",
+        };
       case "PLAN_ACTIVATED":
         return {
           icon: icons.platinumPlan,
@@ -195,6 +201,12 @@ const NotificationCard = ({
             >
               {notification.message}
             </Text>
+
+            {notification.description && (
+              <Text className="text-sm mt-1 text-gray-600" numberOfLines={3}>
+                {notification.description}
+              </Text>
+            )}
 
             {/* Delete Action */}
             <TouchableOpacity

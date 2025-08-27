@@ -418,6 +418,7 @@ const Profile: React.FC = () => {
     latitude: number;
     longitude: number;
     address: string;
+    radius?: number;
   }) => {
     try {
       setLoading(true);
@@ -427,6 +428,7 @@ const Profile: React.FC = () => {
           latitude: location.latitude,
           longitude: location.longitude,
           address: location.address,
+          radius: location.radius,
           updatedAt: new Date().toISOString(),
         },
       });
@@ -448,9 +450,18 @@ const Profile: React.FC = () => {
     }
   };
 
+  type IDType = "philsys" | "drivers" | "student";
+
+  const ID_TYPES = [
+    { label: "PhilSys ID", value: "philsys" },
+    { label: "Driver's License", value: "drivers" },
+    { label: "Student ID", value: "student" },
+  ];
+
   const handleIdVerifySave = async (idVerified: {
     idImage: string;
     idNumber: string;
+    idType: IDType;
   }) => {
     try {
       setLoading(true);
@@ -463,12 +474,17 @@ const Profile: React.FC = () => {
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
 
+      const idTypeLabel =
+        ID_TYPES.find((t) => t.value === idVerified.idType)?.label ||
+        idVerified.idType;
+
       // Update Firestore with ID verification data
       const userRef = doc(db, "users", userId);
       await updateDoc(userRef, {
         idVerified: {
           idImage: downloadURL,
           idNumber: idVerified.idNumber,
+          idType: idTypeLabel,
           updatedAt: new Date().toISOString(),
         },
       });

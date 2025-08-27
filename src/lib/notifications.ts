@@ -69,6 +69,11 @@ const generateNotificationContent = (
         title: "New Message",
         message: `You have a new message regarding your rental.`,
       };
+    case "MESSAGE_RECEIVED":
+      return {
+        title: "New Message",
+        message: `You have a new message regarding your rental.`,
+      };
 
     // Add more cases as needed
     default:

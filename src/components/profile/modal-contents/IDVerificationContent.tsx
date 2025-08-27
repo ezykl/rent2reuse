@@ -22,7 +22,11 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 const OCR_SPACE_API_KEY = "K84356591988957";
 
 interface IDVerificationContentProps {
-  onSave: (idVerified: { idImage: string; idNumber: string }) => void;
+  onSave: (idVerified: {
+    idImage: string;
+    idNumber: string;
+    idType: IDType;
+  }) => void;
   onClose?: () => void;
   loading?: boolean;
 }
@@ -429,7 +433,7 @@ export const IDVerificationContent = ({
       console.log("ID details validated successfully.");
 
       // Call onSave with the verified data
-      await onSave({ idImage, idNumber });
+      await onSave({ idImage, idNumber, idType: selectedIDType });
 
       // Show success toast
       Toast.show({
@@ -595,7 +599,9 @@ export const IDVerificationContent = ({
               value={idNumber}
               onChangeText={setIdNumber}
               className="bg-gray-100 font-pmedium text-lg pt-2"
-              keyboardType="numeric"
+              keyboardType={
+                selectedIDType === "drivers" ? "default" : "numeric"
+              }
             />
           </View>
         </View>

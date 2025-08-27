@@ -13,7 +13,12 @@ import { icons } from "@/constant";
 import { LinearGradient } from "expo-linear-gradient";
 
 type PlanType = "free" | "basic" | "premium" | "platinum" | "limited";
-type SubscriptionStatus = "active" | "expired" | "cancelled" | "pending";
+type SubscriptionStatus =
+  | "active"
+  | "expired"
+  | "cancelled"
+  | "pending"
+  | "inactive";
 
 // Define plan hierarchy for validation
 const PLAN_HIERARCHY: Record<PlanType, number> = {

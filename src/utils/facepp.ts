@@ -21,7 +21,7 @@ export const detectFace = async (
         api_key: API_KEY,
         api_secret: API_SECRET,
         image_base64: base64Image,
-        return_attributes: "blur,headpose,facequality",
+        return_attributes: "blur,headpose,facequality,eyestatus",
       }),
       {
         headers: {

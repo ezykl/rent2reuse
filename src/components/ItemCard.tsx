@@ -5,8 +5,53 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import React from "react";
-import { icons } from "../constant"; // Adjust path as needed
+import React, { useEffect, useState } from "react";
+import { icons } from "../constant";
+import { useLocation } from "../hooks/useLocation";
+import { LocationUtils, Position } from "../utils/locationUtils";
+
+const DistanceBadge = ({ itemLocation }: { itemLocation: Position }) => {
+  const [distanceText, setDistanceText] = useState<string | null>(null);
+  const { userLocation, error, isLoading } = useLocation({
+    autoStart: true,
+    watchLocation: false,
+  });
+
+  useEffect(() => {
+    if (!userLocation || !itemLocation) return;
+
+    try {
+      const result = LocationUtils.Distance.calculateUserToItemDistance(
+        userLocation,
+        itemLocation
+      );
+
+      // Format distance text
+      if (result.kilometers < 1) {
+        setDistanceText(`${Math.round(result.meters)}m`);
+      } else if (result.kilometers < 10) {
+        setDistanceText(`${result.kilometers.toFixed(1)}km`);
+      } else {
+        setDistanceText(`${Math.round(result.kilometers)}km`);
+      }
+    } catch (err) {
+      console.error("Error calculating distance:", err);
+    }
+  }, [userLocation, itemLocation]);
+
+  if (isLoading || error || !distanceText) return null;
+
+  return (
+    <View className="bg-gray-100/90 px-2 py-1 rounded-full flex-row items-center">
+      <Image
+        source={icons.location}
+        className="w-3 h-3 mr-1"
+        tintColor="#6B7280"
+      />
+      <Text className="text-xs text-gray-600 font-pmedium">{distanceText}</Text>
+    </View>
+  );
+};
 
 interface ItemCardProps {
   title: string;
@@ -15,7 +60,10 @@ interface ItemCardProps {
   price?: number;
   status?: string;
   condition?: string;
-  location?: string;
+  itemLocation?: {
+    latitude: number;
+    longitude: number;
+  };
   owner?: {
     id: string;
     fullname: string;
@@ -32,10 +80,34 @@ const ItemCard = ({
   status,
   owner,
   condition,
-  location,
+  itemLocation,
   showProtectionOverlay = false,
   onPress,
 }: ItemCardProps) => {
+  const DistanceBadge = ({ itemLocation }: { itemLocation: Position }) => {
+    const { userLocation } = useLocation({ autoStart: true });
+
+    if (!userLocation || !itemLocation) return null;
+
+    const distance = LocationUtils.Distance.calculateUserToItemDistance(
+      userLocation,
+      itemLocation
+    );
+
+    return (
+      <View className="bg-gray-100 px-2 py-1 rounded-full flex-row items-center">
+        <Image
+          source={icons.location}
+          className="w-3 h-3 mr-1"
+          tintColor="#6B7280"
+        />
+        <Text className="text-xs text-gray-600 font-pmedium">
+          {distance.formatted}
+        </Text>
+      </View>
+    );
+  };
+
   // Status color mapping
   const getStatusColor = (status: string | undefined) => {
     switch (status?.toLowerCase()) {
@@ -83,6 +155,16 @@ const ItemCard = ({
           </View>
         )}
 
+        {itemLocation && itemLocation.latitude && itemLocation.longitude && (
+          <View className="absolute top-2 left-2">
+            <DistanceBadge
+              itemLocation={{
+                latitude: itemLocation.latitude,
+                longitude: itemLocation.longitude,
+              }}
+            />
+          </View>
+        )}
         {/* Status Badge - Only show if not protected */}
         {!showProtectionOverlay && status && (
           <View

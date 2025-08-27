@@ -180,7 +180,12 @@ const Home = () => {
     itemPrice: number;
     itemStatus: string;
     itemCondition: string;
-    itemLocation: string;
+    itemLocation?:
+      | string
+      | {
+          latitude: number;
+          longitude: number;
+        };
     owner: {
       id: string;
       fullname: string;
@@ -199,7 +204,11 @@ const Home = () => {
         price={isProfileComplete ? item.itemPrice : undefined}
         status={isProfileComplete ? item.itemStatus : undefined}
         condition={isProfileComplete ? item.itemCondition : undefined}
-        location={isProfileComplete ? item.itemLocation : undefined}
+        itemLocation={
+          isProfileComplete && typeof item.itemLocation === "object"
+            ? item.itemLocation
+            : undefined
+        }
         owner={isProfileComplete ? item.owner : undefined}
         // NEW: Show protection overlay if profile incomplete
         showProtectionOverlay={!isProfileComplete}

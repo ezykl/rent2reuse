@@ -4,6 +4,7 @@ import { icons } from "../constant";
 
 interface InputFieldProps {
   title: string;
+  subtitle?: string;
   value: string;
   placeholder: string;
   handleChangeText: (text: string) => void;
@@ -13,6 +14,7 @@ interface InputFieldProps {
 
 const InputField = ({
   title,
+  subtitle,
   value,
   placeholder,
   handleChangeText,
@@ -24,9 +26,16 @@ const InputField = ({
 
   return (
     <View className={`space-y-2 ${otherStyles}`}>
-      <Text className="text-xl text-secondary-300 font-psemibold m-2">
-        {title}
-      </Text>
+      <View className="flex-row items-center">
+        <Text className="text-xl text-secondary-300 font-psemibold m-2">
+          {title}
+        </Text>
+        {subtitle && (
+          <Text className="text-sm text-secondary-400 font-pregular m-2">
+            {subtitle}
+          </Text>
+        )}
+      </View>
       <View
         className="w-full h-16 px-4 bg-black-100 rounded-xl border-2 border-secondary-300  flex flex-row items-center"
         style={[

@@ -14,6 +14,7 @@ import { db, auth } from "@/lib/firebaseConfig";
 import { Image } from "expo-image";
 import { icons } from "@/constant";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
+import { createNotification } from "@/lib/notifications";
 
 const reportReasons = [
   "Inappropriate behavior",
@@ -55,6 +56,33 @@ export default function ReportScreen() {
       };
 
       await addDoc(collection(db, "reports"), reportData);
+
+      try {
+        // Create a reference to the user's notifications subcollection
+        const userNotificationsRef = collection(
+          db,
+          `users/${userId}/notifications`
+        );
+
+        await addDoc(userNotificationsRef, {
+          type: "REPORT_ISSUE",
+          title: "New Report Submitted",
+          message: "Thank you for your report. We'll review it shortly.",
+          isRead: false,
+          createdAt: serverTimestamp(),
+          data: {
+            route: "/profile",
+            params: {
+              setup: "true",
+              source: "welcome",
+            },
+          },
+        });
+      } catch (error) {
+        console.error("Error creating welcome notification:", error);
+      }
+
+      createNotification(userId.toString(), "REPORT_ISSUE");
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,

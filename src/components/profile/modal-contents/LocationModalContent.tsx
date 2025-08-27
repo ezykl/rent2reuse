@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import {
   View,
   Image,
@@ -7,18 +7,27 @@ import {
   Text,
   ScrollView,
 } from "react-native";
-import { MapView, Camera, MarkerView } from "@maplibre/maplibre-react-native";
+import {
+  MapView,
+  Camera,
+  MarkerView,
+  ShapeSource,
+  CircleLayer,
+  FillLayer,
+  SymbolLayer,
+} from "@maplibre/maplibre-react-native";
+
 import * as Location from "expo-location";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 
 const CEBU_COORDINATES = {
-  latitude: 10.3157,
-  longitude: 123.8854,
+  latitude: 10.296581,
+  longitude: 123.906541,
 };
 
 const MAP_BOUNDS = {
-  ne: [124.0854, 10.4157],
-  sw: [123.7854, 10.2157],
+  ne: [123.80664825439452, 10.20673915914469],
+  sw: [124.00234222412107, 10.41075861313864],
 };
 
 const MIN_ZOOM_LEVEL = 12;
@@ -41,6 +50,35 @@ const getAddressFromCoordinates = async (
   }
 };
 
+// Helper function to create a circle polygon
+const createCirclePolygon = (
+  center: [number, number],
+  radiusInMeters: number,
+  points: number = 64
+) => {
+  const coords: number[][] = [];
+  const distanceX =
+    radiusInMeters / (111320 * Math.cos((center[1] * Math.PI) / 180));
+  const distanceY = radiusInMeters / 110540;
+
+  for (let i = 0; i < points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    coords.push([center[0] + x, center[1] + y]);
+  }
+  coords.push(coords[0]); // Close the polygon
+
+  return {
+    type: "Feature" as const,
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [coords],
+    },
+    properties: {},
+  };
+};
+
 // Add this helper to check if coordinates are the same
 const areCoordinatesEqual = (
   coord1: [number, number] | undefined,
@@ -50,14 +88,22 @@ const areCoordinatesEqual = (
   return coord1[0] === coord2[0] && coord1[1] === coord2[1];
 };
 
-// Add this helper function to check if coordinates are within Cebu bounds
 const isWithinCebuBounds = (coords: [number, number]): boolean => {
   const [longitude, latitude] = coords;
+
+  //Cebu City bounds
+  const PRECISE_CEBU_BOUNDS = {
+    north: 10.45, // Northern limit
+    south: 10.2, // Southern limit
+    east: 123.95, // Eastern limit
+    west: 123.75, // Western limit
+  };
+
   return (
-    longitude >= MAP_BOUNDS.sw[0] &&
-    longitude <= MAP_BOUNDS.ne[0] &&
-    latitude >= MAP_BOUNDS.sw[1] &&
-    latitude <= MAP_BOUNDS.ne[1]
+    longitude >= PRECISE_CEBU_BOUNDS.west &&
+    longitude <= PRECISE_CEBU_BOUNDS.east &&
+    latitude >= PRECISE_CEBU_BOUNDS.south &&
+    latitude <= PRECISE_CEBU_BOUNDS.north
   );
 };
 
@@ -66,6 +112,7 @@ interface LocationModalContentProps {
     latitude: number;
     longitude: number;
     address: string;
+    radius?: number;
   }) => void;
   loading?: boolean;
 }
@@ -94,8 +141,35 @@ export const LocationModalContent = ({
   const [address, setAddress] = useState("");
   const [currentZoom, setCurrentZoom] = useState(14);
   const [shouldTrackLocation, setShouldTrackLocation] = useState(true);
+  const [showCircleRadius, setShowCircleRadius] = useState(true);
+  const [selectedRadius, setSelectedRadius] = useState(500); // Default 500m
+  const [showRadiusSelector, setShowRadiusSelector] = useState(false);
+
+  const circleFeature = useMemo(() => {
+    if (!pinCoord || !showCircleRadius) return null;
+    return createCirclePolygon(pinCoord, selectedRadius);
+  }, [pinCoord, selectedRadius, showCircleRadius]);
+
+  const radiusOptions = [
+    { value: 100, label: "100m" },
+    { value: 250, label: "250m" },
+    { value: 500, label: "500m" },
+    { value: 1000, label: "1km" },
+    { value: 1500, label: "1.5km" },
+    { value: 2000, label: "2km" },
+  ];
 
   const updatePinLocation = async (coords: [number, number]) => {
+    // Check if coordinates are within Cebu bounds
+    if (!isWithinCebuBounds(coords)) {
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Location Restricted",
+        textBody: "Please select a location within Cebu City limits",
+      });
+      return;
+    }
+
     setPinCoord(coords);
     const [lng, lat] = coords;
     const formattedAddress = await getAddressFromCoordinates(lat, lng);
@@ -108,7 +182,6 @@ export const LocationModalContent = ({
       });
     }
   };
-
   const getUserLocation = async (): Promise<void> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -297,6 +370,19 @@ export const LocationModalContent = ({
             }}
           />
 
+          {/* Add circle radius layer */}
+          {circleFeature && (
+            <ShapeSource id="circle-radius-source" shape={circleFeature}>
+              <FillLayer
+                id="circle-radius-fill"
+                style={{
+                  fillColor: "rgba(33, 150, 243, 0.15)",
+                  fillOutlineColor: "#2196F3",
+                }}
+              />
+            </ShapeSource>
+          )}
+
           {pinCoord && (
             <MarkerView coordinate={pinCoord} anchor={{ x: 0.5, y: 1 }}>
               <Image
@@ -307,6 +393,57 @@ export const LocationModalContent = ({
             </MarkerView>
           )}
         </MapView>
+
+        {showRadiusSelector && (
+          <View
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-lg p-4"
+            style={{ zIndex: 1001 }}
+          >
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-lg font-pbold text-gray-800">
+                Select Radius
+              </Text>
+              <TouchableOpacity onPress={() => setShowRadiusSelector(false)}>
+                <Text className="text-primary font-pmedium">Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-4"
+            >
+              {radiusOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  className={`mr-3 px-4 py-2 rounded-full ${
+                    selectedRadius === option.value
+                      ? "bg-primary"
+                      : "bg-gray-200"
+                  }`}
+                  onPress={() => setSelectedRadius(option.value)}
+                >
+                  <Text
+                    className={`font-pmedium ${
+                      selectedRadius === option.value
+                        ? "text-white"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text className="text-sm text-gray-600 text-center">
+              Selected radius:{" "}
+              {selectedRadius >= 1000
+                ? `${selectedRadius / 1000}km`
+                : `${selectedRadius}m`}
+            </Text>
+          </View>
+        )}
 
         {address && (
           <View
@@ -332,6 +469,58 @@ export const LocationModalContent = ({
       </View>
 
       <View className="p-4 bg-white border-t border-gray-200">
+        {/* Show controls only when pin is placed - Pin My Location and Show Radius in one row */}
+        {pinCoord && address && (
+          <View className="flex-row gap-2 mb-2">
+            {/* Pin My Location - only show if user location is available and within bounds */}
+            {hasLocationPermission &&
+              userLocation &&
+              isWithinCebuBounds(userLocation) && (
+                <TouchableOpacity
+                  className="flex-1 bg-blue-500 py-3 rounded-xl"
+                  onPress={handlePinMyLocation}
+                >
+                  <Text className="text-white text-center font-pmedium">
+                    Pin My Location
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+            {/* Show/Hide Radius button */}
+            <TouchableOpacity
+              className={`${
+                hasLocationPermission &&
+                userLocation &&
+                isWithinCebuBounds(userLocation)
+                  ? "flex-1"
+                  : "flex-1"
+              } py-3 rounded-xl ${
+                showCircleRadius ? "bg-primary" : "bg-gray-400"
+              }`}
+              onPress={() => setShowCircleRadius(!showCircleRadius)}
+            >
+              <Text className="text-white text-center font-pmedium">
+                {showCircleRadius ? "Hide" : "Show"} Radius
+              </Text>
+            </TouchableOpacity>
+
+            {/* Radius selector button - only when circle is visible */}
+            {showCircleRadius && (
+              <TouchableOpacity
+                className="px-4 py-3 bg-blue-500 rounded-xl"
+                onPress={() => setShowRadiusSelector(true)}
+              >
+                <Text className="text-white text-center font-pmedium">
+                  {selectedRadius >= 1000
+                    ? `${selectedRadius / 1000}km`
+                    : `${selectedRadius}m`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Save Location button */}
         <TouchableOpacity
           className="bg-primary py-3 rounded-xl"
           onPress={() => {
@@ -340,6 +529,7 @@ export const LocationModalContent = ({
                 latitude: pinCoord[1],
                 longitude: pinCoord[0],
                 address,
+                radius: showCircleRadius ? selectedRadius : undefined,
               });
             }
           }}
@@ -349,17 +539,6 @@ export const LocationModalContent = ({
             {loading ? "Saving..." : "Save Location"}
           </Text>
         </TouchableOpacity>
-
-        {hasLocationPermission && userLocation && (
-          <TouchableOpacity
-            className="bg-blue-500 py-3 rounded-xl mt-2"
-            onPress={handlePinMyLocation}
-          >
-            <Text className="text-white text-center font-pbold">
-              Pin My Location
-            </Text>
-          </TouchableOpacity>
-        )}
       </View>
     </View>
   );

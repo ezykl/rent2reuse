@@ -51,6 +51,8 @@ const SignUp = () => {
     email: string;
     password: string;
     confirmPass: string;
+    suffix?: string;
+    sex: string;
   }>({
     firstname: "",
     middlename: "",
@@ -58,6 +60,8 @@ const SignUp = () => {
     email: "",
     password: "",
     confirmPass: "",
+    suffix: "",
+    sex: "",
   });
 
   // Real-time validation states
@@ -67,6 +71,8 @@ const SignUp = () => {
     confirmPass?: string;
     firstname?: string;
     lastname?: string;
+    suffix?: string;
+    sex?: string;
   }>({});
 
   // Add/update these state variables at the top of your component
@@ -82,6 +88,11 @@ const SignUp = () => {
       layoutMeasurement.height + contentOffset.y >=
       contentSize.height - paddingToBottom;
     setIsAtBottom(isCloseToBottom);
+  };
+
+  const validateSex = (sex: string) => {
+    if (!sex.trim()) return "Please select your sex";
+    return "";
   };
 
   // Real-time validation functions
@@ -162,6 +173,9 @@ const SignUp = () => {
       case "lastname":
         error = validateName(value, "Last name");
         break;
+      case "sex":
+        error = validateSex(value);
+        break;
     }
 
     setErrors((prev) => ({ ...prev, [field]: error }));
@@ -182,8 +196,10 @@ const SignUp = () => {
       return (
         form.firstname.trim() !== "" &&
         form.lastname.trim() !== "" &&
+        form.sex.trim() !== "" &&
         !errors.firstname &&
         !errors.lastname &&
+        !errors.sex &&
         isChecked
       );
     }
@@ -207,6 +223,7 @@ const SignUp = () => {
           ...errors,
           firstname: validateName(form.firstname, "First name"),
           lastname: validateName(form.lastname, "Last name"),
+          sex: validateSex(form.sex),
         });
       }
     }
@@ -279,6 +296,7 @@ const SignUp = () => {
         middlename: form.middlename || "",
         lastname: form.lastname,
         email: form.email.trim(),
+        sex: form.sex,
         role: "user",
         status: "Pending",
         createdAt: new Date().toISOString(),
@@ -419,8 +437,9 @@ const SignUp = () => {
 
       <InputField
         title="Middle Name"
+        subtitle="(optional)"
         value={form.middlename || ""}
-        placeholder="Enter middle name (optional)"
+        placeholder="Enter middle name "
         handleChangeText={(e: string) => handleFormChange("middlename", e)}
         otherStyles="mt-2"
       />
@@ -432,6 +451,63 @@ const SignUp = () => {
         handleChangeText={(e: string) => handleFormChange("lastname", e)}
         otherStyles="mt-2"
       />
+
+      <InputField
+        title="Suffix"
+        subtitle="(optional)"
+        value={form.suffix || ""}
+        placeholder="Enter suffix (e.g. Jr., III)"
+        handleChangeText={(e: string) => handleFormChange("suffix", e)}
+        otherStyles="flex-1"
+      />
+
+      <View className="mt-2 flex-row justify-center items-center">
+        {/* Sex Row */}
+        <View className="mt-4 flex-1 ml-2">
+          <Text className="text-xl text-secondary-300 font-psemibold m-2">
+            Sex
+          </Text>
+          <View className="flex-row gap-4">
+            <TouchableOpacity
+              onPress={() => handleFormChange("sex", "Male")}
+              className={`flex-1 py-4 px-4 rounded-xl border-2 ${
+                form.sex === "Male"
+                  ? "border-primary bg-primary/10"
+                  : "border-gray-200 bg-gray-50"
+              }`}
+            >
+              <Text
+                className={`text-center font-pmedium ${
+                  form.sex === "Male" ? "text-primary" : "text-gray-600"
+                }`}
+              >
+                Male
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleFormChange("sex", "Female")}
+              className={`flex-1 py-4 px-4 rounded-xl border-2 ${
+                form.sex === "Female"
+                  ? "border-primary bg-primary/10"
+                  : "border-gray-200 bg-gray-50"
+              }`}
+            >
+              <Text
+                className={`text-center font-pmedium ${
+                  form.sex === "Female" ? "text-primary" : "text-gray-600"
+                }`}
+              >
+                Female
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+      {errors.sex && (
+        <Text className="text-red-500 text-sm mt-1 ml-2">{errors.sex}</Text>
+      )}
+
       {errors.lastname && (
         <Text className="text-red-500 text-sm mt-1 ml-2">
           {errors.lastname}

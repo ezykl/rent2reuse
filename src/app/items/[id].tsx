@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import DateTimePicker, {
@@ -18,6 +19,8 @@ import DateTimePicker, {
 import type { DateType } from "react-native-ui-datepicker";
 import dayjs from "dayjs";
 import { useState, useEffect } from "react";
+import { useLocation } from "../../hooks/useLocation";
+import { LocationUtils } from "../../utils/locationUtils";
 import {
   doc,
   getDoc,
@@ -42,23 +45,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PinchGestureHandlerGestureEvent } from "react-native-gesture-handler";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
 import { Toast, ALERT_TYPE } from "react-native-alert-notification";
-import ImageView from "react-native-image-viewing";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  useAnimatedGestureHandler,
-  runOnJS,
-} from "react-native-reanimated";
-import {
-  PinchGestureHandler,
-  PanGestureHandler,
-  GestureHandlerRootView,
-  State,
-} from "react-native-gesture-handler";
+import CustomImageViewer from "@/components/CustomImageViewer";
+import * as Linking from "expo-linking";
+
 import TimePicker from "@/components/TimePicker";
 import { useTimeConverter } from "@/hooks/useTimeConverter";
 import { sendRentRequestNotifications } from "@/utils/notificationHelper";
+import {
+  MapView,
+  Camera,
+  MarkerView,
+  ShapeSource,
+  FillLayer,
+} from "@maplibre/maplibre-react-native";
+import * as Location from "expo-location";
 
 type RangeChange = { startDate?: DateType; endDate?: DateType };
 
@@ -103,11 +103,9 @@ export default function ItemDetails() {
     chatId: string;
   } | null>(null);
   const [ownerRating, setOwnerRating] = useState<UserRating | null>(null);
-  const [imageViewerVisible, setImageViewerVisible] = useState(false);
-  const [initialImageIndex, setInitialImageIndex] = useState(0);
 
-  // Add these state declarations at the top of your component
   const [fullscreenImageVisible, setFullscreenImageVisible] = useState(false);
+  const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Add new state for form visibility
@@ -118,6 +116,129 @@ export default function ItemDetails() {
   const [timePickerMode, setTimePickerMode] = useState<"start" | "end">(
     "start"
   );
+  const [imageLoadError, setImageLoadError] = useState<Set<number>>(new Set());
+  const [imageDebugInfo, setImageDebugInfo] = useState<any[]>([]);
+
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [distanceToItem, setDistanceToItem] = useState<number | null>(null);
+
+  const handleImageError = (index: number) => {
+    setImageLoadError((prev) => new Set(prev).add(index));
+  };
+
+  // Helper function to create circle polygon for radius display
+  const createCirclePolygon = (
+    center: [number, number],
+    radiusInMeters: number,
+    points: number = 64
+  ) => {
+    const coords: number[][] = [];
+    const distanceX =
+      radiusInMeters / (111320 * Math.cos((center[1] * Math.PI) / 180));
+    const distanceY = radiusInMeters / 110540;
+
+    for (let i = 0; i < points; i++) {
+      const theta = (i / points) * (2 * Math.PI);
+      const x = distanceX * Math.cos(theta);
+      const y = distanceY * Math.sin(theta);
+      coords.push([center[0] + x, center[1] + y]);
+    }
+    coords.push(coords[0]);
+
+    return {
+      type: "Feature" as const,
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [coords],
+      },
+      properties: {},
+    };
+  };
+
+  // Function to get directions to the location
+  const getDirectionsToLocation = (
+    latitude: number,
+    longitude: number,
+    address: string
+  ) => {
+    const latLng = `${latitude},${longitude}`;
+    const label = address || "Pickup Location";
+
+    // URL schemes for directions
+    const url =
+      Platform.select({
+        ios: `maps:?daddr=${latLng}&dirflg=d`, // d = driving directions
+        android: `google.navigation:q=${latLng}`, // Opens Google Maps in navigation mode
+      }) || "";
+
+    // Fallback to web Google Maps directions
+    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${latLng}&destination_place_id=${encodeURIComponent(
+      label
+    )}`;
+
+    Linking.canOpenURL(url || webUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(url);
+        } else {
+          return Linking.openURL(webUrl);
+        }
+      })
+      .catch((err) => {
+        // Fallback to web version
+        Linking.openURL(webUrl);
+      });
+  };
+
+  // Calculate distance between two coordinates
+  const calculateDistance = (
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Get user's current location
+  const getCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+
+      const location = await Location.getCurrentPositionAsync({});
+      const userCoords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+      setUserLocation(userCoords);
+
+      if (item?.itemLocation) {
+        const distance = calculateDistance(
+          userCoords.latitude,
+          userCoords.longitude,
+          item.itemLocation.latitude,
+          item.itemLocation.longitude
+        );
+        setDistanceToItem(distance);
+      }
+    } catch (error) {
+      console.error("Error getting location:", error);
+    }
+  };
 
   // Function to fetch user rating data
   const fetchUserRating = async (
@@ -260,6 +381,10 @@ export default function ItemDetails() {
       checkExistingRequest();
     }
   }, [item, user]);
+
+  useEffect(() => {
+    getCurrentLocation();
+  }, [item]);
 
   // Update the checkExistingRequests function
   const checkExistingRequests = async (userId: string, itemId: string) => {
@@ -476,10 +601,7 @@ export default function ItemDetails() {
   const isCurrentUserOwner = item?.owner?.id === user?.uid;
 
   return (
-    <View
-      className="absolute inset-0 bg-white"
-      style={{ paddingTop: insets.top }}
-    >
+    <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
       {/* Header */}
       <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
         <TouchableOpacity
@@ -501,6 +623,29 @@ export default function ItemDetails() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Image Section */}
         <View>
+          {/* AI Badge Enhancement */}
+          {item?.enableAI && (
+            <View className="mb-4">
+              <LinearGradient
+                colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                className="p-4 py-2 rounded-2xl"
+              >
+                <View className="flex-row items-center">
+                  <View className="w-8 h-8 bg-white/20 rounded-full items-center justify-center mr-3">
+                    <Text className="text-white font-bold text-sm">✨</Text>
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-white font-psemibold text-base">
+                      AI-Enhanced Listing
+                    </Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
+
           <View className="h-[370px] relative mb-4 ">
             {item && item.images && item.images.length > 0 ? (
               <>
@@ -518,8 +663,12 @@ export default function ItemDetails() {
                     <TouchableOpacity
                       activeOpacity={0.9}
                       onPress={() => {
-                        setCurrentImageIndex(index);
-                        setFullscreenImageVisible(true);
+                        if (!imageLoadError.has(index)) {
+                          console.log("Opening fullscreen with index:", index);
+                          console.log("Available images:", item.images);
+                          setFullscreenImageIndex(index);
+                          setFullscreenImageVisible(true);
+                        }
                       }}
                       className="flex-1 items-center justify-center p-2"
                     >
@@ -528,15 +677,35 @@ export default function ItemDetails() {
                           source={{ uri: imageUrl as string }}
                           className="w-full h-full rounded-2xl"
                           resizeMode="cover"
+                          onError={() => handleImageError(index)}
+                          onLoad={() => {
+                            // Remove from error set if it loads successfully
+                            setImageLoadError((prev) => {
+                              const newSet = new Set(prev);
+                              newSet.delete(index);
+                              return newSet;
+                            });
+                          }}
                         />
-
+                        {imageLoadError.has(index) && (
+                          <View className="absolute inset-0 bg-gray-200 rounded-2xl items-center justify-center">
+                            <Image
+                              source={images.logoSmall}
+                              className="w-20 h-20 opacity-30"
+                              resizeMode="contain"
+                            />
+                            <Text className="text-gray-400 text-sm mt-2">
+                              Image unavailable
+                            </Text>
+                          </View>
+                        )}
                         <LinearGradient
                           colors={["transparent", "rgba(0,0,0,0.7)"]}
                           start={{ x: 0.5, y: 0 }}
                           end={{ x: 0.5, y: 1 }}
                           className="absolute bottom-0 left-0 right-0 h-32 rounded-b-2xl p-4"
                           style={{ borderRadius: 16 }}
-                        ></LinearGradient>
+                        />
                       </View>
                     </TouchableOpacity>
                   )}
@@ -547,29 +716,21 @@ export default function ItemDetails() {
                   {/* Title and Price Container (Left) */}
                   <View className="rounded-xl pb-2">
                     <Text
-                      className="text-white text-2xl font-bold mb-1"
+                      className="text-white text-2xl font-pbold mb-1"
                       numberOfLines={1}
                     >
                       {item.itemName}
                     </Text>
                     <View className="flex-row items-baseline">
-                      <Text className="text-3xl font-bold text-primary">
+                      <Text className="text-3xl font-pbold text-primary">
                         ₱{item?.itemPrice ?? ""}
                       </Text>
-                      <Text className="text-white text-base ml-1">/day</Text>
+                      <Text className="text-white font-pregular text-base ml-1">
+                        /day
+                      </Text>
                     </View>
                   </View>
                   {/* Listed Date & Time (Right) */}
-                  <View className="rounded-xl pb-2 items-end">
-                    <Text className="text-xs text-white/80 mb-1">Listed</Text>
-                    <Text className="text-white text-sm font-pmedium text-right">
-                      {item?.createdAt
-                        ? dayjs(
-                            item.createdAt.toDate?.() ?? item.createdAt
-                          ).format("MMM D, YYYY\n h:mm A")
-                        : ""}
-                    </Text>
-                  </View>
                 </View>
 
                 {/* Image Counter */}
@@ -578,6 +739,24 @@ export default function ItemDetails() {
                     {activeIndex + 1}/{item.images.length}
                   </Text>
                 </View>
+                {distanceToItem && (
+                  <View className="absolute top-6 left-6 bg-black/50 px-3 py-1 rounded-full flex-row items-center justify-center">
+                    <Image
+                      source={icons.location}
+                      className="w-4 h-4 mr-1"
+                      resizeMode="contain"
+                      tintColor={"white"}
+                    />
+
+                    <Text className="text-white font-psemibold">
+                      {distanceToItem
+                        ? distanceToItem < 1
+                          ? `${Math.round(distanceToItem * 1000)}m`
+                          : `${distanceToItem.toFixed(1)}km`
+                        : "Unknown distance"}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Dots Indicator */}
                 {item.images.length > 1 && (
@@ -613,115 +792,321 @@ export default function ItemDetails() {
         <View className="px-4 ">
           {/* Owner Badge with Dynamic Rating */}
           <TouchableOpacity
-            className="flex-row items-center my-4  rounded-xl"
+            className="flex-row items-center my-4 gap-4 rounded-xl"
             onPress={handleProfilePress}
             activeOpacity={0.7}
           >
             {/* Profile Image or Letter Avatar */}
-            {item && item.owner?.profileImage ? (
-              <Image
-                source={{ uri: item.owner.profileImage }}
-                className="w-10 h-10 rounded-full mr-3"
-                resizeMode="cover"
-              />
-            ) : (
-              <View className="w-8 h-8 bg-primary/20 rounded-full items-center justify-center mr-3">
-                <Text className="text-primary font-bold text-sm">
-                  {(item && item.owner?.fullname?.charAt(0)?.toUpperCase()) ||
-                    "U"}
-                </Text>
-              </View>
-            )}
+            <View className="relative">
+              {item && item.owner?.profileImage ? (
+                <>
+                  <Image
+                    source={{ uri: item.owner.profileImage }}
+                    className="w-12 h-12 rounded-full"
+                    resizeMode="cover"
+                  />
+                  <Image
+                    source={icons.verified}
+                    className="w-4 h-4 absolute -right-1 bottom-0"
+                    resizeMode="contain"
+                  />
+                </>
+              ) : (
+                <View className="relative">
+                  <View className="w-8 h-8 bg-primary/20 rounded-full items-center justify-center mr-3">
+                    <Text className="text-primary font-bold text-sm">
+                      {(item &&
+                        item.owner?.fullname?.charAt(0)?.toUpperCase()) ||
+                        "U"}
+                    </Text>
+                  </View>
+                  <Image
+                    source={icons.verified}
+                    className="w-4 h-4 absolute -left-1 bottom-0"
+                    resizeMode="contain"
+                  />
+                </View>
+              )}
+            </View>
 
             <View className="flex-1">
-              <Text className="text-gray-800 text-base font-medium">
+              <Text className="text-gray-800 text-base font-pmedium">
                 {item?.owner?.fullname ?? ""}
               </Text>
-              <View className="flex-row items-center mt-1">
+              <View className="flex-row items-center font-pregular">
                 {ownerRating?.averageRating && ownerRating?.totalRatings ? (
                   <>
                     <View className="flex-row items-center mr-2">
                       {renderStars(ownerRating.averageRating)}
                     </View>
-                    <Text className="text-gray-600 text-sm">
+                    <Text className="text-gray-600 text-sm font-pregular">
                       {ownerRating.averageRating.toFixed(1)}
                     </Text>
-                    <Text className="text-gray-400 text-sm ml-1">
+                    <Text className="text-gray-400 text-sm ml-1 font-pregular">
                       ({ownerRating.totalRatings}{" "}
                       {ownerRating.totalRatings === 1 ? "review" : "reviews"})
                     </Text>
                   </>
                 ) : (
-                  <Text className="text-gray-400 text-sm">No ratings yet</Text>
+                  <Text className="text-gray-400 text-sm font-pregular">
+                    No ratings yet
+                  </Text>
                 )}
               </View>
             </View>
           </TouchableOpacity>
 
-          {/* Condition & Location Quick Info */}
-          <View className="flex-row mb-2">
-            <View
-              style={{ flex: 1 }}
-              className="bg-green-50 p-3 rounded-xl mr-1"
-            >
-              <Text className="text-green-700 text-xs font-medium mb-1">
-                CONDITION
-              </Text>
-              <Text className="text-green-800 font-semibold">
-                {item?.itemCondition ?? ""}
+          {/* Condition, Location, and Distance Info */}
+          <View className="flex-row mb-4 gap-3">
+            {/* Condition Card */}
+            <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
+              <View className="flex-row items-center mb-1">
+                <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
+                <Text className="text-gray-500 text-xs font-pmedium">
+                  CONDITION
+                </Text>
+              </View>
+              <Text className="text-gray-800 text-base font-psemibold">
+                {item?.itemCondition ?? "Not specified"}
               </Text>
             </View>
-            <View
-              style={{ flex: 3 }}
-              className="bg-blue-50 p-3 rounded-xl ml-2"
-            >
-              <Text className="text-blue-700 text-xs font-medium mb-1">
-                LOCATION
+
+            {/* Listed Date Card */}
+            <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
+              <View className="flex-row items-center mb-1">
+                <View className="w-2 h-2 bg-primary rounded-full mr-2" />
+                <Text className="text-gray-500 text-xs font-pmedium">
+                  LISTED
+                </Text>
+              </View>
+              <Text className="text-gray-800 font-psemibold">
+                {item?.createdAt
+                  ? dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
+                      "MMM D, YYYY"
+                    )
+                  : "Not available"}
               </Text>
-              <Text className="text-blue-800 font-semibold">
-                {item?.itemLocation ?? ""}
+              <Text className="text-gray-500 text-sm font-pregular">
+                {item?.createdAt
+                  ? dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
+                      "h:mm A"
+                    )
+                  : ""}
               </Text>
             </View>
           </View>
 
           {/* Description Section */}
-          <View className="mb-3 px-4">
-            <Text className="text-lg font-semibold text-gray-900 mb-2">
-              Description
+          <View className="mb-4 ">
+            <Text className="text-xl font-psemibold text-gray-900 mb-3">
+              About this item
             </Text>
-            <Text className="text-gray-600 text-base leading-6">
-              {item?.itemDesc}
-            </Text>
+            <View className="bg-gray-50 border border-gray-100 p-4 rounded-2xl">
+              <Text className="text-gray-700 text-base leading-6 font-pregular">
+                {item?.itemDesc}
+              </Text>
+            </View>
           </View>
 
-          {/* Rental Terms */}
-          <View className="bg-gray-50 p-4 rounded-xl mb-6">
-            <Text className="text-base font-semibold text-gray-900 mb-3">
-              Rental Information
-            </Text>
-            <View className="space-y-2">
-              <View className="flex-row justify-between">
-                <Text className="text-gray-600">Daily Rate</Text>
-                <Text className="font-semibold text-gray-900">
+          {/* Updated Rental Terms with downpayment */}
+          <View className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20  p-5 rounded-2xl mb-6">
+            <View className="flex-row items-center mb-4">
+              <View className="w-10 h-10 bg-primary/20 rounded-full items-center justify-center mr-3">
+                <Text className="text-primary text-lg">₱</Text>
+              </View>
+              <Text className="text-xl font-psemibold text-gray-900">
+                Rental Details
+              </Text>
+            </View>
+
+            <View className="gap-2">
+              <View className="flex-row justify-between items-center ">
+                <View className="flex-row items-center">
+                  <View className="w-2 h-2 bg-primary rounded-full mr-3" />
+                  <Text className="text-gray-700 font-pmedium">Daily Rate</Text>
+                </View>
+                <Text className="font-psemibold text-gray-900 text-lg">
                   ₱{item?.itemPrice}
                 </Text>
               </View>
-              <View className="flex-row justify-between">
-                <Text className="text-gray-600">Minimum Rental</Text>
-                <Text className="font-semibold text-gray-900">
-                  {" "}
+
+              <View className="flex-row justify-between items-center ">
+                <View className="flex-row items-center">
+                  <View className="w-2 h-2 bg-primary rounded-full mr-3" />
+                  <Text className="text-gray-700 font-pmedium">
+                    Minimum Rental
+                  </Text>
+                </View>
+                <Text className="font-psemibold text-gray-900">
                   {item?.itemMinRentDuration}{" "}
                   {item?.itemMinRentDuration && item.itemMinRentDuration > 1
                     ? "days"
                     : "day"}
                 </Text>
               </View>
-              <View className="flex-row justify-between">
-                <Text className="text-gray-600">Availability</Text>
-                <Text className="font-semibold text-green-600">Available</Text>
+
+              {item?.downpaymentPercentage && (
+                <View className="flex-row justify-between items-center ">
+                  <View className="flex-row items-center">
+                    <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
+                    <Text className="text-gray-700 font-pmedium">
+                      Downpayment
+                    </Text>
+                  </View>
+                  <Text className="font-psemibold text-orange-600">
+                    {item.downpaymentPercentage}%
+                  </Text>
+                </View>
+              )}
+
+              <View className="flex-row justify-between items-center">
+                <View className="flex-row items-center">
+                  <View className="w-2 h-2 bg-green-500 rounded-full mr-3" />
+                  <Text className="text-gray-700 font-pmedium">Status</Text>
+                </View>
+                <View className="bg-green-100 px-3 py-1 rounded-full">
+                  <Text className="font-psemibold text-green-700 text-sm">
+                    Available
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
+
+          {/* Pickup Location Map */}
+          {item?.itemLocation && (
+            <View className="mb-6">
+              <Text className="text-lg font-semibold text-gray-900 mb-3">
+                Pickup Location
+              </Text>
+
+              {/* Map container with touchable overlay for Google Maps */}
+              <View className="relative">
+                <View className="h-48 rounded-s-xl overflow-hidden border border-gray-200">
+                  <MapView
+                    style={{ flex: 1 }}
+                    rotateEnabled={false}
+                    attributionEnabled={false}
+                    compassViewPosition={3}
+                    mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+                  >
+                    <Camera
+                      defaultSettings={{
+                        centerCoordinate: [
+                          item.itemLocation.longitude,
+                          item.itemLocation.latitude,
+                        ],
+                        zoomLevel: 15,
+                      }}
+                    />
+
+                    {/* Radius circle if available */}
+                    {item.itemLocation.radius && (
+                      <ShapeSource
+                        id="pickup-radius"
+                        shape={createCirclePolygon(
+                          [
+                            item.itemLocation.longitude,
+                            item.itemLocation.latitude,
+                          ],
+                          item.itemLocation.radius
+                        )}
+                      >
+                        <FillLayer
+                          id="pickup-radius-fill"
+                          style={{
+                            fillColor: "rgba(33, 150, 243, 0.15)",
+                            fillOutlineColor: "#2196F3",
+                          }}
+                        />
+                      </ShapeSource>
+                    )}
+
+                    {/* Pickup location marker */}
+                    <MarkerView
+                      coordinate={[
+                        item.itemLocation.longitude,
+                        item.itemLocation.latitude,
+                      ]}
+                      anchor={{ x: 0.5, y: 1 }}
+                    >
+                      <View>
+                        <Image
+                          source={require("@/assets/images/marker-home.png")}
+                          style={{ width: 32, height: 40 }}
+                          resizeMode="contain"
+                        />
+                      </View>
+                    </MarkerView>
+
+                    {/* User location marker if available */}
+                    {/* {userLocation && (
+            <MarkerView
+              coordinate={[
+                userLocation.longitude,
+                userLocation.latitude,
+              ]}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white" />
+            </MarkerView>
+          )} */}
+                  </MapView>
+                </View>
+
+                {/* Google Maps redirect button */}
+                <TouchableOpacity
+                  className="absolute top-2 right-2 flex-row bg-white rounded-e-lg p-2 shadow-md"
+                  onPress={() =>
+                    getDirectionsToLocation(
+                      item.itemLocation!.latitude,
+                      item.itemLocation!.longitude,
+                      item.itemLocation!.address
+                    )
+                  }
+                >
+                  <Text className="text-blue-600 text-xs font-medium">
+                    Get Direction
+                  </Text>
+                  <Image
+                    source={icons.rightArrow}
+                    className="w-4 h-4 mr-1"
+                    tintColor={"#2563eb"}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <View className="p-3 bg-gray-100 rounded-e-xl">
+                <Text className="text-gray-600  font-pmedium text-sm">
+                  {item.itemLocation.address}
+                </Text>
+                {item.itemLocation.radius && (
+                  <Text className="text-gray-500 text-xs ">
+                    Pickup radius:{" "}
+                    {item.itemLocation.radius >= 1000
+                      ? `${item.itemLocation.radius / 1000}km`
+                      : `${item.itemLocation.radius}m`}
+                  </Text>
+                )}
+
+                {/* Alternative: Make the entire address section clickable */}
+                <TouchableOpacity
+                  className="mt-2"
+                  onPress={() =>
+                    getDirectionsToLocation(
+                      item.itemLocation!.latitude,
+                      item.itemLocation!.longitude,
+                      item.itemLocation!.address
+                    )
+                  }
+                >
+                  <Text className="text-blue-600 text-sm font-medium">
+                    📍 View in Google Maps
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -761,51 +1146,6 @@ export default function ItemDetails() {
         </SafeAreaView>
       )}
 
-      <ImageView
-        images={
-          item && item.images
-            ? item.images.map((url) => ({
-                uri: url,
-                width: width, // Add dimensions
-                height: width, // Square aspect ratio by default
-              }))
-            : []
-        }
-        imageIndex={initialImageIndex}
-        visible={imageViewerVisible}
-        onRequestClose={() => setImageViewerVisible(false)}
-        swipeToCloseEnabled={true}
-        doubleTapToZoomEnabled={true}
-        presentationStyle="overFullScreen"
-        animationType="fade"
-        HeaderComponent={({ imageIndex }) => (
-          <SafeAreaView className="w-full">
-            <View className="flex-row justify-between items-center px-4 py-2">
-              <Text className="text-white font-medium">
-                {imageIndex + 1} / {item?.images?.length ?? 0}
-              </Text>
-              <TouchableOpacity
-                onPress={() => setImageViewerVisible(false)}
-                className="p-2"
-              >
-                <Image
-                  source={icons.close}
-                  className="w-6 h-6"
-                  tintColor="white"
-                />
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        )}
-        FooterComponent={() => (
-          <SafeAreaView className="w-full">
-            <View className="h-10" />
-          </SafeAreaView>
-        )}
-      />
-
-      {/* <FullScreenImageViewer /> */}
-
       <RentRequestForm
         visible={showRequestForm}
         onClose={() => setShowRequestForm(false)}
@@ -815,10 +1155,40 @@ export default function ItemDetails() {
         itemImage={item?.images?.[0] ?? ""}
         itemMinRentDuration={item?.itemMinRentDuration ?? 1}
       />
+
+      <CustomImageViewer
+        images={
+          item?.images?.filter((uri) => {
+            // More robust filtering
+            if (typeof uri !== "string") return false;
+            if (!uri || uri.trim().length === 0) return false;
+            if (!uri.startsWith("http")) return false;
+
+            // Additional validation
+            try {
+              new URL(uri);
+              return true;
+            } catch {
+              return false;
+            }
+          }) || []
+        }
+        visible={fullscreenImageVisible}
+        imageIndex={fullscreenImageIndex}
+        onRequestClose={() => {
+          setFullscreenImageVisible(false);
+          // Reset any other state if needed
+          setFullscreenImageIndex(0);
+        }}
+        onImageIndexChange={(index) => {
+          setFullscreenImageIndex(index);
+          // Optional: sync with carousel if needed
+          setActiveIndex(index);
+        }}
+      />
     </View>
   );
 }
-// Replace your existing RentRequestForm component with this updated version
 
 const RentRequestForm = ({
   visible,
@@ -976,10 +1346,7 @@ const RentRequestForm = ({
         : 0;
 
     return (
-      <View
-        className="absolute inset-0 bg-white"
-        style={{ paddingTop: insets.top }}
-      >
+      <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
         {/* Header */}
         <View className="flex-row justify-between items-center p-2  border-b border-gray-100">
           <TouchableOpacity

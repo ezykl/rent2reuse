@@ -12,7 +12,7 @@ interface ListingCardProps {
     itemStatus: string;
     images?: string[];
     requestCount: number;
-    createdAt?: string; // Add this
+    createdAt?: string;
   };
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
