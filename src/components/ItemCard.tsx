@@ -1,12 +1,11 @@
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-} from "react-native";
-import React from "react";
-import { icons } from "../constant"; // Adjust path as needed
+import { View, Text, Image, TouchableOpacity } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import * as Location from "expo-location";
+import { icons } from "../constant";
+import { useLocation } from "../hooks/useLocation";
+import { LocationUtils, Position } from "../utils/locationUtils";
+import { auth, db } from "../lib/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
 
 interface ItemCardProps {
   title: string;
@@ -15,7 +14,10 @@ interface ItemCardProps {
   price?: number;
   status?: string;
   condition?: string;
-  location?: string;
+  itemLocation?: {
+    latitude: number;
+    longitude: number;
+  };
   owner?: {
     id: string;
     fullname: string;
@@ -32,10 +34,75 @@ const ItemCard = ({
   status,
   owner,
   condition,
-  location,
+  itemLocation,
   showProtectionOverlay = false,
   onPress,
 }: ItemCardProps) => {
+  const DistanceBadge = ({ itemLocation }: { itemLocation: Position }) => {
+    const {
+      userLocation,
+      hasPermission,
+      isLoading,
+      firestoreLocation,
+      isUsingStoredLocation,
+    } = useLocation({
+      autoStart: true,
+      watchLocation: true, // Now uses 5-minute intervals instead of continuous watching
+      updateInterval: 5 * 60 * 1000, // 5 minutes
+    });
+
+    const [distanceText, setDistanceText] = useState<string | null>(null);
+
+    // Calculate distance using current location or Firestore location as fallback
+    useEffect(() => {
+      const locationToUse = userLocation || firestoreLocation;
+
+      if (hasPermission && locationToUse && itemLocation) {
+        try {
+          const result = LocationUtils.Distance.calculateUserToItemDistance(
+            locationToUse,
+            itemLocation
+          );
+          if (result.kilometers < 1) {
+            setDistanceText(`${Math.round(result.meters)}m`);
+          } else if (result.kilometers < 10) {
+            setDistanceText(`${result.kilometers.toFixed(1)}km`);
+          } else {
+            setDistanceText(`${Math.round(result.kilometers)}km`);
+          }
+        } catch (err) {
+          console.error("Error calculating distance:", err);
+          setDistanceText(null);
+        }
+      } else {
+        setDistanceText(null);
+      }
+    }, [userLocation, firestoreLocation, hasPermission, itemLocation]);
+
+    // Don't show anything if we don't have permission
+    if (!hasPermission) return null;
+
+    // Don't show if no distance calculated
+    if (!distanceText) return null;
+
+    return (
+      <View className="bg-gray-100/90 px-2 py-1 rounded-full flex-row items-center">
+        <Image
+          source={icons.location}
+          className="w-3 h-3 mr-1"
+          tintColor="#6B7280"
+        />
+        <Text className="text-xs text-gray-600 font-pmedium">
+          {distanceText}
+        </Text>
+        {/* Small indicator dot when using Firestore location */}
+        {isUsingStoredLocation && (
+          <View className="w-1 h-1 bg-blue-400 rounded-full ml-1" />
+        )}
+      </View>
+    );
+  };
+
   // Status color mapping
   const getStatusColor = (status: string | undefined) => {
     switch (status?.toLowerCase()) {
@@ -82,6 +149,21 @@ const ItemCard = ({
             </View>
           </View>
         )}
+
+        {/* Distance Badge - Only show if location data exists and profile is complete */}
+        {!showProtectionOverlay &&
+          itemLocation &&
+          itemLocation.latitude &&
+          itemLocation.longitude && (
+            <View className="absolute top-2 left-2">
+              <DistanceBadge
+                itemLocation={{
+                  latitude: itemLocation.latitude,
+                  longitude: itemLocation.longitude,
+                }}
+              />
+            </View>
+          )}
 
         {/* Status Badge - Only show if not protected */}
         {!showProtectionOverlay && status && (

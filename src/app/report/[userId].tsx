@@ -33,12 +33,12 @@ export default function ReportScreen() {
 
   const handleSubmitReport = async () => {
     if (!selectedReason) {
-      Alert.alert("Error", "Please select a reason for reporting");
+      Alert.alert("Reason Required", "Please select a reason for reporting");
       return;
     }
 
     if (!description.trim()) {
-      Alert.alert("Error", "Please provide details about the issue");
+      Alert.alert("Missing Details", "Please provide details about the issue.");
       return;
     }
 
@@ -55,6 +55,35 @@ export default function ReportScreen() {
       };
 
       await addDoc(collection(db, "reports"), reportData);
+
+      if (auth.currentUser?.uid) {
+        try {
+          // Create a reference to the user's notifications subcollection
+          const userNotificationsRef = collection(
+            db,
+            `users/${auth.currentUser?.uid}/notifications`
+          );
+
+          await addDoc(userNotificationsRef, {
+            type: "REPORT_ISSUE",
+            title: "Report Submitted",
+            message: `We've received your report regarding ${reportData.reason.toLowerCase()}. Our team will review this matter and take appropriate action if needed.`,
+            isRead: false,
+            createdAt: serverTimestamp(),
+            data: {
+              reportReason: reportData.reason,
+              reportedUserId: userId,
+              reportDescription: description.trim().slice(0, 100),
+            },
+          });
+        } catch (error) {
+          console.error("Error creating welcome notification:", error);
+        }
+
+        // await createNotification(auth.currentUser.uid, "REPORT_ISSUE", {
+        //   reportReason: reportData.reason,
+        // });
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -77,7 +106,7 @@ export default function ReportScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      <View className="flex-row items-center p-4 border-b border-gray-100">
+      <View className="flex-row justify-center items-center p-4 border-b border-gray-100">
         <TouchableOpacity onPress={() => router.back()} className="mr-3">
           <Image
             source={icons.leftArrow}
@@ -85,11 +114,11 @@ export default function ReportScreen() {
             tintColor="#6B7280"
           />
         </TouchableOpacity>
-        <Text className="text-lg font-bold text-gray-900">Report User</Text>
+        <Text className="text-xl font-pbold text-gray-800">Report User</Text>
       </View>
 
       <ScrollView className="flex-1 p-4">
-        <Text className="text-base font-semibold mb-4">
+        <Text className="text-base font-psemibold mb-4">
           Select a reason for reporting:
         </Text>
 
@@ -104,7 +133,7 @@ export default function ReportScreen() {
             }`}
           >
             <Text
-              className={`${
+              className={`font-pmedium ${
                 selectedReason === reason ? "text-primary" : "text-gray-700"
               }`}
             >
@@ -113,7 +142,7 @@ export default function ReportScreen() {
           </TouchableOpacity>
         ))}
 
-        <Text className="text-base font-semibold mt-6 mb-2">
+        <Text className="text-base font-psemibold mt-6 mb-2">
           Provide additional details:
         </Text>
         <TextInput

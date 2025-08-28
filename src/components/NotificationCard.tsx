@@ -43,14 +43,14 @@ const NotificationCard = ({
       case "REPORT_ISSUE":
         return {
           icon: icons.report,
-          bgColor: "bg-blue-100",
-          iconColor: "#FBBF24",
+          bgColor: "bg-red-400",
+          iconColor: "#FFF",
         };
       case "REPORT_RESPONSE":
         return {
-          icon: icons.ringBell,
-          bgColor: "bg-gray-200",
-          iconColor: "#374957",
+          icon: icons.report,
+          bgColor: "bg-red-400",
+          iconColor: "#FFF",
         };
       case "RENT_REQUEST_CANCELLED":
         return {
@@ -85,6 +85,12 @@ const NotificationCard = ({
       case "SUPPORT_TICKET":
         return {
           icon: icons.ticket,
+          bgColor: "bg-orange-100",
+          iconColor: "#d96c00",
+        };
+      case "REPORT_RESPOSE":
+        return {
+          icon: icons.report,
           bgColor: "bg-orange-100",
           iconColor: "#d96c00",
         };
@@ -195,6 +201,12 @@ const NotificationCard = ({
             >
               {notification.message}
             </Text>
+
+            {notification.description && (
+              <Text className="text-sm mt-1 text-gray-600" numberOfLines={4}>
+                {notification.description}
+              </Text>
+            )}
 
             {/* Delete Action */}
             <TouchableOpacity

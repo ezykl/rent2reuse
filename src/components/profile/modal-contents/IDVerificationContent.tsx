@@ -22,7 +22,11 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 const OCR_SPACE_API_KEY = "K84356591988957";
 
 interface IDVerificationContentProps {
-  onSave: (idVerified: { idImage: string; idNumber: string }) => void;
+  onSave: (idVerified: {
+    idImage: string;
+    idNumber: string;
+    idType: IDType;
+  }) => void;
   onClose?: () => void;
   loading?: boolean;
 }
@@ -343,12 +347,17 @@ export const IDVerificationContent = ({
   };
 
   const analyzeIdAndSave = async () => {
+    let sanitizedIdNumber;
     try {
       if (!idImage) {
         setValidationError("Please upload your ID first.");
         return;
       }
 
+      sanitizedIdNumber =
+        selectedIDType === "drivers"
+          ? idNumber.replace(/[-/_\s]/g, "")
+          : idNumber;
       setLoading(true);
       setValidationError(null);
 
@@ -385,7 +394,7 @@ export const IDVerificationContent = ({
 
       const matchFirst = new RegExp(clean(userData.firstName)).test(extracted);
       const matchLast = new RegExp(clean(userData.lastName)).test(extracted);
-      const matchIdNo = new RegExp(clean(idNumber)).test(extracted);
+      const matchIdNo = new RegExp(clean(sanitizedIdNumber)).test(extracted);
       let matchIdType = false;
 
       if (selectedIDType === "philsys") {
@@ -429,7 +438,7 @@ export const IDVerificationContent = ({
       console.log("ID details validated successfully.");
 
       // Call onSave with the verified data
-      await onSave({ idImage, idNumber });
+      await onSave({ idImage, idNumber, idType: selectedIDType });
 
       // Show success toast
       Toast.show({
@@ -595,7 +604,9 @@ export const IDVerificationContent = ({
               value={idNumber}
               onChangeText={setIdNumber}
               className="bg-gray-100 font-pmedium text-lg pt-2"
-              keyboardType="numeric"
+              keyboardType={
+                selectedIDType === "drivers" ? "default" : "numeric"
+              }
             />
           </View>
         </View>

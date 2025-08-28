@@ -862,6 +862,7 @@ const AddListing = () => {
           const firstName = userData?.firstname || "";
           const middleName = userData?.middlename || "";
           const lastName = userData?.lastname || "";
+          const location = userData?.location || {};
 
           const nameParts = [];
           if (firstName) nameParts.push(firstName);
@@ -872,6 +873,9 @@ const AddListing = () => {
         }
 
         // Create the listing document
+        const ownerDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        const userData = ownerDoc.data();
+
         const listingData = {
           itemName: formData.title,
           itemCategory: formData.category,
@@ -879,16 +883,21 @@ const AddListing = () => {
           itemPrice: Number(formData.price),
           itemMinRentDuration: Number(formData.minimumDays),
           itemCondition: formData.condition,
-          itemLocation: formData.location,
+          itemLocation: {
+            address: userData?.location?.address || "",
+            latitude: userData?.location?.latitude || 0,
+            longitude: userData?.location?.longitude || 0,
+            radius: userData?.location?.radius || 0,
+          },
           owner: {
             id: auth.currentUser?.uid,
             fullname: fullname,
           },
           createdAt: serverTimestamp(),
           itemStatus: "Available",
-          downPayment: {
-            percentage: Number(formData.downpaymentPercentage),
-          },
+          ...(formData.enableDownpayment && {
+            downpaymentPercentage: Number(formData.downpaymentPercentage),
+          }),
           enableAI: useAI,
         };
 
@@ -1105,7 +1114,7 @@ const AddListing = () => {
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     onPress={pickImage}
                     className={`w-24 h-24 rounded-xl bg-gray-100 border items-center justify-center ${
                       errors.images ? "border-red-500" : "border-gray-200"
@@ -1119,7 +1128,7 @@ const AddListing = () => {
                     <Text className="text-secondary-400 font-pregular text-xs text-center">
                       Upload
                     </Text>
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                 </>
               )}
             </ScrollView>
@@ -1946,12 +1955,9 @@ const AddListing = () => {
                 />
               </TouchableOpacity>
 
-              <View className="flex-1 items-center">
+              <View className="flex-1 items-center bg-black/60 rounded-full py-2 px-2 mx-4">
                 <Text className="text-white font-pbold text-xl">
                   Capture to Analyze
-                </Text>
-                <Text className="text-white/80 text-sm font-pmedium mt-1">
-                  Image will be analyzed automatically
                 </Text>
               </View>
 
@@ -1976,7 +1982,7 @@ const AddListing = () => {
               {!expanded && (
                 <TouchableOpacity
                   onPress={() => setExpanded(true)}
-                  className="bg-blue-400/60 rounded-full p-3 self-start"
+                  className="bg-blue-400/60 rounded-full p-2 self-end"
                 >
                   <Text className="text-2xl">💡</Text>
                 </TouchableOpacity>
@@ -1984,29 +1990,39 @@ const AddListing = () => {
 
               {/* Expanded Tips Box */}
               {expanded && (
-                <View className="bg-blue-400/60 rounded-xl px-5 py-3">
+                <View className="bg-blue-300/50 rounded-xl px-5 py-3 border border-blue-600">
                   <View className="flex-row justify-between items-center mb-2">
                     <Text className="font-pbold text-white text-lg">
                       Camera Tips
                     </Text>
                     <TouchableOpacity onPress={() => setExpanded(false)}>
-                      <Text className="text-red-600 text-lg">✖</Text>
+                      <Image
+                        source={icons.close}
+                        className="w-8 h-8"
+                        tintColor="red"
+                      />
                     </TouchableOpacity>
                   </View>
 
                   {[
-                    "✔ Use bright, even lighting",
-                    "✔ Center the item in the frame",
-                    "✔ Use a clear, plain background",
-                    "✔ Make sure the full item is visible",
-                    "✔ Hold your phone steady",
+                    "Use bright, even lighting",
+                    "Use a clear, plain background",
+                    "Make sure the full item is visible",
+                    "Hold your phone steady",
                   ].map((tip, idx) => (
-                    <Text
-                      key={idx}
-                      className="text-white text-sm font-pmedium mb-0.5"
-                    >
-                      {tip}
-                    </Text>
+                    <View key={idx} className="flex-row items-start mb-1">
+                      <Image
+                        source={icons.check}
+                        className="w-4 h-4 mr-2"
+                        tintColor="#fff"
+                      />
+                      <Text
+                        key={idx}
+                        className="text-white text-sm font-pmedium mb-0.5"
+                      >
+                        {tip}
+                      </Text>
+                    </View>
                   ))}
                 </View>
               )}

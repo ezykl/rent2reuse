@@ -23,7 +23,7 @@ import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
 import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
-
+import { icons } from "@/constant";
 import { createUserWithEmailAndPassword } from "@firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
 import {
@@ -51,6 +51,8 @@ const SignUp = () => {
     email: string;
     password: string;
     confirmPass: string;
+    suffix?: string;
+    sex: string;
   }>({
     firstname: "",
     middlename: "",
@@ -58,6 +60,8 @@ const SignUp = () => {
     email: "",
     password: "",
     confirmPass: "",
+    suffix: "",
+    sex: "",
   });
 
   // Real-time validation states
@@ -67,6 +71,9 @@ const SignUp = () => {
     confirmPass?: string;
     firstname?: string;
     lastname?: string;
+    suffix?: string;
+    sex?: string;
+    middlename?: string;
   }>({});
 
   // Add/update these state variables at the top of your component
@@ -82,6 +89,11 @@ const SignUp = () => {
       layoutMeasurement.height + contentOffset.y >=
       contentSize.height - paddingToBottom;
     setIsAtBottom(isCloseToBottom);
+  };
+
+  const validateSex = (sex: string) => {
+    if (!sex.trim()) return "Please select your sex";
+    return "";
   };
 
   // Real-time validation functions
@@ -121,6 +133,29 @@ const SignUp = () => {
     return errors;
   };
 
+  // First, add validation functions for middlename and suffix
+  const validateOptionalField = (value: string, fieldName: string) => {
+    if (!value) return "";
+
+    // List of values to be considered as empty
+    const emptyValues = ["n/a", "na", "none", "n.a.", "n.a"];
+
+    if (emptyValues.includes(value.toLowerCase().trim())) {
+      return "";
+    }
+
+    // If user entered something else, validate it
+    if (!/^[a-zA-Z\s.]+$/.test(value)) {
+      return `${fieldName} should contain only letters, spaces, and dots`;
+    }
+
+    if (value.length < 2) {
+      return `${fieldName} should be at least 2 characters`;
+    }
+
+    return "";
+  };
+
   const validateConfirmPassword = (confirmPass: string, password: string) => {
     if (!confirmPass) return "Please confirm your password";
     if (confirmPass !== password) return "Passwords do not match";
@@ -137,7 +172,17 @@ const SignUp = () => {
 
   // Handle form changes with real-time validation
   const handleFormChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    // Clean the value if it's considered empty
+    const cleanValue = (val: string) => {
+      const emptyValues = ["n/a", "na", "none", "n.a.", "n.a"];
+      return emptyValues.includes(val.toLowerCase().trim()) ? "" : val;
+    };
+
+    // For middlename and suffix, clean the value before setting
+    const finalValue =
+      field === "middlename" || field === "suffix" ? cleanValue(value) : value;
+
+    setForm((prev) => ({ ...prev, [field]: finalValue }));
 
     // Real-time validation
     let error = "";
@@ -162,6 +207,22 @@ const SignUp = () => {
       case "lastname":
         error = validateName(value, "Last name");
         break;
+      case "sex":
+        error = validateSex(value);
+        break;
+      case "middlename":
+        if (value.trim()) {
+          // Only validate if user entered something
+          error = validateOptionalField(value, "Middle name");
+        }
+        break;
+
+      case "suffix":
+        if (value.trim()) {
+          // Only validate if user entered something
+          error = validateOptionalField(value, "Suffix");
+        }
+        break;
     }
 
     setErrors((prev) => ({ ...prev, [field]: error }));
@@ -182,8 +243,10 @@ const SignUp = () => {
       return (
         form.firstname.trim() !== "" &&
         form.lastname.trim() !== "" &&
+        form.sex.trim() !== "" &&
         !errors.firstname &&
         !errors.lastname &&
+        !errors.sex &&
         isChecked
       );
     }
@@ -207,6 +270,7 @@ const SignUp = () => {
           ...errors,
           firstname: validateName(form.firstname, "First name"),
           lastname: validateName(form.lastname, "Last name"),
+          sex: validateSex(form.sex),
         });
       }
     }
@@ -274,11 +338,20 @@ const SignUp = () => {
       const uid = userCredential.user.uid;
 
       // 2. Create user document in Firestore
+      // Clean optional fields before saving
+      const cleanedForm = {
+        ...form,
+        middlename: form.middlename?.trim() || "",
+        suffix: form.suffix?.trim() || "",
+      };
+
       await setDoc(doc(db, "users", uid), {
-        firstname: form.firstname,
-        middlename: form.middlename || "",
-        lastname: form.lastname,
-        email: form.email.trim(),
+        firstname: cleanedForm.firstname,
+        middlename: cleanedForm.middlename,
+        suffix: cleanedForm.suffix,
+        lastname: cleanedForm.lastname,
+        email: cleanedForm.email.trim(),
+        sex: cleanedForm.sex,
         role: "user",
         status: "Pending",
         createdAt: new Date().toISOString(),
@@ -419,11 +492,17 @@ const SignUp = () => {
 
       <InputField
         title="Middle Name"
+        subtitle="(optional)"
         value={form.middlename || ""}
-        placeholder="Enter middle name (optional)"
+        placeholder="Enter middle name or leave empty"
         handleChangeText={(e: string) => handleFormChange("middlename", e)}
         otherStyles="mt-2"
       />
+      {errors.middlename && (
+        <Text className="text-red-500 text-sm mt-1 ml-2">
+          {errors.middlename}
+        </Text>
+      )}
 
       <InputField
         title="Last Name"
@@ -432,10 +511,72 @@ const SignUp = () => {
         handleChangeText={(e: string) => handleFormChange("lastname", e)}
         otherStyles="mt-2"
       />
-      {errors.lastname && (
-        <Text className="text-red-500 text-sm mt-1 ml-2">
-          {errors.lastname}
+
+      <InputField
+        title="Suffix"
+        subtitle="(optional)"
+        value={form.suffix || ""}
+        placeholder="Enter suffix (e.g. Jr., III) or leave empty"
+        handleChangeText={(e: string) => handleFormChange("suffix", e)}
+        otherStyles="mt-2"
+      />
+      {errors.suffix && (
+        <Text className="text-red-500 text-sm mt-1 ml-2">{errors.suffix}</Text>
+      )}
+
+      <View className=" flex-1 ">
+        <Text className="text-xl text-secondary-300 font-psemibold mt-2">
+          Sex
         </Text>
+        <View className="flex-row gap-4">
+          <TouchableOpacity
+            onPress={() => handleFormChange("sex", "male")}
+            className={`flex-1 flex-row justify-center items-center gap-3 py-4 px-4 rounded-xl border-2 ${
+              form.sex === "male"
+                ? "border-blue-500 bg-blue-50"
+                : "border-secondary-300 bg-white"
+            }`}
+          >
+            <Image
+              source={icons.male}
+              className="w-6 h-6"
+              tintColor={form.sex === "male" ? "#3b82f6" : "#6C9082"}
+            />
+            <Text
+              className={`text-center font-pmedium ${
+                form.sex === "male" ? "text-blue-500" : "text-secondary-300"
+              }`}
+            >
+              Male
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => handleFormChange("sex", "female")}
+            className={`flex-1 flex-row justify-center items-center gap-3 py-4 px-4 rounded-xl border-2 ${
+              form.sex === "female"
+                ? "border-pink-400 bg-pink-50"
+                : "border-secondary-300 bg-white"
+            }`}
+          >
+            <Image
+              source={icons.female}
+              className="w-6 h-6"
+              tintColor={form.sex === "female" ? "#f472b6" : "#6C9082"}
+            />
+            <Text
+              className={`text-center font-psemibold ${
+                form.sex === "female" ? "text-pink-400" : "text-secondary-300"
+              }`}
+            >
+              Female
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {errors.sex && (
+        <Text className="text-red-500 text-sm mt-1 ml-2">{errors.sex}</Text>
       )}
 
       {/* Terms and Conditions Checkbox */}

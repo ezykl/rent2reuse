@@ -6,13 +6,20 @@ export interface Item {
   itemPrice: number;
   itemStatus: string;
   itemCondition: string;
-  itemLocation: string;
+  itemLocation: {
+    latitude: number;
+    longitude: number;
+    address: string;
+    radius?: number;
+  };
+  downpaymentPercentage?: number;
+  enableAI?: boolean;
   itemCategory: string;
   itemMinRentDuration?: number;
   createdAt: any;
   owner: {
     id: string;
     fullname: string;
-    profileImage?: string; // Add this field
+    profileImage?: string;
   };
 }

@@ -12,6 +12,7 @@ export type NotificationType =
   | "REVIEW_REMINDER"
   | "SUPPORT_TICKET"
   | "REPORT_ISSUE"
+  | "REPORT_RESPONSE"
   | "SYSTEM_ALERT";
 
 export interface FirestoreNotification {
@@ -21,8 +22,11 @@ export interface FirestoreNotification {
   title: string;
   message: string;
   isRead: boolean;
-  createdAt: any; // Firestore Timestamp
+  createdAt: any;
+  description?: string;
   data?: {
+    reportId?: string;
+    reportReason?: string;
     itemId?: string;
     requestId?: string;
     messageId?: string;

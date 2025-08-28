@@ -259,7 +259,7 @@ const ForgotPassword = () => {
 
                 {/* Email input section */}
                 <View className="mt-4">
-                  <Text className="text-xl font-pmedium text-secondary-300 mb-2">
+                  <Text className="text-xl text-secondary-300 font-psemibold m-1">
                     Email
                   </Text>
                   <View
@@ -276,6 +276,7 @@ const ForgotPassword = () => {
                       onChangeText={handleEmailChange}
                       onBlur={() => setIsTouched(true)}
                       placeholder="Enter your email"
+                      placeholderTextColor={"#A7BEB4"}
                       keyboardType="email-address"
                       autoCapitalize="none"
                       className="px-4 py-3 font-psemibold text-base text-secondary-400"

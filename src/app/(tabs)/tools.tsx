@@ -839,11 +839,11 @@ const Tools = () => {
 
       updates.forEach((change) => {
         if (change.type === "added") {
-          Toast.show({
-            type: ALERT_TYPE.INFO,
-            title: "New Rental Request",
-            textBody: "You have received a new rental request",
-          });
+          // Toast.show({
+          //   type: ALERT_TYPE.INFO,
+          //   title: "New Rental Request",
+          //   textBody: "You have received a new rental request",
+          // });
           shouldRefreshListings = true;
         }
         if (change.type === "modified") {

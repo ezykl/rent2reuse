@@ -99,6 +99,8 @@ import share from "../assets/icons/share.png";
 import cross from "../assets/icons/cross.png";
 import peso from "../assets/icons/peso-sign.png";
 import handshake from "../assets/icons/handshake.png";
+import male from "../assets/icons/men.png";
+import female from "../assets/icons/female.png";
 
 export default {
   handshake,
@@ -106,6 +108,8 @@ export default {
   ringBell,
   megaPhone,
   cross,
+  female,
+  male,
   share,
   receipt,
   emptyBox,
