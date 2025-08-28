@@ -18,7 +18,7 @@ import {
 } from "@maplibre/maplibre-react-native";
 
 import * as Location from "expo-location";
-import { ALERT_TYPE, Toast } from "react-native-alert-notification";
+// Remove the Toast import since we're displaying errors in the view now
 
 const CEBU_COORDINATES = {
   latitude: 10.296581,
@@ -142,8 +142,11 @@ export const LocationModalContent = ({
   const [currentZoom, setCurrentZoom] = useState(14);
   const [shouldTrackLocation, setShouldTrackLocation] = useState(true);
   const [showCircleRadius, setShowCircleRadius] = useState(true);
-  const [selectedRadius, setSelectedRadius] = useState(500); // Default 500m
+  const [selectedRadius, setSelectedRadius] = useState(100); // Changed to 100m default
   const [showRadiusSelector, setShowRadiusSelector] = useState(false);
+
+  // Add error state for displaying errors in the note view
+  const [errorMessage, setErrorMessage] = useState<string>("");
 
   const circleFeature = useMemo(() => {
     if (!pinCoord || !showCircleRadius) return null;
@@ -162,14 +165,12 @@ export const LocationModalContent = ({
   const updatePinLocation = async (coords: [number, number]) => {
     // Check if coordinates are within Cebu bounds
     if (!isWithinCebuBounds(coords)) {
-      Toast.show({
-        type: ALERT_TYPE.WARNING,
-        title: "Location Restricted",
-        textBody: "Please select a location within Cebu City limits",
-      });
+      setErrorMessage("Please select a location within Cebu City limits");
       return;
     }
 
+    // Clear any previous error
+    setErrorMessage("");
     setPinCoord(coords);
     const [lng, lat] = coords;
     const formattedAddress = await getAddressFromCoordinates(lat, lng);
@@ -182,17 +183,14 @@ export const LocationModalContent = ({
       });
     }
   };
+
   const getUserLocation = async (): Promise<void> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       setHasLocationPermission(status === "granted");
 
       if (status !== "granted") {
-        Toast.show({
-          type: ALERT_TYPE.WARNING,
-          title: "Permission Required",
-          textBody: "Please enable location services to use this feature",
-        });
+        setErrorMessage("Please enable location services to use this feature");
         return;
       }
 
@@ -209,18 +207,10 @@ export const LocationModalContent = ({
         setUserLocation(userCoords);
         await updatePinLocation(userCoords);
       } else {
-        Toast.show({
-          type: ALERT_TYPE.INFO,
-          title: "Location Notice",
-          textBody: "This app is limited to Cebu City area",
-        });
+        setErrorMessage("This app is limited to Cebu City area");
       }
     } catch (error) {
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Failed to get your location. Please try again.",
-      });
+      setErrorMessage("Failed to get your location. Please try again.");
     }
   };
 
@@ -248,17 +238,18 @@ export const LocationModalContent = ({
 
   const handleSearch = async () => {
     if (searchQuery.length < 3) {
-      alert("Please enter at least 3 characters to search");
+      setErrorMessage("Please enter at least 3 characters to search");
       return;
     }
 
     try {
       setIsSearching(true);
+      setErrorMessage(""); // Clear any previous error
       const results = await Location.geocodeAsync(searchQuery);
 
       if (results.length === 0) {
         setSearchResults([]);
-        alert("No locations found for your search");
+        setErrorMessage("No locations found for your search");
         return;
       }
 
@@ -279,7 +270,7 @@ export const LocationModalContent = ({
 
       setSearchResults(detailedResults);
     } catch (error) {
-      alert("Failed to search location. Please try again.");
+      setErrorMessage("Failed to search location. Please try again.");
     } finally {
       setIsSearching(false);
     }
@@ -299,13 +290,24 @@ export const LocationModalContent = ({
 
   return (
     <View className="flex-1 w-full h-full">
-      <View className=" bg-orange-400/10 p-2 m-4 mb-0  rounded-xl border border-orange-300">
-        <Text className="text-orange-500 text-xs font-pmedium text-center">
-          Note: Please pin the exact location where the item will be available
-          for pickup. This helps interested renters find the item easily and
-          ensures a smooth handover.
+      {/* Note view with error handling */}
+      <View
+        className={`p-2 m-4 mb-0 rounded-xl border ${
+          errorMessage
+            ? "bg-red-400/10 border-red-300"
+            : "bg-orange-400/10 border-orange-300"
+        }`}
+      >
+        <Text
+          className={`text-xs font-pmedium text-center ${
+            errorMessage ? "text-red-500" : "text-orange-500"
+          }`}
+        >
+          {errorMessage ||
+            "Note: Please pin the exact location where the item will be available for pickup. This helps interested renters find the item easily and ensures a smooth handover."}
         </Text>
       </View>
+
       {/* Search Bar */}
       <View className="p-4">
         <View className="flex-row gap-2">
@@ -328,7 +330,7 @@ export const LocationModalContent = ({
         </View>
 
         {searchResults.length > 0 && (
-          <ScrollView className="relative mt-2  rounded-lg ">
+          <ScrollView className="relative mt-2 rounded-lg ">
             <Text className="text-secondary-400 text-sm font-pmedium mb-2">
               Search Results{" "}
             </Text>
@@ -393,6 +395,23 @@ export const LocationModalContent = ({
             </MarkerView>
           )}
         </MapView>
+
+        {/* Floating Location Button - Google Maps style */}
+        {hasLocationPermission &&
+          userLocation &&
+          isWithinCebuBounds(userLocation) && (
+            <TouchableOpacity
+              className="absolute bottom-20 right-4 bg-white rounded-full p-3 shadow-lg"
+              style={{ elevation: 5, zIndex: 999 }}
+              onPress={handlePinMyLocation}
+            >
+              <Image
+                source={require("@/assets/icons/location.png")} // You'll need to add a location icon
+                style={{ width: 24, height: 24 }}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          )}
 
         {showRadiusSelector && (
           <View
@@ -469,32 +488,12 @@ export const LocationModalContent = ({
       </View>
 
       <View className="p-4 bg-white border-t border-gray-200">
-        {/* Show controls only when pin is placed - Pin My Location and Show Radius in one row */}
+        {/* Show controls only when pin is placed - Show/Hide Radius and Radius selector */}
         {pinCoord && address && (
           <View className="flex-row gap-2 mb-2">
-            {/* Pin My Location - only show if user location is available and within bounds */}
-            {hasLocationPermission &&
-              userLocation &&
-              isWithinCebuBounds(userLocation) && (
-                <TouchableOpacity
-                  className="flex-1 bg-blue-500 py-3 rounded-xl"
-                  onPress={handlePinMyLocation}
-                >
-                  <Text className="text-white text-center font-pmedium">
-                    Pin My Location
-                  </Text>
-                </TouchableOpacity>
-              )}
-
             {/* Show/Hide Radius button */}
             <TouchableOpacity
-              className={`${
-                hasLocationPermission &&
-                userLocation &&
-                isWithinCebuBounds(userLocation)
-                  ? "flex-1"
-                  : "flex-1"
-              } py-3 rounded-xl ${
+              className={`flex-1 py-3 rounded-xl ${
                 showCircleRadius ? "bg-primary" : "bg-gray-400"
               }`}
               onPress={() => setShowCircleRadius(!showCircleRadius)}
@@ -524,13 +523,17 @@ export const LocationModalContent = ({
         <TouchableOpacity
           className="bg-primary py-3 rounded-xl"
           onPress={() => {
-            if (pinCoord && address) {
+            if (pinCoord && address && isWithinCebuBounds(pinCoord)) {
               onSave({
                 latitude: pinCoord[1],
                 longitude: pinCoord[0],
                 address,
                 radius: showCircleRadius ? selectedRadius : undefined,
               });
+            } else if (pinCoord && !isWithinCebuBounds(pinCoord)) {
+              setErrorMessage(
+                "Please select a location within Cebu City limits."
+              );
             }
           }}
           disabled={!pinCoord || !address || loading}
