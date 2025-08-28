@@ -122,6 +122,7 @@ export default function ItemDetails() {
   const [userLocation, setUserLocation] = useState<{
     latitude: number;
     longitude: number;
+    source: "device" | "profile";
   } | null>(null);
   const [distanceToItem, setDistanceToItem] = useState<number | null>(null);
 
@@ -216,24 +217,52 @@ export default function ItemDetails() {
   // Get user's current location
   const getCurrentLocation = async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
+      // First try to get user's stored location from Firestore
+      if (user?.uid) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        const userData = userDoc.data();
 
-      const location = await Location.getCurrentPositionAsync({});
-      const userCoords = {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      };
-      setUserLocation(userCoords);
+        if (userData?.location?.latitude && userData?.location?.longitude) {
+          setUserLocation({
+            latitude: userData.location.latitude,
+            longitude: userData.location.longitude,
+            source: "profile",
+          });
 
-      if (item?.itemLocation) {
-        const distance = calculateDistance(
-          userCoords.latitude,
-          userCoords.longitude,
-          item.itemLocation.latitude,
-          item.itemLocation.longitude
-        );
-        setDistanceToItem(distance);
+          // Calculate distance if item location exists
+          if (item?.itemLocation) {
+            const distance = calculateDistance(
+              userData.location.latitude,
+              userData.location.longitude,
+              item.itemLocation.latitude,
+              item.itemLocation.longitude
+            );
+            setDistanceToItem(distance);
+          }
+        }
+      }
+
+      // Then try to get device location if permission is granted
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status === "granted") {
+        const location = await Location.getCurrentPositionAsync({});
+        const deviceLocation = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          source: "device" as const,
+        };
+
+        setUserLocation(deviceLocation);
+
+        if (item?.itemLocation) {
+          const distance = calculateDistance(
+            deviceLocation.latitude,
+            deviceLocation.longitude,
+            item.itemLocation.latitude,
+            item.itemLocation.longitude
+          );
+          setDistanceToItem(distance);
+        }
       }
     } catch (error) {
       console.error("Error getting location:", error);
@@ -745,15 +774,16 @@ export default function ItemDetails() {
                       source={icons.location}
                       className="w-4 h-4 mr-1"
                       resizeMode="contain"
-                      tintColor={"white"}
+                      tintColor={
+                        userLocation?.source === "profile" ? "#9CA3AF" : "white"
+                      }
                     />
 
                     <Text className="text-white font-psemibold">
-                      {distanceToItem
-                        ? distanceToItem < 1
-                          ? `${Math.round(distanceToItem * 1000)}m`
-                          : `${distanceToItem.toFixed(1)}km`
-                        : "Unknown distance"}
+                      {distanceToItem < 1
+                        ? `${Math.round(distanceToItem * 1000)}m`
+                        : `${distanceToItem.toFixed(1)}km`}
+                      {/* {userLocation?.source === 'profile' && ' (Profile)'} */}
                     </Text>
                   </View>
                 )}

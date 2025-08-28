@@ -874,61 +874,67 @@ const Profile: React.FC = () => {
       <View className="bg-white rounded-2xl shadow-sm mb-6">
         {/* Quick Actions */}
         <View className="divide-y divide-gray-100">
-          <TouchableOpacity
-            onPress={() => setActiveModal("contact")}
-            className="flex-row items-center px-6 py-4"
-          >
-            <Image
-              source={icons.call}
-              className="w-6 h-6 mr-3"
-              tintColor="#6B7280"
-            />
-            <Text className="flex-1 font-pmedium text-gray-800">
-              Contact Number
-            </Text>
-            <Image
-              source={icons.arrowRight}
-              className="w-5 h-5"
-              tintColor="#9CA3AF"
-            />
-          </TouchableOpacity>
+          {isProfileComplete && (
+            <>
+              <TouchableOpacity
+                onPress={() => setActiveModal("contact")}
+                className="flex-row items-center px-6 py-4"
+              >
+                <Image
+                  source={icons.call}
+                  className="w-6 h-6 mr-3"
+                  tintColor="#6B7280"
+                />
+                <Text className="flex-1 font-pmedium text-gray-800">
+                  Contact Number
+                </Text>
+                <Image
+                  source={icons.arrowRight}
+                  className="w-5 h-5"
+                  tintColor="#9CA3AF"
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setActiveModal("location")}
-            className="flex-row items-center px-6 py-4"
-          >
-            <Image
-              source={icons.location}
-              className="w-6 h-6 mr-3"
-              tintColor="#6B7280"
-            />
-            <Text className="flex-1 font-pmedium text-gray-800">Location</Text>
-            <Image
-              source={icons.arrowRight}
-              className="w-5 h-5"
-              tintColor="#9CA3AF"
-            />
-          </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setActiveModal("location")}
+                className="flex-row items-center px-6 py-4"
+              >
+                <Image
+                  source={icons.location}
+                  className="w-6 h-6 mr-3"
+                  tintColor="#6B7280"
+                />
+                <Text className="flex-1 font-pmedium text-gray-800">
+                  Location
+                </Text>
+                <Image
+                  source={icons.arrowRight}
+                  className="w-5 h-5"
+                  tintColor="#9CA3AF"
+                />
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => router.push("/plans")}
-            className="flex-row items-center px-6 py-4"
-            disabled={!isProfileComplete}
-          >
-            <Image
-              source={icons.card}
-              className="w-6 h-6 mr-3"
-              tintColor="#6B7280"
-            />
-            <Text className="flex-1 font-pmedium text-gray-800">
-              Subscription
-            </Text>
-            <Image
-              source={icons.arrowRight}
-              className="w-5 h-5"
-              tintColor="#9CA3AF"
-            />
-          </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push("/plans")}
+                className="flex-row items-center px-6 py-4"
+                disabled={!isProfileComplete}
+              >
+                <Image
+                  source={icons.card}
+                  className="w-6 h-6 mr-3"
+                  tintColor="#6B7280"
+                />
+                <Text className="flex-1 font-pmedium text-gray-800">
+                  Subscription
+                </Text>
+                <Image
+                  source={icons.arrowRight}
+                  className="w-5 h-5"
+                  tintColor="#9CA3AF"
+                />
+              </TouchableOpacity>
+            </>
+          )}
 
           <TouchableOpacity
             onPress={() => router.push("/transactions")}
@@ -1286,7 +1292,7 @@ const Profile: React.FC = () => {
                 />
                 <View>
                   <Text className="text-gray-500 text-sm">Location</Text>
-                  <Text className="text-gray-800 font-pmedium ml-3">
+                  <Text className="text-gray-800 font-pmedium ">
                     {profileData?.location?.address || "Not set"}
                   </Text>
                 </View>

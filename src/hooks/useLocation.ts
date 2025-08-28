@@ -6,12 +6,21 @@ import {
   Position,
   DistanceResult,
 } from "../utils/locationUtils";
+import { auth, db } from "@/lib/firebaseConfig";
+import { doc, getDoc } from "firebase/firestore";
 
 interface UseLocationOptions {
   autoStart?: boolean;
   watchLocation?: boolean;
   accuracy?: Location.LocationAccuracy;
   showErrorAlerts?: boolean;
+  updateInterval?: number; // NEW: Update interval in milliseconds (default 5 minutes)
+}
+
+interface StoredLocation {
+  latitude: number;
+  longitude: number;
+  address?: string;
 }
 
 interface UseLocationReturn {
@@ -19,6 +28,9 @@ interface UseLocationReturn {
   isLoading: boolean;
   error: string | null;
   hasPermission: boolean;
+  isUsingStoredLocation: boolean;
+  firestoreLocation: StoredLocation | null;
+  lastUpdated: Date | null; // NEW: Track when location was last updated
   refreshLocation: () => Promise<void>;
   startWatching: () => Promise<void>;
   stopWatching: () => void;
@@ -34,6 +46,7 @@ export const useLocation = (
     watchLocation = false,
     accuracy = Location.Accuracy.Balanced,
     showErrorAlerts = true,
+    updateInterval = 5 * 60 * 1000, // Default: 5 minutes
   } = options;
 
   // State
@@ -41,73 +54,149 @@ export const useLocation = (
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
+  const [isUsingStoredLocation, setIsUsingStoredLocation] = useState(false);
+  const [storedLocation, setStoredLocation] = useState<StoredLocation | null>(
+    null
+  );
+  const [firestoreLocation, setFirestoreLocation] =
+    useState<StoredLocation | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Refs
   const isWatching = useRef<boolean>(false);
   const mounted = useRef<boolean>(true);
+  const locationInterval = useRef<NodeJS.Timeout | null>(null);
 
-  // Get current location
-  const getCurrentLocation = useCallback(async (): Promise<void> => {
-    if (!mounted.current) return;
-
-    setIsLoading(true);
-    setError(null);
-
+  // Get stored location from Firestore
+  const fetchStoredLocation = async () => {
     try {
-      const location = await LocationUtils.Service.getCurrentLocation({
-        accuracy,
-        showErrorAlert: showErrorAlerts,
-      });
+      const currentUser = auth.currentUser;
+      if (!currentUser) return null;
 
-      if (mounted.current) {
-        if (location) {
-          setUserLocation(location);
-          setHasPermission(true);
-        } else {
-          setError("Unable to get location");
-          setHasPermission(false);
+      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+      if (userDoc.exists() && userDoc.data().location) {
+        const location = userDoc.data().location;
+        if (location.latitude && location.longitude) {
+          const storedLoc = {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            address: location.address,
+          };
+          setFirestoreLocation(storedLoc);
+          return storedLoc;
         }
       }
-    } catch (err: any) {
-      if (mounted.current) {
-        setError(err.message || "Location error occurred");
-        setHasPermission(false);
-      }
-    } finally {
-      if (mounted.current) {
-        setIsLoading(false);
-      }
+      return null;
+    } catch (error) {
+      console.error("Error fetching stored location:", error);
+      return null;
     }
-  }, [accuracy, showErrorAlerts]);
+  };
 
-  // Start watching location
+  // Get current location (single fetch)
+  const getCurrentLocation = useCallback(
+    async (isInitial: boolean = false): Promise<void> => {
+      if (!mounted.current) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      // Fetch stored location on initial load
+      if (isInitial) {
+        await fetchStoredLocation();
+      }
+
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+
+        if (status === "granted") {
+          setHasPermission(true);
+
+          const location = await LocationUtils.Service.getCurrentLocation({
+            accuracy,
+            showErrorAlert: showErrorAlerts,
+          });
+
+          if (mounted.current && location) {
+            setUserLocation(location);
+            setIsUsingStoredLocation(false);
+            setLastUpdated(new Date());
+            return;
+          }
+        }
+
+        // If we reach here, either no permission or failed to get location
+        // Use firestore location if available
+        if (firestoreLocation) {
+          setUserLocation({
+            latitude: firestoreLocation.latitude,
+            longitude: firestoreLocation.longitude,
+          });
+          setIsUsingStoredLocation(true);
+          setHasPermission(false);
+          if (isInitial) setLastUpdated(new Date());
+        } else {
+          setUserLocation(null);
+          setHasPermission(false);
+          setError("Location not available");
+        }
+      } catch (err: any) {
+        console.error("Location error:", err);
+        // Use firestore location as fallback
+        if (firestoreLocation) {
+          setUserLocation({
+            latitude: firestoreLocation.latitude,
+            longitude: firestoreLocation.longitude,
+          });
+          setIsUsingStoredLocation(true);
+          if (isInitial) setLastUpdated(new Date());
+        }
+      } finally {
+        if (mounted.current) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [accuracy, showErrorAlerts, firestoreLocation]
+  );
+
+  // Start periodic location updates
+  const startPeriodicUpdates = useCallback((): void => {
+    if (locationInterval.current) return; // Already running
+
+    locationInterval.current = setInterval(async () => {
+      if (mounted.current && hasPermission) {
+        console.log("Updating location (5-minute interval)...");
+        await getCurrentLocation(false);
+      }
+    }, updateInterval);
+  }, [getCurrentLocation, updateInterval, hasPermission]);
+
+  // Stop periodic updates
+  const stopPeriodicUpdates = useCallback((): void => {
+    if (locationInterval.current) {
+      clearInterval(locationInterval.current);
+      locationInterval.current = null;
+    }
+  }, []);
+
+  // Start watching location (now uses periodic updates instead of continuous watching)
   const startWatching = useCallback(async (): Promise<void> => {
     if (isWatching.current) return;
 
-    const success = await LocationUtils.Service.startWatchingLocation(
-      (location) => {
-        if (mounted.current) {
-          setUserLocation(location);
-          setHasPermission(true);
-          setError(null);
-        }
-      },
-      (err) => {
-        if (mounted.current) {
-          setError(err.message || "Location watching error");
-        }
-      },
-      { accuracy }
-    );
+    // Get initial location
+    await getCurrentLocation(false);
 
-    isWatching.current = success;
-  }, [accuracy]);
+    // Start periodic updates
+    startPeriodicUpdates();
+    isWatching.current = true;
+  }, [getCurrentLocation, startPeriodicUpdates]);
 
   // Stop watching location
   const stopWatching = useCallback((): void => {
-    LocationUtils.Service.stopWatchingLocation();
+    stopPeriodicUpdates();
     isWatching.current = false;
-  }, []);
+  }, [stopPeriodicUpdates]);
 
   // Calculate distance to a location
   const calculateDistanceTo = useCallback(
@@ -136,19 +225,19 @@ export const useLocation = (
 
   // Refresh location (manual trigger)
   const refreshLocation = useCallback(async (): Promise<void> => {
-    await getCurrentLocation();
+    await getCurrentLocation(false);
   }, [getCurrentLocation]);
 
   // Effects
   useEffect(() => {
     mounted.current = true;
 
-    // Auto start if enabled
+    // Auto start if enabled (initial fetch + setup)
     if (autoStart) {
-      getCurrentLocation();
+      getCurrentLocation(true); // Initial load with Firestore fetch
     }
 
-    // Start watching if enabled
+    // Start periodic watching if enabled
     if (watchLocation) {
       startWatching();
     }
@@ -156,23 +245,30 @@ export const useLocation = (
     // Cleanup
     return () => {
       mounted.current = false;
+      stopPeriodicUpdates();
       if (isWatching.current) {
         stopWatching();
       }
     };
-  }, [
-    autoStart,
-    watchLocation,
-    getCurrentLocation,
-    startWatching,
-    stopWatching,
-  ]);
+  }, [autoStart, watchLocation]);
+
+  // Start periodic updates when permission is granted
+  useEffect(() => {
+    if (hasPermission && watchLocation && !locationInterval.current) {
+      startPeriodicUpdates();
+    } else if (!hasPermission && locationInterval.current) {
+      stopPeriodicUpdates();
+    }
+  }, [hasPermission, watchLocation, startPeriodicUpdates, stopPeriodicUpdates]);
 
   return {
     userLocation,
+    firestoreLocation,
     isLoading,
     error,
     hasPermission,
+    isUsingStoredLocation,
+    lastUpdated,
     refreshLocation,
     startWatching,
     stopWatching,
@@ -181,7 +277,7 @@ export const useLocation = (
   };
 };
 
-// Hook for calculating distances to multiple items
+// Hook for calculating distances to multiple items (unchanged)
 interface UseItemDistancesOptions {
   items: Array<Position & { id: string }>;
   sortByDistance?: boolean;

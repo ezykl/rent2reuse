@@ -347,12 +347,17 @@ export const IDVerificationContent = ({
   };
 
   const analyzeIdAndSave = async () => {
+    let sanitizedIdNumber;
     try {
       if (!idImage) {
         setValidationError("Please upload your ID first.");
         return;
       }
 
+      sanitizedIdNumber =
+        selectedIDType === "drivers"
+          ? idNumber.replace(/[-/_\s]/g, "")
+          : idNumber;
       setLoading(true);
       setValidationError(null);
 
@@ -389,7 +394,7 @@ export const IDVerificationContent = ({
 
       const matchFirst = new RegExp(clean(userData.firstName)).test(extracted);
       const matchLast = new RegExp(clean(userData.lastName)).test(extracted);
-      const matchIdNo = new RegExp(clean(idNumber)).test(extracted);
+      const matchIdNo = new RegExp(clean(sanitizedIdNumber)).test(extracted);
       let matchIdType = false;
 
       if (selectedIDType === "philsys") {

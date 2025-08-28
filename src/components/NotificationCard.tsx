@@ -43,14 +43,14 @@ const NotificationCard = ({
       case "REPORT_ISSUE":
         return {
           icon: icons.report,
-          bgColor: "bg-blue-100",
-          iconColor: "#FBBF24",
+          bgColor: "bg-red-400",
+          iconColor: "#FFF",
         };
       case "REPORT_RESPONSE":
         return {
-          icon: icons.ringBell,
-          bgColor: "bg-gray-200",
-          iconColor: "#374957",
+          icon: icons.report,
+          bgColor: "bg-red-400",
+          iconColor: "#FFF",
         };
       case "RENT_REQUEST_CANCELLED":
         return {
@@ -203,7 +203,7 @@ const NotificationCard = ({
             </Text>
 
             {notification.description && (
-              <Text className="text-sm mt-1 text-gray-600" numberOfLines={3}>
+              <Text className="text-sm mt-1 text-gray-600" numberOfLines={4}>
                 {notification.description}
               </Text>
             )}

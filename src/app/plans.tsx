@@ -813,6 +813,14 @@ const PlansScreen: React.FC = () => {
             rentUsed: profileData?.currentPlan?.rentUsed || 0,
             listUsed: profileData?.currentPlan?.listUsed || 0,
             status: profileData?.currentPlan?.status || "inactive",
+            subscriptionId: profileData?.currentPlan?.subscriptionId,
+            // Add this line - parse expiry date from subscription details
+            expiryDate: subscriptionDetails?.endDate
+              ? new Date(subscriptionDetails.endDate)
+              : undefined,
+            hasUsedFreeTrial:
+              profileData?.currentPlan?.planType?.toLowerCase() === "free" ||
+              false,
           }}
           onSelectPlan={handlePlanSelect}
         />

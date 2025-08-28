@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Modal,
   Alert,
 } from "react-native";
 import { collection, query, getDocs } from "firebase/firestore";
@@ -20,13 +21,17 @@ type SubscriptionStatus =
   | "pending"
   | "inactive";
 
-// Define plan hierarchy for validation
-const PLAN_HIERARCHY: Record<PlanType, number> = {
-  free: 0,
-  basic: 1,
-  premium: 2,
-  platinum: 3,
-  limited: 4, // Special case - might have different rules
+const getPlanHierarchy = (
+  plans: Plan[],
+  planType: string,
+  planId?: string
+): number => {
+  const plan = plans.find((p) =>
+    planId
+      ? p.id === planId
+      : p.planType.toLowerCase() === planType.toLowerCase()
+  );
+  return plan?.price || 0;
 };
 
 const getGradientColors = (planType: string): [string, string, string] => {
@@ -65,7 +70,8 @@ interface PlanSubscriptionProps {
     listUsed: number;
     status?: SubscriptionStatus;
     expiryDate?: Date;
-    hasUsedFreeTrial?: boolean; // Track if user already used free plan
+    hasUsedFreeTrial?: boolean;
+    subscriptionId?: string;
   };
   onSelectPlan: (plan: Plan) => void;
   onUpgradePlan?: (plan: Plan) => void; // Separate handler for upgrades
@@ -78,7 +84,196 @@ interface PlanValidation {
   action: "current" | "upgrade" | "downgrade" | "select" | "blocked";
   requiresConfirmation?: boolean;
   warningMessage?: string;
+  daysRemaining?: number;
 }
+
+interface ConfirmationModalProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  currentPlan: string;
+  newPlan: string;
+  currentPrice: number;
+  newPrice: number;
+  daysRemaining?: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+const PlanConfirmationModal: React.FC<ConfirmationModalProps> = ({
+  visible,
+  title,
+  message,
+  currentPlan,
+  newPlan,
+  currentPrice,
+  newPrice,
+  daysRemaining,
+  onConfirm,
+  onCancel,
+}) => {
+  const formatDaysRemaining = (days: number) => {
+    if (days <= 0) return "Expired";
+    if (days === 1) return "1 day";
+    if (days < 30) return `${days} days`;
+    if (days < 365) {
+      const months = Math.floor(days / 30);
+      const remainingDays = days % 30;
+      if (remainingDays === 0) return `${months} month${months > 1 ? "s" : ""}`;
+      return `${months} month${months > 1 ? "s" : ""} ${remainingDays} day${
+        remainingDays > 1 ? "s" : ""
+      }`;
+    }
+    return `${Math.floor(days / 365)} year${
+      Math.floor(days / 365) > 1 ? "s" : ""
+    }`;
+  };
+
+  const getActionText = () => {
+    if (currentPrice === 0) return "upgrade to"; // From free
+    if (newPrice > currentPrice) return "upgrade to";
+    if (newPrice < currentPrice) return "downgrade to";
+    return "switch to";
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent={true}
+      statusBarTranslucent={true}
+    >
+      <View className="flex-1 bg-black/50 justify-center  items-center">
+        <View className="bg-white rounded-2xl p-6 w-full max-w-sm">
+          {/* Header */}
+          <View className="items-center mb-6">
+            <View className="w-16 h-16 bg-orange-100 rounded-full items-center justify-center mb-3">
+              <Text className="text-orange-600 text-2xl font-pbold">!</Text>
+            </View>
+            <Text className="text-xl font-pbold text-gray-800 text-center">
+              Confirm Plan Change
+            </Text>
+            <Text className="text-sm text-gray-600 text-center mt-1">
+              You want to {getActionText()}{" "}
+              {newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}
+            </Text>
+          </View>
+
+          {/* Current Plan Status */}
+          {daysRemaining && daysRemaining > 0 && (
+            <View className="bg-blue-50 p-4 rounded-lg mb-4">
+              <Text className="text-center text-sm text-gray-600 mb-1">
+                Current Plan Status
+              </Text>
+              <Text className="text-center font-pbold text-blue-800 text-lg">
+                {currentPlan} Plan
+              </Text>
+              <Text className="text-center text-blue-600 font-pmedium">
+                {formatDaysRemaining(daysRemaining)} remaining
+              </Text>
+              <Text className="text-center text-xs text-blue-600 mt-1">
+                (₱{currentPrice} plan value)
+              </Text>
+            </View>
+          )}
+
+          {/* Plan Change Arrow */}
+          <View className="items-center mb-4">
+            <View className="flex-row items-center">
+              <View className=" flex-1 bg-red-100 px-3 py-2 rounded-lg">
+                <Text className="font-psemibold text-base text-red-700">
+                  {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
+                </Text>
+                <Text className="text-lg text-red-600 font-pmedium">
+                  ₱{currentPrice}
+                </Text>
+              </View>
+
+              <Image source={icons.arrowRight} className="w-6 h-6" />
+
+              <View className="flex-1 bg-green-100 px-3 py-2 rounded-lg">
+                <Text className="font-psemibold text-base text-green-700 ">
+                  {newPlan.charAt(0).toUpperCase() + newPlan.slice(1)}
+                </Text>
+                <Text className="text-lg text-green-600 font-pmedium">
+                  ₱{newPrice}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Warning Section */}
+          <View className="bg-orange-50 border border-orange-200 p-4 rounded-lg mb-4">
+            <View className="flex-row items-start mb-2">
+              <Text className="text-orange-600 mr-2">⚠</Text>
+              <Text className="text-orange-800 font-pbold text-sm flex-1">
+                Important Notice
+              </Text>
+            </View>
+
+            {daysRemaining && daysRemaining > 0 ? (
+              <Text className="text-orange-700 text-sm leading-5">
+                Your current subscription will be immediately cancelled and
+                replaced. The remaining {formatDaysRemaining(daysRemaining)} of
+                your {currentPlan} plan will be forfeited without refund.
+              </Text>
+            ) : (
+              <Text className="text-orange-700 text-sm leading-5">
+                {message}
+              </Text>
+            )}
+          </View>
+
+          {/* No Refund Policy */}
+          <View className="bg-red-50 border border-red-200 p-3 rounded-lg mb-6">
+            <View className="flex-row items-center justify-center">
+              <Text className="text-red-600 mr-2">🚫</Text>
+              <Text className="text-red-700 text-sm font-pmedium text-center">
+                No refunds for unused subscription time
+              </Text>
+            </View>
+          </View>
+
+          {/* Financial Impact */}
+          {daysRemaining && daysRemaining > 0 && (
+            <View className="bg-gray-50 p-3 rounded-lg mb-6">
+              <Text className="text-center text-xs text-gray-600 mb-1">
+                Financial Impact
+              </Text>
+              <Text className="text-center text-gray-700 font-pmedium">
+                You'll lose ₱{((currentPrice / 30) * daysRemaining).toFixed(0)}{" "}
+                in unused value
+              </Text>
+              <Text className="text-center text-gray-700 font-pmedium">
+                New plan cost: ₱{newPrice}
+              </Text>
+            </View>
+          )}
+
+          {/* Action Buttons */}
+          <View className="flex-row gap-4">
+            <TouchableOpacity
+              onPress={onCancel}
+              className="flex-1 bg-primary py-4 rounded-xl"
+            >
+              <Text className="text-center font-pbold text-white">
+                Keep Current Plan
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={onConfirm}
+              className="flex-1 bg-red-500 py-4 rounded-xl"
+            >
+              <Text className="text-center font-pbold text-white">
+                Confirm Change
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
   currentPlan,
@@ -89,16 +284,32 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Add these new state variables
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<Plan | null>(null);
+  const [confirmationData, setConfirmationData] = useState<{
+    title: string;
+    message: string;
+    action: string;
+    daysRemaining?: number;
+  } | null>(null);
+
   // Memoize current plan hierarchy level
   const currentPlanLevel = useMemo(() => {
-    if (!currentPlan?.planType) return -1;
-    return PLAN_HIERARCHY[currentPlan.planType.toLowerCase() as PlanType] ?? -1;
-  }, [currentPlan?.planType]);
+    if (!currentPlan?.planType || plans.length === 0) return -1;
+    return getPlanHierarchy(plans, currentPlan.planType, currentPlan.planId);
+  }, [currentPlan?.planType, currentPlan?.planId, plans]);
 
-  // Validate plan selection
+  const getDaysRemaining = (expiryDate: Date): number => {
+    const now = new Date();
+    const expiry = new Date(expiryDate);
+    const diffTime = expiry.getTime() - now.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   const validatePlanSelection = useCallback(
     (plan: Plan): PlanValidation => {
-      const planLevel = PLAN_HIERARCHY[plan.planType.toLowerCase() as PlanType];
+      const planLevel = plan.price;
 
       // If user has no current plan, allow any plan
       if (!currentPlan || currentPlan.status !== "active") {
@@ -117,8 +328,37 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
         };
       }
 
+      // Check if current plan is still active and has time remaining
+      if (currentPlan.expiryDate && currentPlan.status === "active") {
+        const daysRemaining = getDaysRemaining(currentPlan.expiryDate);
+
+        if (daysRemaining > 0) {
+          // Current plan is still active
+          if (currentPlanLevel > 0) {
+            // Has a paid plan
+            return {
+              isAllowed: true,
+              action:
+                planLevel > currentPlanLevel
+                  ? "upgrade"
+                  : planLevel < currentPlanLevel
+                  ? "downgrade"
+                  : "select",
+              requiresConfirmation: true,
+              warningMessage: `Your ${
+                currentPlan.planType
+              } plan is still active and expires in ${daysRemaining} day${
+                daysRemaining !== 1 ? "s" : ""
+              }. Switching plans will immediately replace your current subscription.`,
+              daysRemaining: daysRemaining,
+            };
+          }
+        }
+      }
+
       // Free plan special rules
-      if (plan.planType.toLowerCase() === "free") {
+      if (plan.price === 0) {
+        // Free plan
         if (currentPlan.hasUsedFreeTrial) {
           return {
             isAllowed: false,
@@ -138,38 +378,26 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
         }
       }
 
-      // Plan upgrade
+      // Plan upgrade/downgrade logic
       if (planLevel > currentPlanLevel) {
-        return {
-          isAllowed: true,
-          action: "upgrade",
-        };
-      }
-
-      // Plan downgrade
-      if (planLevel < currentPlanLevel) {
-        // Check if user has active items that exceed the new plan limits
+        return { isAllowed: true, action: "upgrade" };
+      } else if (planLevel < currentPlanLevel) {
         const exceedsLimits =
           currentPlan.rentUsed > plan.rent || currentPlan.listUsed > plan.list;
-
         return {
           isAllowed: true,
           action: "downgrade",
           requiresConfirmation: true,
           warningMessage: exceedsLimits
-            ? `You currently have ${currentPlan.listUsed} listings and ${currentPlan.rentUsed} rentals. Downgrading to ${plan.planType} (${plan.list} listings, ${plan.rent} rentals) may affect your active items.`
-            : `Are you sure you want to downgrade from ${currentPlan.planType} to ${plan.planType}?`,
+            ? `You currently have ${currentPlan.listUsed} listings and ${currentPlan.rentUsed} rentals. Downgrading may affect your active items.`
+            : `Confirm downgrade from ${currentPlan.planType} to ${plan.planType}?`,
         };
       }
 
-      return {
-        isAllowed: true,
-        action: "select",
-      };
+      return { isAllowed: true, action: "select" };
     },
-    [currentPlan, currentPlanLevel]
+    [currentPlan, currentPlanLevel, plans]
   );
-
   const handlePlanSelection = useCallback(
     async (plan: Plan) => {
       const validation = validatePlanSelection(plan);
@@ -182,18 +410,21 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
         return;
       }
 
-      // Handle confirmation for downgrades
+      // Handle confirmation with custom modal
       if (validation.requiresConfirmation && validation.warningMessage) {
-        Alert.alert("Confirm Plan Change", validation.warningMessage, [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: "Continue",
-            onPress: () => executePlanSelection(plan, validation.action),
-          },
-        ]);
+        setPendingPlan(plan);
+        setConfirmationData({
+          title:
+            validation.action === "upgrade"
+              ? "Upgrade Plan"
+              : validation.action === "downgrade"
+              ? "Downgrade Plan"
+              : "Replace Plan",
+          message: validation.warningMessage,
+          action: validation.action,
+          daysRemaining: validation.daysRemaining,
+        });
+        setShowConfirmModal(true);
         return;
       }
 
@@ -202,6 +433,21 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
     [validatePlanSelection]
   );
 
+  // Add confirmation handlers
+  const handleConfirmPlan = () => {
+    if (pendingPlan && confirmationData) {
+      executePlanSelection(pendingPlan, confirmationData.action);
+      setShowConfirmModal(false);
+      setPendingPlan(null);
+      setConfirmationData(null);
+    }
+  };
+
+  const handleCancelConfirm = () => {
+    setShowConfirmModal(false);
+    setPendingPlan(null);
+    setConfirmationData(null);
+  };
   const executePlanSelection = (plan: Plan, action: string) => {
     switch (action) {
       case "upgrade":
@@ -239,10 +485,18 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
             textStyle: "text-white/80",
           };
         case "upgrade":
+          // Check if user has active plan that will be replaced
+          const hasActivePlan =
+            currentPlan?.expiryDate &&
+            getDaysRemaining(currentPlan.expiryDate) > 0 &&
+            currentPlan.planType.toLowerCase() !== "free";
+
           return {
-            text: `Upgrade - ₱${plan.price}`,
+            text: hasActivePlan
+              ? `Replace Plan - ₱${plan.price}`
+              : `Upgrade - ₱${plan.price}`,
             disabled: false,
-            style: "bg-green-500",
+            style: hasActivePlan ? "bg-orange-500" : "bg-green-500",
             textStyle: "text-white",
           };
         case "downgrade":
@@ -263,7 +517,7 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
           };
       }
     },
-    [validatePlanSelection]
+    [validatePlanSelection, currentPlan]
   );
 
   useEffect(() => {
@@ -276,13 +530,14 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
           (doc) => ({ id: doc.id, ...doc.data() } as Plan)
         );
 
-        // Sort plans by hierarchy
+        // Sort plans by price (ascending order: Free -> Basic -> Premium -> Platinum)
         const sortedPlans = plansData.sort((a, b) => {
-          const aLevel =
-            PLAN_HIERARCHY[a.planType.toLowerCase() as PlanType] ?? 999;
-          const bLevel =
-            PLAN_HIERARCHY[b.planType.toLowerCase() as PlanType] ?? 999;
-          return aLevel - bLevel;
+          // Handle free plans (price 0) to always be first
+          if (a.price === 0 && b.price !== 0) return -1;
+          if (b.price === 0 && a.price !== 0) return 1;
+
+          // For all other plans, sort by price ascending
+          return a.price - b.price;
         });
 
         setPlans(sortedPlans);
@@ -295,7 +550,6 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
 
     fetchPlans();
   }, []);
-
   const renderPlanCard = useCallback(
     (plan: Plan) => {
       const isActive =
@@ -420,13 +674,31 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
   }
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      className="py-4 h-auto"
-    >
-      {plans.map(renderPlanCard)}
-    </ScrollView>
+    <>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        className="py-4 h-auto"
+      >
+        {plans.map(renderPlanCard)}
+      </ScrollView>
+
+      {/* Add the confirmation modal */}
+      {showConfirmModal && confirmationData && pendingPlan && (
+        <PlanConfirmationModal
+          visible={showConfirmModal}
+          title={confirmationData.title}
+          message={confirmationData.message}
+          currentPlan={currentPlan?.planType || ""}
+          newPlan={pendingPlan.planType}
+          currentPrice={currentPlanLevel}
+          newPrice={pendingPlan.price}
+          daysRemaining={confirmationData.daysRemaining}
+          onConfirm={handleConfirmPlan}
+          onCancel={handleCancelConfirm}
+        />
+      )}
+    </>
   );
 };
 

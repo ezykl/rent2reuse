@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  Image as Imagex,
 } from "react-native";
 import React, { useState, useEffect, useCallback } from "react";
 import Carousel from "react-native-reanimated-carousel";
@@ -19,6 +20,7 @@ import ItemCard from "@/components/ItemCard";
 import { router } from "expo-router";
 import { db } from "@/lib/firebaseConfig";
 import { Image } from "expo-image";
+import * as Location from "expo-location";
 
 import {
   getDocs,
@@ -52,6 +54,10 @@ const Home = () => {
   const [selectedAnnouncement, setSelectedAnnouncement] =
     useState<AnnouncementItem | null>(null);
   const [showFullDetails, setShowFullDetails] = useState(false);
+  const [askedLocation, setAskedLocation] = useState(false);
+  const [locationServicesEnabled, setLocationServicesEnabled] = useState<
+    boolean | null
+  >(null);
 
   const { completionPercentage } = useProfileCompletion();
 
@@ -98,6 +104,54 @@ const Home = () => {
       setShowProfileAlert(true);
     }
   }, [completionPercentage]);
+
+  useEffect(() => {
+    const checkLocationSettings = async () => {
+      try {
+        // First check if location services are enabled on the device
+        const enabled = await Location.hasServicesEnabledAsync();
+        setLocationServicesEnabled(enabled);
+
+        if (enabled) {
+          // Check current permission status
+          const { status } = await Location.getForegroundPermissionsAsync();
+
+          if (status !== "granted" && !askedLocation) {
+            // Request permission using native dialog
+            const { status: newStatus } =
+              await Location.requestForegroundPermissionsAsync();
+            setAskedLocation(true);
+
+            if (newStatus === "granted") {
+              // Permission granted - you can now use location services
+              console.log("Location permission granted");
+              // Optionally get current location to verify it works
+              try {
+                const location = await Location.getCurrentPositionAsync({
+                  accuracy: Location.Accuracy.Balanced,
+                });
+                console.log("Current location:", location);
+              } catch (error) {
+                console.error("Error getting location:", error);
+              }
+            } else {
+              console.log("Location permission denied");
+            }
+          }
+        } else {
+          // Location services are disabled at the system level
+          console.log("Location services are disabled on the device");
+        }
+      } catch (error) {
+        console.error("Error checking location settings:", error);
+      }
+    };
+
+    // Only check location settings once when component mounts
+    if (locationServicesEnabled === null && !askedLocation) {
+      checkLocationSettings();
+    }
+  }, [askedLocation, locationServicesEnabled]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -195,22 +249,26 @@ const Home = () => {
   const renderItemCard = ({ item }: { item: ItemType }) => {
     if (!item) return null;
 
+    const locationData =
+      item.itemLocation && typeof item.itemLocation === "object"
+        ? {
+            latitude: item.itemLocation.latitude,
+            longitude: item.itemLocation.longitude,
+          }
+        : null;
+
     return (
       <ItemCard
         title={item.itemName}
         thumbnail={item.images}
-        // NEW: Only show full details if profile is complete
         description={isProfileComplete ? item.itemDesc : undefined}
         price={isProfileComplete ? item.itemPrice : undefined}
         status={isProfileComplete ? item.itemStatus : undefined}
         condition={isProfileComplete ? item.itemCondition : undefined}
         itemLocation={
-          isProfileComplete && typeof item.itemLocation === "object"
-            ? item.itemLocation
-            : undefined
+          isProfileComplete && locationData ? locationData : undefined
         }
         owner={isProfileComplete ? item.owner : undefined}
-        // NEW: Show protection overlay if profile incomplete
         showProtectionOverlay={!isProfileComplete}
         onPress={() => handleItemPress(item.id)}
       />
@@ -269,7 +327,7 @@ const Home = () => {
                     className="flex-row items-center justify-between mb-3"
                   >
                     <View className="flex-row items-center flex-1">
-                      <Image source={icons.danger} className="w-5 h-5 mr-2" />
+                      <Imagex source={icons.danger} className="w-5 h-5 mr-2" />
                       <Text className="text-yellow-800 font-pbold flex-1">
                         Complete Your Profile
                       </Text>
@@ -279,7 +337,7 @@ const Home = () => {
                         {completionPercentage}%
                       </Text>
 
-                      <Image
+                      <Imagex
                         source={
                           showFullDetails ? icons.arrowDown : icons.arrowRight
                         }
@@ -303,7 +361,7 @@ const Home = () => {
                       {/* Benefits List */}
                       <View className="mb-4">
                         <View className="flex-row items-center mb-2">
-                          <Image
+                          <Imagex
                             source={icons.verified}
                             className="w-4 h-4 mr-2"
                           />
@@ -312,7 +370,7 @@ const Home = () => {
                           </Text>
                         </View>
                         <View className="flex-row items-center mb-2">
-                          <Image
+                          <Imagex
                             source={icons.bronzePlan}
                             className="w-4 h-4 mr-2"
                           />
@@ -321,7 +379,7 @@ const Home = () => {
                           </Text>
                         </View>
                         <View className="flex-row items-center">
-                          <Image
+                          <Imagex
                             source={icons.eye}
                             className="w-4 h-4 mr-2"
                             tintColor="#92400E"

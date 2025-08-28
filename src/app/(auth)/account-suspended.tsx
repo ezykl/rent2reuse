@@ -1,10 +1,11 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet, Image, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import LargeButton from "@/components/LargeButton";
 import { auth } from "@/lib/firebaseConfig";
 import { router } from "expo-router";
+import * as Linking from "expo-linking";
 
 const AccountSuspendedScreen = () => {
   // Prevent navigation back
@@ -52,6 +53,29 @@ const AccountSuspendedScreen = () => {
           If you believe this is an error, please contact our support team for
           assistance.
         </Text>
+
+        <TouchableOpacity
+          className="mt-2"
+          onPress={() => {
+            const user = auth.currentUser;
+            const emailBody = `
+      User Details:
+      - Email: ${user?.email || "N/A"}
+      - User ID: ${user?.uid || "N/A"}
+
+      Please explain why you believe your account suspension should be reviewed:
+      `;
+            Linking.openURL(
+              `mailto:rent2reuse@gmail.com?subject=Account Suspension Appeal&body=${encodeURIComponent(
+                emailBody
+              )}`
+            );
+          }}
+        >
+          <Text className="text-blue-500 text-base font-medium italic underline">
+            rent2reuse@gmail.com
+          </Text>
+        </TouchableOpacity>
 
         <LargeButton
           title="Sign Out"

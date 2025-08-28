@@ -27,11 +27,11 @@ const InputField = ({
   return (
     <View className={`space-y-2 ${otherStyles}`}>
       <View className="flex-row items-center">
-        <Text className="text-xl text-secondary-300 font-psemibold m-2">
+        <Text className="text-xl text-secondary-300 font-psemibold m-1">
           {title}
         </Text>
         {subtitle && (
-          <Text className="text-sm text-secondary-400 font-pregular m-2">
+          <Text className="text-sm text-secondary-200 font-psemibold ml-1">
             {subtitle}
           </Text>
         )}
@@ -46,7 +46,7 @@ const InputField = ({
           className="flex-1 text-secondary-300 font-psemibold text-base "
           value={value}
           placeholder={placeholder}
-          placeholderTextColor="#6C9082"
+          placeholderTextColor="#A7BEB4"
           onChangeText={handleChangeText}
           secureTextEntry={
             (title === "Password" || title === "Confirm Password") &&
