@@ -26,28 +26,37 @@ import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { generateDescriptionTemplate } from "@/constant/item-specifications";
 import { getToolCategory } from "@/constant/tool-categories";
+import { Item as ListingData } from "@/types/item";
+import stringSimilarity from "string-similarity";
+import {
+  MapView,
+  Camera,
+  MarkerView,
+  ShapeSource,
+  FillLayer,
+} from "@maplibre/maplibre-react-native";
 
 // Update the interface to include all fields
-interface ListingData {
-  itemName: string;
-  itemCategory: string;
-  itemDesc: string;
-  itemPrice: number;
-  itemMinRentDuration: number;
-  itemCondition: string;
-  itemLocation: string;
-  images: string[];
-  paymentSettings?: {
-    downpayment?: {
-      percentage: number;
-      timing: "reservation" | "pickup";
-    };
-  };
-  owner: {
-    id: string;
-    fullname: string;
-  };
-}
+// interface ListingData extends Item {
+//   itemName: string;
+//   itemCategory: string;
+//   itemDesc: string;
+//   itemPrice: number;
+//   itemMinRentDuration: number;
+//   itemCondition: string;
+//   itemLocation: string;
+//   images: string[];
+//   paymentSettings?: {
+//     downpayment?: {
+//       percentage: number;
+//       timing: "reservation" | "pickup";
+//     };
+//   };
+//   owner: {
+//     id: string;
+//     fullname: string;
+//   };
+// }
 
 const EditListing = () => {
   const { id } = useLocalSearchParams();
@@ -78,11 +87,16 @@ const EditListing = () => {
     price: "",
     minimumDays: "",
     condition: "",
-    location: "",
+    location: {
+      latitude: 0,
+      longitude: 0,
+      address: "",
+      radius: 0,
+    },
     images: [] as string[],
     enableDownpayment: false,
     downpaymentPercentage: "",
-    downpaymentTiming: "reservation" as "reservation" | "pickup",
+    enableAI: false,
   });
 
   const [errors, setErrors] = useState({
@@ -93,6 +107,13 @@ const EditListing = () => {
     description: "",
     condition: "",
     images: "",
+  });
+
+  // Add new state for original values
+  const [originalData, setOriginalData] = useState({
+    title: "",
+    category: "",
+    firstImage: "",
   });
 
   useEffect(() => {
@@ -107,6 +128,16 @@ const EditListing = () => {
 
       if (docSnap.exists()) {
         const data = docSnap.data();
+
+        // Store original data if AI is enabled
+        if (data.enableAI) {
+          setOriginalData({
+            title: data.itemName,
+            category: data.itemCategory,
+            firstImage: data.images[0],
+          });
+        }
+
         setFormData({
           title: data.itemName || "",
           category: data.itemCategory || "",
@@ -116,11 +147,9 @@ const EditListing = () => {
           condition: data.itemCondition || "",
           location: data.itemLocation || "",
           images: data.images || [],
-          enableDownpayment: !!data.paymentSettings?.downpayment,
-          downpaymentPercentage:
-            data.paymentSettings?.downpayment?.percentage?.toString() || "",
-          downpaymentTiming:
-            data.paymentSettings?.downpayment?.timing || "reservation",
+          enableDownpayment: data.downpaymentPercentage ? true : false,
+          downpaymentPercentage: data.downpaymentPercentage?.toString() || "",
+          enableAI: data.enableAI || false,
         });
       }
     } catch (error) {
@@ -134,6 +163,35 @@ const EditListing = () => {
       setGlobalLoading(false);
       setIsLoading(false);
     }
+  };
+
+  // Helper function to create circle polygon for radius display
+  const createCirclePolygon = (
+    center: [number, number],
+    radiusInMeters: number,
+    points: number = 64
+  ) => {
+    const coords: number[][] = [];
+    const distanceX =
+      radiusInMeters / (111320 * Math.cos((center[1] * Math.PI) / 180));
+    const distanceY = radiusInMeters / 110540;
+
+    for (let i = 0; i < points; i++) {
+      const theta = (i / points) * (2 * Math.PI);
+      const x = distanceX * Math.cos(theta);
+      const y = distanceY * Math.sin(theta);
+      coords.push([center[0] + x, center[1] + y]);
+    }
+    coords.push(coords[0]);
+
+    return {
+      type: "Feature" as const,
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [coords],
+      },
+      properties: {},
+    };
   };
 
   const validateForm = () => {
@@ -211,17 +269,7 @@ const EditListing = () => {
     try {
       const docRef = doc(db, "items", id as string);
 
-      // Prepare payment settings
-      const paymentSettings = formData.enableDownpayment
-        ? {
-            downpayment: {
-              percentage: Number(formData.downpaymentPercentage),
-              timing: formData.downpaymentTiming,
-            },
-          }
-        : null;
-
-      // Update the document
+      // Update document with new structure
       await updateDoc(docRef, {
         itemName: formData.title,
         itemCategory: formData.category,
@@ -229,9 +277,16 @@ const EditListing = () => {
         itemPrice: Number(formData.price),
         itemMinRentDuration: Number(formData.minimumDays),
         itemCondition: formData.condition,
-        itemLocation: formData.location,
-        paymentSettings,
+        enableAI: formData.enableAI,
+        // Only include downpaymentPercentage if enabled
+        ...(formData.enableDownpayment
+          ? { downpaymentPercentage: Number(formData.downpaymentPercentage) }
+          : { downpaymentPercentage: null }),
         updatedAt: serverTimestamp(),
+        // Make sure first image remains if AI enabled
+        images: formData.enableAI
+          ? [originalData.firstImage, ...formData.images.slice(1)]
+          : formData.images,
       });
 
       Toast.show({
@@ -292,10 +347,49 @@ const EditListing = () => {
   };
 
   const removeImage = (index: number) => {
+    if (formData.enableAI && index === 0) {
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Cannot Remove",
+        textBody: "The first image cannot be removed for AI-identified items",
+      });
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       images: prev.images.filter((_, i) => i !== index),
     }));
+  };
+
+  // Add title similarity check
+  const checkTitleSimilarity = (newTitle: string) => {
+    if (!formData.enableAI) return true;
+
+    // Only check similarity if newTitle has more than 5 characters
+    if (newTitle.length <= 5) return true;
+
+    const similarity = stringSimilarity.compareTwoStrings(
+      newTitle.toLowerCase(),
+      originalData.title.toLowerCase()
+    );
+
+    if (similarity < 0.5) {
+      Alert.alert(
+        "Warning",
+        "The new title is significantly different from the AI-identified title. This might affect item searchability.",
+        [
+          {
+            text: "Keep Original",
+            onPress: () => {
+              setFormData((prev) => ({ ...prev, title: originalData.title }));
+            },
+          },
+          { text: "Use New", style: "destructive" },
+        ]
+      );
+    }
+    return true;
   };
 
   if (isLoading) {
@@ -377,17 +471,20 @@ const EditListing = () => {
 
           {/* Title Input */}
           <View className="mt-2">
-            <Text className="text-secondary-400 font-pmedium mb-2">
+            <Text className="text-secondary-400 text-lg font-pmedium mb-2">
               Item Name
             </Text>
             <TextInput
               value={formData.title}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, title: text }))
-              }
+              onChangeText={(text) => {
+                checkTitleSimilarity(text);
+                setFormData((prev) => ({ ...prev, title: text }));
+              }}
+              // editable={!formData.enableAI}
               placeholder="Enter item name"
               className="border font-pregular text-base border-gray-200 rounded-xl p-3"
             />
+
             {errors.title ? (
               <Text className="text-red-500 text-xs mt-1">{errors.title}</Text>
             ) : null}
@@ -395,17 +492,35 @@ const EditListing = () => {
 
           {/* Category Selection */}
           <View className="mt-2">
-            <Text className="text-secondary-400 font-pmedium mb-2 ">
+            <Text className="text-secondary-400 text-lg font-pmedium mb-2 ">
               Category
             </Text>
             <TouchableOpacity
-              onPress={() => setShowCategoryDropdown(true)}
-              className="border border-gray-200 rounded-xl p-3"
+              onPress={() => {
+                if (formData.enableAI) {
+                  Toast.show({
+                    type: ALERT_TYPE.INFO,
+                    title: "Category Locked",
+                    textBody:
+                      "Category cannot be changed for AI-identified items",
+                  });
+                  return;
+                }
+                setShowCategoryDropdown(true);
+              }}
+              className={`border border-gray-200 rounded-xl p-3 ${
+                formData.enableAI ? "bg-gray-100" : ""
+              }`}
             >
-              <Text className="font-pregular text-base">
+              <Text
+                className={`font-pregular text-base ${
+                  formData.enableAI ? "text-gray-400" : ""
+                }`}
+              >
                 {formData.category || "Select category"}
               </Text>
             </TouchableOpacity>
+
             {errors.category ? (
               <Text className="text-red-500 text-xs mt-1">
                 {errors.category}
@@ -415,7 +530,7 @@ const EditListing = () => {
 
           <View className="flex-row justify-between gap-4 mt-2">
             <View className="flex-1">
-              <Text className="text-secondary-400 font-pmedium mb-2">
+              <Text className="text-secondary-400 text-lg font-pmedium  mb-2">
                 Price per Day
               </Text>
               <View className="flex-row items-center border border-gray-200 rounded-xl">
@@ -443,7 +558,7 @@ const EditListing = () => {
             </View>
 
             <View className="flex-1">
-              <Text className="text-secondary-400 font-pmedium mb-2">
+              <Text className="text-secondary-400 text-lg font-pmedium  mb-2">
                 Min. Rental Days
               </Text>
               <TextInput
@@ -468,7 +583,7 @@ const EditListing = () => {
 
           {/* Condition Selection */}
           <View className="my-2">
-            <Text className="text-secondary-400 font-pmedium">
+            <Text className="text-secondary-400 font-pmedium text-lg">
               Item Condition
             </Text>
             <TouchableOpacity
@@ -486,7 +601,9 @@ const EditListing = () => {
 
           {/* Description Input */}
           <View className="my-2">
-            <Text className="text-secondary-400 font-pmedium">Description</Text>
+            <Text className="text-secondary-400 text-lg font-pmedium ">
+              Description
+            </Text>
             <TextInput
               value={formData.description}
               onChangeText={(text) =>
@@ -505,30 +622,20 @@ const EditListing = () => {
             ) : null}
           </View>
 
-          {/* Location Input */}
-          <View className="my-2">
-            <Text className="text-secondary-400 font-pmedium">Location</Text>
-            <View className="border border-gray-200 rounded-xl p-3">
-              <Text className="font-pregular text-base">
-                {formData.location || "No location set"}
-              </Text>
-            </View>
-          </View>
-
           {/* Add Payment Settings Section */}
-          <View className="mt-6">
-            <Text className="text-secondary-400 font-psemibold text-lg mb-3">
+          <View className="my-2">
+            <Text className="text-secondary-400 text-lg font-pmedium ">
               Payment Options
             </Text>
 
-            <View className="bg-gray-50 rounded-xl p-4 mb-3">
+            <View className="bg-gray-50 rounded-xl p-4 ">
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-1">
                   <Text className="text-secondary-400 font-pmedium">
                     Downpayment Requirement
                   </Text>
                   <Text className="text-secondary-300 font-pregular text-xs">
-                    Secures reservation and reduces remaining balance
+                    Secures rental and must be paid at pickup
                   </Text>
                 </View>
                 <Switch
@@ -550,63 +657,158 @@ const EditListing = () => {
               </View>
 
               {formData.enableDownpayment && (
-                // Add downpayment configuration UI from create listing
                 <View>
                   {/* Percentage Input */}
-                  <View className="mb-3">
-                    {/* Quick Select Buttons */}
-                    <View className="flex-row gap-2 mb-2">
-                      {["10", "20", "30", "40", "50"].map((percentage) => (
-                        <TouchableOpacity
-                          key={percentage}
-                          onPress={() => {
-                            setFormData((prev) => ({
-                              ...prev,
-                              downpaymentPercentage: percentage,
-                            }));
-                          }}
-                          className={`px-3 py-2 rounded-lg border ${
+
+                  {/* Quick Select Buttons */}
+                  <View className="flex-row gap-2">
+                    {["10", "20", "30", "40", "50"].map((percentage) => (
+                      <TouchableOpacity
+                        key={percentage}
+                        onPress={() => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            downpaymentPercentage: percentage,
+                          }));
+                        }}
+                        className={`px-3 py-2 rounded-lg border ${
+                          formData.downpaymentPercentage === percentage
+                            ? "bg-primary border-primary"
+                            : "bg-white border-gray-300"
+                        }`}
+                      >
+                        <Text
+                          className={`font-pmedium ${
                             formData.downpaymentPercentage === percentage
-                              ? "bg-primary border-primary"
-                              : "bg-white border-gray-300"
+                              ? "text-white"
+                              : "text-secondary-400"
                           }`}
                         >
-                          <Text
-                            className={`font-pmedium ${
-                              formData.downpaymentPercentage === percentage
-                                ? "text-white"
-                                : "text-secondary-400"
-                            }`}
-                          >
-                            {percentage}%
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                          {percentage}%
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
 
-                    {/* Custom Percentage Input */}
-                    <TextInput
+                  {/* Custom Percentage Input */}
+                  {/* <TextInput
                       value={formData.downpaymentPercentage}
                       onChangeText={(text) => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          downpaymentPercentage: text,
-                        }));
+                        const numValue = parseInt(text);
+                        if (text === "" || (numValue > 0 && numValue <= 100)) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            downpaymentPercentage: text,
+                          }));
+                        }
                       }}
                       className="font-pregular bg-white border rounded-xl p-3 border-gray-200"
                       keyboardType="numeric"
                       placeholder="Enter percentage (10-100)"
                     />
-                  </View>
-
-                  {/* Timing Selection */}
-                  <View className="flex-row gap-2">
-                    {/* Add timing buttons from create listing */}
-                  </View>
+                    <Text className="text-secondary-300 font-pregular text-xs mt-1">
+                      Minimum 10%, Maximum 100%
+                    </Text> */}
                 </View>
               )}
             </View>
           </View>
+
+          {/* Location Display - Static Map */}
+          {formData.location &&
+            formData.location.latitude &&
+            formData.location.longitude && (
+              <View className="my-2">
+                <View className="flex-row items-center ">
+                  <Text className="text-secondary-400 font-pmedium">
+                    Location
+                  </Text>
+                  <Text className="text-secondary-300 font-pregular text-xs ml-2">
+                    (Pickup location cannot be changed)
+                  </Text>
+                </View>
+
+                {/* Static Map Container */}
+                <View className="relative">
+                  <View className="h-48 rounded-s-xloverflow-hidden border border-gray-200">
+                    <MapView
+                      style={{ flex: 1 }}
+                      rotateEnabled={false}
+                      scrollEnabled={false}
+                      zoomEnabled={false}
+                      pitchEnabled={false}
+                      attributionEnabled={false}
+                      compassViewPosition={3}
+                      mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+                    >
+                      <Camera
+                        defaultSettings={{
+                          centerCoordinate: [
+                            formData.location.longitude,
+                            formData.location.latitude,
+                          ],
+                          zoomLevel: 15,
+                        }}
+                      />
+
+                      {/* Radius circle if available */}
+                      {formData.location.radius && (
+                        <ShapeSource
+                          id="pickup-radius"
+                          shape={createCirclePolygon(
+                            [
+                              formData.location.longitude,
+                              formData.location.latitude,
+                            ],
+                            formData.location.radius
+                          )}
+                        >
+                          <FillLayer
+                            id="pickup-radius-fill"
+                            style={{
+                              fillColor: "rgba(33, 150, 243, 0.15)",
+                              fillOutlineColor: "#2196F3",
+                            }}
+                          />
+                        </ShapeSource>
+                      )}
+
+                      {/* Location marker */}
+                      <MarkerView
+                        coordinate={[
+                          formData.location.longitude,
+                          formData.location.latitude,
+                        ]}
+                        anchor={{ x: 0.5, y: 1 }}
+                      >
+                        <View>
+                          <Image
+                            source={require("@/assets/images/marker-home.png")}
+                            style={{ width: 32, height: 40 }}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      </MarkerView>
+                    </MapView>
+                  </View>
+
+                  {/* Location Info Card */}
+                  <View className="p-3 bg-gray-100 rounded-b-xl">
+                    <Text className="text-secondary-400 font-pmedium text-sm">
+                      {formData.location.address}
+                    </Text>
+                    {formData.location.radius && (
+                      <Text className="text-gray-500 text-xs mt-1">
+                        Pickup radius:{" "}
+                        {formData.location.radius >= 1000
+                          ? `${formData.location.radius / 1000}km`
+                          : `${formData.location.radius}m`}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
 
           {/* Update Button */}
           <LargeButton

@@ -547,6 +547,7 @@ export default function ItemDetails() {
           price: item?.itemPrice,
           totalPrice: daysDifference * (item?.itemPrice ?? 0),
           rentalDays: daysDifference,
+          downpaymentPercentage: item?.downpaymentPercentage ?? 0,
         },
         createdAt: serverTimestamp(),
         lastMessage: formData.message,
@@ -626,8 +627,37 @@ export default function ItemDetails() {
     }
   };
 
+  // Helper function to check if the item is available
+  const isItemAvailable = () => {
+    const status = item?.itemStatus?.toLowerCase();
+    return status === "available";
+  };
+
   // Determine if the current user is the owner of the item
   const isCurrentUserOwner = item?.owner?.id === user?.uid;
+
+  const handleEdit = () => {
+    // Verify item status before allowing edit
+    if (!isItemAvailable()) {
+      Alert.alert(
+        "Cannot Edit",
+        "This item can only be edited when its status is 'Available'."
+      );
+      return;
+    }
+    router.push(`/edit-listing/${id}`);
+  };
+
+  const handleDelete = async () => {
+    // Verify item status before allowing delete
+    if (!isItemAvailable()) {
+      Alert.alert(
+        "Cannot Delete",
+        "This item can only be deleted when its status is 'Available'."
+      );
+      return;
+    }
+  };
 
   return (
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
@@ -1172,6 +1202,52 @@ export default function ItemDetails() {
                 </Text>
               </View>
             </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      )}
+
+      {isCurrentUserOwner && (
+        <SafeAreaView edges={["bottom"]}>
+          <View className="bg-white border-t border-gray-100 px-4 py-4">
+            <View className="flex-row gap-4">
+              <TouchableOpacity
+                onPress={handleEdit}
+                className={`flex-1 rounded-xl flex-row justify-center items-center gap-3 py-4 ${
+                  isItemAvailable() ? "bg-blue-500" : "bg-gray-300"
+                }`}
+              >
+                <Image
+                  source={icons.edit}
+                  className="w-5 h-5"
+                  tintColor="white"
+                />
+                <Text className="text-white text-center font-pbold">
+                  Edit Listing
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleDelete}
+                className={`flex-1 rounded-xl  flex-row justify-center items-start gap-3 py-4  ${
+                  isItemAvailable() ? "bg-red-500" : "bg-gray-300"
+                }`}
+              >
+                <Image
+                  source={icons.trash}
+                  className="w-5 h-5"
+                  tintColor="white"
+                />
+                <Text className="text-white text-center font-pbold">
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {!isItemAvailable() && (
+              <Text className="text-orange-700 text-center text-sm mt-3">
+                Edit and delete actions are only available when the item status
+                is "Available"
+              </Text>
+            )}
           </View>
         </SafeAreaView>
       )}

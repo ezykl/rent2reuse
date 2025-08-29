@@ -19,21 +19,9 @@ import {
 } from "react-native-safe-area-context";
 import Carousel from "react-native-reanimated-carousel";
 import { LinearGradient } from "expo-linear-gradient";
+import { Item } from "@/types/item";
 
 const { width } = Dimensions.get("window");
-
-interface Item {
-  id: string;
-  itemName: string;
-  itemPrice: number;
-  itemDesc: string;
-  itemCondition: string;
-  itemCategory: string;
-  itemMinRentDuration: number;
-  itemLocation: string;
-  itemStatus: string;
-  images?: string[];
-}
 
 const ListingDetail = () => {
   const insets = useSafeAreaInsets();
@@ -293,11 +281,11 @@ const ListingDetail = () => {
             />
 
             {/* Location */}
-            <DetailRow
+            {/* <DetailRow
               isMultiline={true}
               label="Location"
               value={item?.itemLocation}
-            />
+            /> */}
 
             {/* Status */}
             <DetailRow label="Status" value={item?.itemStatus} />

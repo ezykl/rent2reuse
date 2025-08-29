@@ -619,7 +619,7 @@ const Tools = () => {
     type: ItemType
   ): void => {
     if (type === "listing") {
-      router.push(`/listing/${item.id}`);
+      router.push(`/items/${item.id}`);
     } else if (type === "rented") {
       router.push(`/rented-detail/${item.id}`);
     } else if (type === "request") {

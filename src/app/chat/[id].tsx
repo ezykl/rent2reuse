@@ -5,6 +5,8 @@ import React, {
   useLayoutEffect,
   useCallback,
 } from "react";
+import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import {
   View,
   Text,
@@ -19,6 +21,8 @@ import {
   Alert,
   Image,
   Modal,
+  ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { useMemo } from "react";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
@@ -61,6 +65,15 @@ import {
 import { useTimeConverter } from "@/hooks/useTimeConverter";
 import RentalProgressIndicator from "@/components/RentalProgressIndicator";
 import { useLoader } from "@/context/LoaderContext";
+import { storage } from "@/lib/firebaseConfig";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytes,
+  deleteObject,
+  getStorage,
+} from "firebase/storage";
+import { ChatCamera } from "@/components/ChatCamera";
 
 // First fix the ChatHeader props interface
 interface ChatHeaderProps {
@@ -130,13 +143,20 @@ const MessageActionsModal = ({
   visible,
   onClose,
   onEdit,
+  onSave,
   onDelete,
+  message, // Add this prop
 }: {
   visible: boolean;
   onClose: () => void;
   onEdit: () => void;
+  onSave?: () => void;
   onDelete: () => void;
+  message?: Message | null; // Add this type
 }) => {
+  const isImageMessage = message?.type === "image";
+  const isTextMessage = message?.type === "message" || !message?.type;
+
   return (
     <Modal
       visible={visible}
@@ -389,10 +409,18 @@ interface Message {
   senderId: string;
   text: string;
   createdAt: any;
-  type?: "message" | "rentRequest" | "statusUpdate";
+  type?:
+    | "message"
+    | "rentRequest"
+    | "statusUpdate"
+    | "image"
+    | "paymentRequest";
   read: boolean;
   readAt: any;
   rentRequestId?: string;
+  imageUrl?: string;
+  imageWidth?: number;
+  imageHeight?: number;
   rentRequestDetails?: {
     itemId: string;
     itemName: string;
@@ -584,7 +612,7 @@ const RentRequestMessage = ({
       case "cancelled":
         return "bg-gray-100 text-gray-600";
       case "pending":
-        return "bg-blue-100 text-blue-600";
+        return "bg-yellow-100 text-yellow-600";
       default:
         return "bg-gray-100 text-gray-600";
     }
@@ -807,6 +835,168 @@ const createInAppNotification = async (
 
 const requestDataCache = new Map();
 
+const ImageMessage = ({
+  item,
+  isCurrentUser,
+  onLongPress,
+}: {
+  item: Message;
+  isCurrentUser: boolean;
+  onLongPress: () => void;
+}) => {
+  const [imageError, setImageError] = useState(false);
+  const maxWidth = Dimensions.get("window").width * 0.65;
+  const maxHeight = 300; // Maximum height for images
+  const [aspectRatio, setAspectRatio] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (item.imageUrl && !item.isDeleted) {
+      Image.getSize(
+        item.imageUrl,
+        (width, height) => {
+          const imageAspectRatio = width / height;
+          setAspectRatio(imageAspectRatio);
+          setIsLoading(false);
+        },
+        () => {
+          setImageError(true);
+          setIsLoading(false);
+        }
+      );
+    } else {
+      setIsLoading(false);
+    }
+  }, [item.imageUrl, item.isDeleted]);
+
+  // Show deleted message state
+  if (item.isDeleted) {
+    return (
+      <View
+        className={`flex-col ${isCurrentUser ? "items-end" : "items-start"}`}
+      >
+        <View
+          className={`p-3 rounded-xl mb-2 ${
+            isCurrentUser
+              ? "bg-primary rounded-tr-none self-end"
+              : "bg-white rounded-tl-none border border-gray-200"
+          }`}
+        >
+          <Text
+            className={`text-base italic ${
+              isCurrentUser ? "text-white/70" : "text-gray-500"
+            }`}
+          >
+            [Image deleted]
+          </Text>
+        </View>
+        {/* Message metadata */}
+        <View
+          className={`flex-row items-center mt-1 px-1 ${
+            isCurrentUser ? "justify-end" : "justify-start"
+          }`}
+        >
+          {isCurrentUser && (
+            <>
+              {item.read ? (
+                <Image
+                  source={icons.doubleCheck}
+                  className="w-3 h-3 mr-1"
+                  tintColor="#4285F4"
+                />
+              ) : (
+                <Image
+                  source={icons.singleCheck}
+                  className="w-3 h-3 mr-1"
+                  tintColor="#9CA3AF"
+                />
+              )}
+            </>
+          )}
+          <Text className="text-xs text-gray-400">
+            {item.createdAt ? format(item.createdAt.toDate(), "h:mm a") : ""}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Show error state
+  if (imageError || !item.imageUrl) {
+    return (
+      <View className="bg-gray-100 rounded-xl p-3 mb-2">
+        <Text className="text-gray-500 text-center font-pmedium">
+          Image not available
+        </Text>
+      </View>
+    );
+  }
+
+  // Calculate dimensions maintaining aspect ratio with max height
+  const imageWidth = maxWidth;
+  const calculatedHeight = maxWidth / aspectRatio;
+  const imageHeight = Math.min(calculatedHeight, maxHeight);
+
+  return (
+    <View className="flex-col">
+      <TouchableOpacity
+        onLongPress={onLongPress}
+        delayLongPress={300}
+        activeOpacity={0.9}
+      >
+        <View className="rounded-xl overflow-hidden bg-gray-100">
+          {isLoading ? (
+            <View
+              style={{ width: imageWidth, height: imageHeight }}
+              className="items-center justify-center bg-gray-100"
+            >
+              <ActivityIndicator color="#6B7280" />
+            </View>
+          ) : (
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={{
+                width: imageWidth,
+                height: imageHeight,
+              }}
+              className="rounded-xl"
+              resizeMode="cover"
+              onError={() => setImageError(true)}
+            />
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {/* Message metadata with read status */}
+      <View
+        className={`flex-row items-center mt-1 px-1 ${
+          isCurrentUser ? "justify-end" : "justify-start"
+        }`}
+      >
+        {isCurrentUser && (
+          <>
+            {item.read ? (
+              <Image
+                source={icons.doubleCheck}
+                className="w-3 h-3 mr-1"
+                tintColor="#4285F4"
+              />
+            ) : (
+              <Image
+                source={icons.singleCheck}
+                className="w-3 h-3 mr-1"
+                tintColor="#9CA3AF"
+              />
+            )}
+          </>
+        )}
+        <Text className="text-xs text-gray-400">
+          {item.createdAt ? format(item.createdAt.toDate(), "h:mm a") : ""}
+        </Text>
+      </View>
+    </View>
+  );
+};
 const ChatScreen = () => {
   const { id: chatId } = useLocalSearchParams();
   const navigation = useNavigation();
@@ -843,6 +1033,15 @@ const ChatScreen = () => {
   const { setIsLoading } = useLoader();
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [uploadingImages, setUploadingImages] = useState<string[]>([]);
+
+  const [messageSelection, setMessageSelection] = useState<{
+    isSelecting: boolean;
+    selectedMessages: string[];
+  }>({
+    isSelecting: false,
+    selectedMessages: [],
+  });
 
   const [chatData, setChatData] = useState<{
     requesterId: string;
@@ -855,6 +1054,9 @@ const ChatScreen = () => {
       itemId?: string;
     };
   } | null>(null);
+
+  // Add state for camera visibility
+  const [showCamera, setShowCamera] = useState(false);
 
   if (!currentUserId || !chatId) {
     return (
@@ -871,6 +1073,11 @@ const ChatScreen = () => {
   ) => {
     if (senderId !== currentUserId) return;
 
+    if (message.isDeleted) return;
+
+    if (message.type === "statusUpdate" || message.type === "rentRequest")
+      return;
+
     setSelectedMessage(message);
     setShowMessageActions(true);
   };
@@ -883,53 +1090,430 @@ const ChatScreen = () => {
   };
 
   const handleMessageDelete = async (messageId: string) => {
-    Alert.alert(
-      "Delete Message",
-      "Are you sure you want to delete this message?",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const messageRef = doc(
-                db,
-                "chat",
-                String(chatId),
-                "messages",
-                messageId
-              );
+    if (!selectedMessage) return;
 
-              await updateDoc(messageRef, {
-                text: "[Message deleted]",
-                isDeleted: true,
-                deletedAt: serverTimestamp(),
-              });
+    const messageType = selectedMessage.type === "image" ? "image" : "message";
+    const confirmText =
+      messageType === "image"
+        ? "Are you sure you want to delete this image? This cannot be undone."
+        : "Are you sure you want to delete this message?";
 
-              setShowMessageActions(false);
-              setSelectedMessage(null);
+    Alert.alert("Delete Message", confirmText, [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const messageRef = doc(
+              db,
+              "chat",
+              String(chatId),
+              "messages",
+              messageId
+            );
 
-              // Toast.show({
-              //   type: ALERT_TYPE.SUCCESS,
-              //   title: "Success",
-              //   textBody: "Message deleted successfully",
-              // });
-            } catch (error) {
-              // console.error("Error deleting message:", error);
-              // Toast.show({
-              //   type: ALERT_TYPE.DANGER,
-              //   title: "Error",
-              //   textBody: "Failed to delete message",
-              // });
+            // Handle image deletion from storage
+            if (selectedMessage.type === "image" && selectedMessage.imageUrl) {
+              try {
+                // Extract the file path from the URL
+                const storage = getStorage();
+                const fileUrl = new URL(selectedMessage.imageUrl);
+                const filePath = decodeURIComponent(
+                  fileUrl.pathname.split("/o/")[1].split("?")[0]
+                );
+                const imageRef = ref(storage, filePath);
+
+                // Delete the image from storage
+                await deleteObject(imageRef);
+                console.log("Image deleted from storage successfully");
+              } catch (storageError) {
+                console.error(
+                  "Error deleting image from storage:",
+                  storageError
+                );
+                // Continue with message update even if storage deletion fails
+              }
             }
-          },
+
+            // Update the message document
+            const updateData = {
+              isDeleted: true,
+              deletedAt: serverTimestamp(),
+              text:
+                messageType === "image"
+                  ? "[Image deleted]"
+                  : "[Message deleted]",
+              ...(messageType === "image" && {
+                imageUrl: null,
+                imageWidth: null,
+                imageHeight: null,
+              }),
+            };
+
+            await updateDoc(messageRef, updateData);
+
+            // Update chat's last message if this was the last message
+            const lastMessageQuery = query(
+              collection(db, "chat", String(chatId), "messages"),
+              orderBy("createdAt", "desc"),
+              limit(1)
+            );
+
+            const lastMessageSnap = await getDocs(lastMessageQuery);
+            if (
+              !lastMessageSnap.empty &&
+              lastMessageSnap.docs[0].id === messageId
+            ) {
+              await updateDoc(doc(db, "chat", String(chatId)), {
+                lastMessage:
+                  messageType === "image"
+                    ? "[Image deleted]"
+                    : "[Message deleted]",
+                lastMessageTime: serverTimestamp(),
+              });
+            }
+
+            setShowMessageActions(false);
+            setSelectedMessage(null);
+
+            Toast.show({
+              type: ALERT_TYPE.SUCCESS,
+              title: "Success",
+              textBody: `${
+                messageType === "image" ? "Image" : "Message"
+              } deleted successfully`,
+            });
+          } catch (error) {
+            console.error("Error deleting message:", error);
+            Toast.show({
+              type: ALERT_TYPE.DANGER,
+              title: "Error",
+              textBody: `Failed to delete ${messageType}`,
+            });
+          }
         },
-      ]
+      },
+    ]);
+  };
+
+  const handleSaveImage = async () => {
+    if (!selectedMessage?.imageUrl) return;
+
+    try {
+      // Request permissions
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Please grant photo library permissions to save images."
+        );
+        return;
+      }
+
+      // For Expo, you can use MediaLibrary
+      // import * as MediaLibrary from 'expo-media-library';
+
+      // Download and save logic would go here
+      // This is a placeholder - you'll need to implement the actual save functionality
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Image saved to gallery",
+      });
+
+      setShowMessageActions(false);
+      setSelectedMessage(null);
+    } catch (error) {
+      console.error("Error saving image:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to save image",
+      });
+    }
+  };
+  // Add image handling functions
+  const pickImage = async () => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Please grant camera roll permissions to send images."
+        );
+        return;
+      }
+
+      // Remove allowsEditing to skip cropping
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false, // Changed to false to remove cropping
+        quality: 0.7,
+        base64: false,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        // Add image to uploading state immediately
+        setUploadingImages((prev) => [...prev, result.assets[0].uri]);
+
+        try {
+          await uploadAndSendImage(result.assets[0]);
+        } catch (error) {
+          console.error("Error uploading image:", error);
+          Toast.show({
+            type: ALERT_TYPE.DANGER,
+            title: "Error",
+            textBody: "Failed to upload image",
+          });
+        } finally {
+          // Remove from uploading state
+          setUploadingImages((prev) =>
+            prev.filter((uri) => uri !== result.assets[0].uri)
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to pick image",
+      });
+    }
+  };
+
+  // const takePhoto = async () => {
+  //   try {
+  //     // Request permission
+  //     const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  //     if (status !== "granted") {
+  //       Alert.alert(
+  //         "Permission needed",
+  //         "Please grant camera permissions to take photos."
+  //       );
+  //       return;
+  //     }
+
+  //     // Launch camera
+  //     const result = await ImagePicker.launchCameraAsync({
+  //       allowsEditing: false,
+  //       quality: 0.7,
+  //       base64: false,
+  //     });
+
+  //     if (!result.canceled && result.assets[0]) {
+  //       setIsLoading(true);
+  //       await uploadAndSendImage(result.assets[0]);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error taking photo:", error);
+  //     Toast.show({
+  //       type: ALERT_TYPE.DANGER,
+  //       title: "Error",
+  //       textBody: "Failed to take photo",
+  //     });
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  const UploadingImageMessage = ({ uri }: { uri: string }) => {
+    const maxWidth = Dimensions.get("window").width * 0.65;
+    const [aspectRatio, setAspectRatio] = useState(1);
+
+    useEffect(() => {
+      Image.getSize(
+        uri,
+        (width, height) => {
+          setAspectRatio(width / height);
+        },
+        () => {
+          setAspectRatio(1);
+        }
+      );
+    }, [uri]);
+
+    const imageWidth = maxWidth;
+    const imageHeight = imageWidth / aspectRatio;
+
+    return (
+      // <View className="items-end mb-2">
+      //   <View className="relative rounded-xl overflow-hidden">
+      //     <Image
+      //       source={{ uri }}
+      //       style={{
+      //         width: imageWidth,
+      //         height: imageHeight,
+      //       }}
+      //       className="rounded-xl opacity-50"
+      //       resizeMode="cover"
+      //     />
+      //     <View className="absolute inset-0 bg-black/30 items-center justify-center">
+      //       <ActivityIndicator color="white" size="large" />
+      //     </View>
+      //   </View>
+      //   <Text className="text-xs text-gray-400 mt-1">Sending...</Text>
+      // </View>
+      null
     );
+  };
+
+  // const uploadAndSendImage = async (
+  //   imageAsset: ImagePicker.ImagePickerAsset
+  // ) => {
+  //   try {
+  //     if (!imageAsset.uri) {
+  //       throw new Error("No image URI provided");
+  //     }
+
+  //     // Add image to uploading state
+  //     setUploadingImages((prev) => [...prev, imageAsset.uri]);
+
+  //     // Create a unique filename
+  //     const filename = `chat_images/${chatId}/${Date.now()}_${Math.random()
+  //       .toString(36)
+  //       .substring(7)}.jpg`;
+
+  //     // Convert image to blob
+  //     const response = await fetch(imageAsset.uri);
+  //     const blob = await response.blob();
+
+  //     // Upload to Firebase Storage
+  //     const imageRef = ref(storage, filename);
+  //     await uploadBytes(imageRef, blob);
+  //     const downloadURL = await getDownloadURL(imageRef);
+
+  //     // Send image message
+  //     await sendImageMessage(
+  //       downloadURL,
+  //       imageAsset.width || 300,
+  //       imageAsset.height || 300
+  //     );
+  //   } catch (error) {
+  //     console.error("Error uploading image:", error);
+  //     Toast.show({
+  //       type: ALERT_TYPE.DANGER,
+  //       title: "Error",
+  //       textBody: "Failed to upload image",
+  //     });
+  //   } finally {
+  //     // Remove image from uploading state
+  //     setUploadingImages((prev) =>
+  //       prev.filter((uri) => uri !== imageAsset.uri)
+  //     );
+  //   }
+  // };
+
+  const sendImageMessage = async (
+    imageUrl: string,
+    width: number,
+    height: number
+  ) => {
+    try {
+      const chatRef = doc(db, "chat", String(chatId));
+      const chatSnap = await getDoc(chatRef);
+
+      if (!chatSnap.exists()) {
+        Alert.alert("Error", "Chat not found");
+        return;
+      }
+
+      const chatData = chatSnap.data();
+      const recipientId = chatData.participants.find(
+        (id: string) => id !== currentUserId
+      );
+
+      const messageData = {
+        senderId: currentUserId,
+        text: "", // Empty text for image messages
+        type: "image",
+        imageUrl: imageUrl,
+        imageWidth: width,
+        imageHeight: height,
+        createdAt: serverTimestamp(),
+        read: false,
+        readAt: null,
+      };
+
+      // Add message to subcollection
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      await addDoc(messagesRef, messageData);
+
+      // Update chat document
+      const updateData = {
+        lastMessage: "📸Sent a Photo",
+        lastMessageTime: serverTimestamp(),
+        lastSender: currentUserId,
+        [`unreadCounts.${recipientId}`]: increment(1),
+      };
+
+      await updateDoc(chatRef, updateData);
+    } catch (error) {
+      console.error("Error sending image message:", error);
+      throw error;
+    }
+  };
+
+  const uploadAndSendImage = async (
+    imageAsset: ImagePicker.ImagePickerAsset
+  ) => {
+    try {
+      if (!imageAsset.uri) {
+        throw new Error("No image URI provided");
+      }
+
+      // Create a unique filename
+      const filename = `chat_images/${chatId}/${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(7)}.jpg`;
+
+      // Get image dimensions
+      const { width, height } = await new Promise<{
+        width: number;
+        height: number;
+      }>((resolve) => {
+        Image.getSize(imageAsset.uri, (w, h) => {
+          resolve({ width: w, height: h });
+        });
+      });
+
+      // Calculate resize dimensions if needed (max width 1024px)
+      const maxWidth = 1024;
+      const aspectRatio = width / height;
+      const targetWidth = Math.min(width, maxWidth);
+      const targetHeight = targetWidth / aspectRatio;
+
+      // Compress and resize image
+      const compressedImage = await manipulateAsync(
+        imageAsset.uri,
+        [{ resize: { width: targetWidth, height: targetHeight } }],
+        {
+          compress: 0.6,
+          format: SaveFormat.JPEG,
+        }
+      );
+
+      // Convert to blob and upload
+      const response = await fetch(compressedImage.uri);
+      const blob = await response.blob();
+
+      const imageRef = ref(storage, filename);
+      await uploadBytes(imageRef, blob);
+      const downloadURL = await getDownloadURL(imageRef);
+
+      // Send image message
+      await sendImageMessage(downloadURL, targetWidth, targetHeight);
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      throw error;
+    }
   };
 
   const handleEditSubmit = async () => {
@@ -1101,14 +1685,14 @@ const ChatScreen = () => {
           }
 
           const recipientData = recipientSnap.data();
-          setRecipientImage(chatData?.itemDetails?.image || "");
+          // Fix: Don't use chatData before it's initialized
+          setRecipientImage(recipientData?.profileImage || "");
           setRecipientName({
-            firstname: recipientData.firstname || "", // Changed from firstName
-            lastname: recipientData.lastname || "", // Changed from lastName
-            middlename: recipientData.middlename || "", // Changed from middleName
+            firstname: recipientData.firstname || "",
+            lastname: recipientData.lastname || "",
+            middlename: recipientData.middlename || "",
           });
 
-          // Create new chat document
           const newChatData = {
             participants: [currentUserId, String(chatId)],
             createdAt: serverTimestamp(),
@@ -1120,7 +1704,7 @@ const ChatScreen = () => {
           await setDoc(chatRef, newChatData);
           console.log("New chat created");
         } else {
-          // Existing chat - fetch recipient data
+          // Existing chat logic...
           const chatData = chatSnap.data();
           if (chatData?.participants) {
             const otherUserId = chatData.participants.find(
@@ -1133,9 +1717,9 @@ const ChatScreen = () => {
                 const userData = userSnap.data();
                 setRecipientImage(userData.profileImage || "");
                 setRecipientName({
-                  firstname: userData.firstname || "", // Changed from firstName
-                  lastname: userData.lastname || "", // Changed from lastName
-                  middlename: userData.middlename || "", // Changed from middleName
+                  firstname: userData.firstname || "",
+                  lastname: userData.lastname || "",
+                  middlename: userData.middlename || "",
                 });
               }
             }
@@ -1151,7 +1735,6 @@ const ChatScreen = () => {
 
     initializeChat();
   }, [chatId, currentUserId]);
-
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
@@ -1260,7 +1843,6 @@ const ChatScreen = () => {
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       await addDoc(messagesRef, messageData);
 
-      // Update chat document with new message info and increment recipient's unread count
       const updateData = {
         lastMessage: messageText,
         lastMessageTime: serverTimestamp(),
@@ -1276,9 +1858,6 @@ const ChatScreen = () => {
     }
   };
 
-  // Update the RentRequestMessage component to use rentRequestDetails
-
-  // Add this near your other useEffect hooks
   useEffect(() => {
     if (!currentUserId || loading) return;
 
@@ -1287,7 +1866,7 @@ const ChatScreen = () => {
         const chatRef = doc(db, "chat", String(chatId));
         const messagesRef = collection(db, "chat", String(chatId), "messages");
 
-        // Query for unread messages not sent by current user
+        // Query for unread messages not sent by current user (including images)
         const q = query(
           messagesRef,
           where("senderId", "!=", currentUserId),
@@ -1426,7 +2005,23 @@ const ChatScreen = () => {
 
   const actionItems: ActionMenuItem[] = [
     {
-      id: "1",
+      id: "camera",
+      icon: icons.camera,
+      label: "Camera",
+      action: () => setShowCamera(true), // Update this line
+      bgColor: "#E3F2FD",
+      iconColor: "#2196F3",
+    },
+    {
+      id: "gallery",
+      icon: icons.gallery, // Make sure you have an image/gallery icon
+      label: "Gallery",
+      action: pickImage,
+      bgColor: "#E8F5E8",
+      iconColor: "#4CAF50",
+    },
+    {
+      id: "location",
       icon: icons.location,
       label: "Location",
       action: handleSendLocation,
@@ -2042,6 +2637,26 @@ const ChatScreen = () => {
                       {item.text}
                     </Text>
                   </View>
+                ) : item.type === "image" ? (
+                  <View
+                    className={`flex-row mb-2 ${
+                      isCurrentUser ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    {!isCurrentUser && (
+                      <Image
+                        source={{ uri: recipientImage }}
+                        className="w-8 h-8 rounded-full mr-2 mt-1"
+                      />
+                    )}
+                    <ImageMessage
+                      item={item}
+                      isCurrentUser={isCurrentUser}
+                      onLongPress={() =>
+                        handleMessageLongPress(item.id, item.senderId, item)
+                      } // Add this
+                    />
+                  </View>
                 ) : (
                   // Regular message
                   <TouchableOpacity
@@ -2062,12 +2677,12 @@ const ChatScreen = () => {
                     )}
                     <View className="flex-col">
                       <View
-                        className={`max-w-[90%] min-w-[72px] rounded-2xl px-4 py-3 ${
+                        className={`max-w-[90%] min-w-[20px] justify-center rounded-2xl px-4 py-3 ${
                           isCurrentUser
                             ? "bg-primary rounded-tr-none self-end"
                             : "bg-white rounded-tl-none border border-gray-200"
-                        } ${
-                          selection.selectedMessages.includes(item.id)
+                        }  } ${
+                          messageSelection.selectedMessages.includes(item.id)
                             ? "border-2 border-primary"
                             : ""
                         }`}
@@ -2146,6 +2761,13 @@ const ChatScreen = () => {
             minIndexForVisible: 0,
             autoscrollToTopThreshold: 10,
           }}
+          ListFooterComponent={() => (
+            <View>
+              {uploadingImages.map((uri, index) => (
+                <UploadingImageMessage key={`uploading-${index}`} uri={uri} />
+              ))}
+            </View>
+          )}
         />
 
         {/* Message Input */}
@@ -2237,6 +2859,7 @@ const ChatScreen = () => {
 
         <MessageActionsModal
           visible={showMessageActions}
+          message={selectedMessage} // Add this line
           onClose={() => {
             setShowMessageActions(false);
             setSelectedMessage(null);
@@ -2258,6 +2881,41 @@ const ChatScreen = () => {
           onClose={() => setShowActionMenu(false)}
           items={actionItems}
         />
+
+        {/* Camera Modal */}
+        {showCamera && (
+          <Modal animationType="slide" visible={showCamera}>
+            <ChatCamera
+              onPhotoTaken={async (uri) => {
+                setShowCamera(false);
+                setIsLoading(true);
+                try {
+                  await uploadAndSendImage({
+                    uri,
+                    width: 300,
+                    height: 300,
+                    type: "image",
+                    fileName: "photo.jpg",
+                    fileSize: 0,
+                    base64: null,
+                    duration: null,
+                    exif: null,
+                  });
+                } catch (error) {
+                  console.error("Error sending photo:", error);
+                  Toast.show({
+                    type: ALERT_TYPE.DANGER,
+                    title: "Error",
+                    textBody: "Failed to send photo",
+                  });
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              onClose={() => setShowCamera(false)}
+            />
+          </Modal>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
