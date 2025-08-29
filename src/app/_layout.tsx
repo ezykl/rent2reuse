@@ -113,18 +113,18 @@ export default function RootLayout() {
   }
 
   return (
-    <AlertNotificationRoot>
-      <AuthProvider>
-        <LoaderProviderWithOverlay>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <NotificationProvider>
+    <AuthProvider>
+      <LoaderProviderWithOverlay>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <NotificationProvider>
+            <AlertNotificationRoot>
               <SearchTransitionProvider>
                 <RootLayoutContent />
               </SearchTransitionProvider>
-            </NotificationProvider>
-          </GestureHandlerRootView>
-        </LoaderProviderWithOverlay>
-      </AuthProvider>
-    </AlertNotificationRoot>
+            </AlertNotificationRoot>
+          </NotificationProvider>
+        </GestureHandlerRootView>
+      </LoaderProviderWithOverlay>
+    </AuthProvider>
   );
 }

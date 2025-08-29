@@ -18,6 +18,7 @@ import {
 } from "@maplibre/maplibre-react-native";
 
 import * as Location from "expo-location";
+import { icons } from "@/constant";
 // Remove the Toast import since we're displaying errors in the view now
 
 const CEBU_COORDINATES = {
@@ -30,7 +31,7 @@ const MAP_BOUNDS = {
   sw: [124.00234222412107, 10.41075861313864],
 };
 
-const MIN_ZOOM_LEVEL = 12;
+const MIN_ZOOM_LEVEL = 15;
 const MAX_ZOOM_LEVEL = 22;
 
 // Update the helper function with proper API key
@@ -148,12 +149,20 @@ export const LocationModalContent = ({
   // Add error state for displaying errors in the note view
   const [errorMessage, setErrorMessage] = useState<string>("");
 
+  console.log("Debug Location Button:", {
+    hasLocationPermission,
+    userLocation,
+    isWithinBounds: userLocation ? isWithinCebuBounds(userLocation) : false,
+  });
+
   const circleFeature = useMemo(() => {
     if (!pinCoord || !showCircleRadius) return null;
     return createCirclePolygon(pinCoord, selectedRadius);
   }, [pinCoord, selectedRadius, showCircleRadius]);
 
   const radiusOptions = [
+    { value: 25, label: "25m" },
+    { value: 50, label: "50m" },
     { value: 100, label: "100m" },
     { value: 250, label: "250m" },
     { value: 500, label: "500m" },
@@ -186,31 +195,71 @@ export const LocationModalContent = ({
 
   const getUserLocation = async (): Promise<void> => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setHasLocationPermission(status === "granted");
+      console.log("Requesting location permission...");
+
+      // First check if permissions are already granted
+      let { status } = await Location.getForegroundPermissionsAsync();
 
       if (status !== "granted") {
-        setErrorMessage("Please enable location services to use this feature");
+        console.log("Permission not granted, requesting...");
+        ({ status } = await Location.requestForegroundPermissionsAsync());
+      }
+
+      console.log("Permission status:", status);
+      setHasLocationPermission(status === "granted");
+
+      setInitialRegion(pinCoord);
+      if (status !== "granted") {
+        setErrorMessage(
+          "Location permission is required to show your current location"
+        );
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
+      console.log("Getting current position...");
 
-      if (
-        longitude >= MAP_BOUNDS.sw[0] &&
-        longitude <= MAP_BOUNDS.ne[0] &&
-        latitude >= MAP_BOUNDS.sw[1] &&
-        latitude <= MAP_BOUNDS.ne[1]
-      ) {
-        const userCoords: [number, number] = [longitude, latitude];
-        setUserLocation(userCoords);
-        await updatePinLocation(userCoords);
+      // Get location with better options
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      console.log("Got location:", location.coords);
+      const { latitude, longitude } = location.coords;
+      const userCoords: [number, number] = [longitude, latitude];
+
+      console.log("Checking if within bounds...", {
+        longitude,
+        latitude,
+        bounds: MAP_BOUNDS,
+      });
+
+      // Check if location is within your map bounds
+      if (location) {
+        if (
+          longitude >= MAP_BOUNDS.sw[0] &&
+          longitude <= MAP_BOUNDS.ne[0] &&
+          latitude >= MAP_BOUNDS.sw[1] &&
+          latitude <= MAP_BOUNDS.ne[1]
+        ) {
+          console.log("Location is within bounds, setting userLocation");
+          setUserLocation(userCoords);
+          await updatePinLocation(userCoords);
+        } else {
+          console.log("Location is outside bounds");
+          setErrorMessage(
+            "You appear to be outside the Cebu City area. The app is limited to Cebu City locations."
+          );
+          // Still set the user location for the button to show
+          setUserLocation(userCoords);
+        }
       } else {
-        setErrorMessage("This app is limited to Cebu City area");
+        setErrorMessage("Unable to get your current location.");
       }
     } catch (error) {
-      setErrorMessage("Failed to get your location. Please try again.");
+      console.error("Error getting location:", error);
+      setErrorMessage(
+        "Failed to get your location. Please try again or search for a location manually."
+      );
     }
   };
 
@@ -396,29 +445,12 @@ export const LocationModalContent = ({
           )}
         </MapView>
 
-        {/* Floating Location Button - Google Maps style */}
-        {hasLocationPermission &&
-          userLocation &&
-          isWithinCebuBounds(userLocation) && (
-            <TouchableOpacity
-              className="absolute bottom-20 right-4 bg-white rounded-full p-3 shadow-lg"
-              style={{ elevation: 5, zIndex: 999 }}
-              onPress={handlePinMyLocation}
-            >
-              <Image
-                source={require("@/assets/icons/location.png")} // You'll need to add a location icon
-                style={{ width: 24, height: 24 }}
-                resizeMode="contain"
-              />
-            </TouchableOpacity>
-          )}
-
         {showRadiusSelector && (
           <View
             className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-lg p-4"
             style={{ zIndex: 1001 }}
           >
-            <View className="flex-row justify-between items-center mb-4">
+            <View className="flex-row justify-between items-center mb-4 mx-2">
               <Text className="text-lg font-pbold text-gray-800">
                 Select Radius
               </Text>
@@ -440,7 +472,10 @@ export const LocationModalContent = ({
                       ? "bg-primary"
                       : "bg-gray-200"
                   }`}
-                  onPress={() => setSelectedRadius(option.value)}
+                  onPress={() => {
+                    console.log("Selecting radius:", option.value);
+                    setSelectedRadius(option.value);
+                  }}
                 >
                   <Text
                     className={`font-pmedium ${
@@ -485,6 +520,30 @@ export const LocationModalContent = ({
             resizeMode="cover"
           />
         </View>
+
+        {hasLocationPermission &&
+          userLocation &&
+          isWithinCebuBounds(userLocation) && (
+            <TouchableOpacity
+              className="absolute bottom-2 right-4 bg-blue-500/55 rounded-full p-3 shadow-xl"
+              style={{
+                elevation: 10,
+                zIndex: 999,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 6,
+              }}
+              onPress={handlePinMyLocation}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={icons.crosshair}
+                style={{ width: 24, height: 24, tintColor: "white" }}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          )}
       </View>
 
       <View className="p-4 bg-white border-t border-gray-200">
@@ -493,26 +552,29 @@ export const LocationModalContent = ({
           <View className="flex-row gap-2 mb-2">
             {/* Show/Hide Radius button */}
             <TouchableOpacity
-              className={`flex-1 py-3 rounded-xl ${
-                showCircleRadius ? "bg-primary" : "bg-gray-400"
+              className={`px-4 py-3 rounded-xl ${
+                showCircleRadius ? "bg-blue-500" : "bg-gray-400"
               }`}
               onPress={() => setShowCircleRadius(!showCircleRadius)}
             >
-              <Text className="text-white text-center font-pmedium">
-                {showCircleRadius ? "Hide" : "Show"} Radius
-              </Text>
+              <Image
+                source={showCircleRadius ? icons.eye : icons.eyeHide}
+                className="h-6 w-6 mx-4"
+                tintColor="white"
+              />
             </TouchableOpacity>
 
             {/* Radius selector button - only when circle is visible */}
-            {showCircleRadius && (
+            {pinCoord && (
               <TouchableOpacity
-                className="px-4 py-3 bg-blue-500 rounded-xl"
+                className=" flex-1 py-3 min-w-10 bg-blue-500 rounded-xl"
                 onPress={() => setShowRadiusSelector(true)}
               >
                 <Text className="text-white text-center font-pmedium">
+                  Pickup Radius:
                   {selectedRadius >= 1000
-                    ? `${selectedRadius / 1000}km`
-                    : `${selectedRadius}m`}
+                    ? ` ${selectedRadius / 1000}km`
+                    : ` ${selectedRadius}m`}
                 </Text>
               </TouchableOpacity>
             )}

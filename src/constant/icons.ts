@@ -101,9 +101,15 @@ import peso from "../assets/icons/peso-sign.png";
 import handshake from "../assets/icons/handshake.png";
 import male from "../assets/icons/men.png";
 import female from "../assets/icons/female.png";
+import crosshair from "../assets/icons/crosshair.png";
+import flashOn from "../assets/icons/light-on.png";
+import flashOff from "../assets/icons/light-off.png";
 
 export default {
+  flashOn,
+  flashOff,
   handshake,
+  crosshair,
   peso,
   ringBell,
   megaPhone,
