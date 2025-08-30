@@ -26,6 +26,8 @@ import { getToolCategory, TOOL_CATEGORIES } from "@/constant/tool-categories";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 import { API__URL } from "@/constant/api";
 import { useLoader } from "@/context/LoaderContext";
+import { useProhibitedChecker } from "../utils/useProhibitedChecker";
+
 import {
   doc,
   getDoc,
@@ -87,6 +89,8 @@ const AddListing = () => {
   const cameraRef = useRef<CameraView>(null);
   const [useAI, setUseAI] = useState(false);
   const [userLocation, setUserLocation] = useState("");
+  const { isProhibited, validateClassification, isAllowedClass } =
+    useProhibitedChecker();
 
   const [showManualModal, setShowManualModal] = useState(false);
   const [showConditionDropdown, setShowConditionDropdown] = useState(false);
@@ -562,6 +566,41 @@ const AddListing = () => {
     }, []);
 
     // Validation for Step 1 (Basic Info)
+
+    const validateStep1Accepted = () => {
+      const newErrors = {
+        title: "",
+        category: "",
+        price: "",
+        minimumDays: "",
+        description: "",
+        condition: "",
+        images: "",
+        downpaymentPercentage: "",
+      };
+
+      let isValid = true;
+
+      // Check product title
+      const titleCheck = isProhibited(formData.title);
+      if (titleCheck.prohibited) {
+        newErrors.title = `Product title contains prohibited item: ${titleCheck.category}`;
+        isValid = false;
+      }
+
+      // Check description
+      const descCheck = isProhibited(formData.description);
+      if (descCheck.prohibited) {
+        newErrors.description = `Description contains prohibited content: ${
+          descCheck.category
+        } (matched: ${descCheck.matchedKeywords?.join(", ")})`;
+        isValid = false;
+      }
+
+      setErrors(newErrors);
+      return isValid;
+    };
+
     const validateStep1 = () => {
       const newErrors = {
         title: "",
@@ -664,8 +703,18 @@ const AddListing = () => {
       if (!validateStep1()) {
         Toast.show({
           type: ALERT_TYPE.DANGER,
-          title: "Validation Error",
-          textBody: "Please fill in all required fields",
+          title: "Incomplete Information",
+          textBody:
+            "Some required fields are missing. Please complete all mandatory fields.",
+        });
+        return;
+      }
+
+      if (!validateStep1Accepted()) {
+        Toast.show({
+          type: ALERT_TYPE.DANGER,
+          title: "Item Not Allowed",
+          textBody: "This item is prohibited and cannot be listed.",
         });
         return;
       }

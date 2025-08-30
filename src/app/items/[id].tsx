@@ -1113,8 +1113,21 @@ export default function ItemDetails() {
           )} */}
                   </MapView>
                 </View>
+              </View>
 
-                {/* Google Maps redirect button */}
+              <View className="p-3 bg-gray-100 rounded-e-xl">
+                <Text className="text-gray-600  font-pmedium text-sm">
+                  {item.itemLocation.address}
+                </Text>
+                {item.itemLocation.radius && (
+                  <Text className="text-gray-500 text-xs ">
+                    Pickup radius:{" "}
+                    {item.itemLocation.radius >= 1000
+                      ? `${item.itemLocation.radius / 1000}km`
+                      : `${item.itemLocation.radius}m`}
+                  </Text>
+                )}
+
                 <TouchableOpacity
                   className="absolute top-2 right-2 flex-row bg-white rounded-e-lg p-2 shadow-md"
                   onPress={() =>
@@ -1133,36 +1146,6 @@ export default function ItemDetails() {
                     className="w-4 h-4 mr-1"
                     tintColor={"#2563eb"}
                   />
-                </TouchableOpacity>
-              </View>
-
-              <View className="p-3 bg-gray-100 rounded-e-xl">
-                <Text className="text-gray-600  font-pmedium text-sm">
-                  {item.itemLocation.address}
-                </Text>
-                {item.itemLocation.radius && (
-                  <Text className="text-gray-500 text-xs ">
-                    Pickup radius:{" "}
-                    {item.itemLocation.radius >= 1000
-                      ? `${item.itemLocation.radius / 1000}km`
-                      : `${item.itemLocation.radius}m`}
-                  </Text>
-                )}
-
-                {/* Alternative: Make the entire address section clickable */}
-                <TouchableOpacity
-                  className="mt-2"
-                  onPress={() =>
-                    getDirectionsToLocation(
-                      item.itemLocation!.latitude,
-                      item.itemLocation!.longitude,
-                      item.itemLocation!.address
-                    )
-                  }
-                >
-                  <Text className="text-blue-600 text-sm font-medium">
-                    📍 View in Google Maps
-                  </Text>
                 </TouchableOpacity>
               </View>
             </View>

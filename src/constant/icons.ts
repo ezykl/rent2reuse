@@ -104,8 +104,11 @@ import female from "../assets/icons/female.png";
 import crosshair from "../assets/icons/crosshair.png";
 import flashOn from "../assets/icons/light-on.png";
 import flashOff from "../assets/icons/light-off.png";
-
+import aiImage from "../assets/icons/aiImage.png";
+import sparkle from "../assets/icons/stars.png";
 export default {
+  aiImage,
+  sparkle,
   flashOn,
   flashOff,
   handshake,
