@@ -34,7 +34,7 @@ const MAP_BOUNDS = {
 const MIN_ZOOM_LEVEL = 15;
 const MAX_ZOOM_LEVEL = 22;
 
-// Update the helper function with proper API key
+// Update the helper function with proper API key OPENCAGE
 const getAddressFromCoordinates = async (
   latitude: number,
   longitude: number
@@ -44,6 +44,7 @@ const getAddressFromCoordinates = async (
       `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=60e64bf3f33b40158223b9ea8354791b`
     );
     const data = await response.json();
+    console.log(JSON.stringify(data, null, 2));
     return data.results[0]?.formatted || "";
   } catch (error) {
     console.error("Error fetching address:", error);

@@ -59,6 +59,7 @@ import {
   FillLayer,
 } from "@maplibre/maplibre-react-native";
 import * as Location from "expo-location";
+import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 
 type RangeChange = { startDate?: DateType; endDate?: DateType };
 
@@ -95,7 +96,7 @@ export default function ItemDetails() {
   const [activeIndex, setActiveIndex] = useState(0);
   const { user } = useAuth();
   const { timeToMinutes } = useTimeConverter();
-
+  const [isLocationLoading, setIsLocationLoading] = useState(false);
   const [hasExistingRequest, setHasExistingRequest] = useState(false);
   const [existingRequestData, setExistingRequestData] = useState<{
     id: string;
@@ -266,9 +267,10 @@ export default function ItemDetails() {
       }
     } catch (error) {
       console.error("Error getting location:", error);
+    } finally {
+      setIsLocationLoading(false); // Stop loading
     }
   };
-
   // Function to fetch user rating data
   const fetchUserRating = async (
     userId: string
@@ -323,7 +325,7 @@ export default function ItemDetails() {
   useEffect(() => {
     const fetchItem = async () => {
       try {
-        setIsLoading(true);
+        // setIsLoading(true);
         const docRef = doc(db, "items", id as string);
         const docSnap = await getDoc(docRef);
 
@@ -364,7 +366,7 @@ export default function ItemDetails() {
         console.error("Error fetching item:", error);
         Alert.alert("Error", "Failed to load item details");
       } finally {
-        setIsLoading(false);
+        // setIsLoading(false);
       }
     };
 
@@ -682,28 +684,12 @@ export default function ItemDetails() {
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Image Section */}
         <View>
-          {/* AI Badge Enhancement */}
+          {/* AI Badge Enhancement
           {item?.enableAI && (
             <View className="mb-4">
-              <LinearGradient
-                colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                className="p-4 py-2 rounded-2xl"
-              >
-                <View className="flex-row items-center">
-                  <View className="w-8 h-8 bg-white/20 rounded-full items-center justify-center mr-3">
-                    <Text className="text-white font-bold text-sm">✨</Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-white font-psemibold text-base">
-                      AI-Enhanced Listing
-                    </Text>
-                  </View>
-                </View>
-              </LinearGradient>
+             
             </View>
-          )}
+          )} */}
 
           <View className="h-[370px] relative mb-4 ">
             {item && item.images && item.images.length > 0 ? (
@@ -770,6 +756,38 @@ export default function ItemDetails() {
                   )}
                 />
 
+                {item.enableAI && (
+                  <View className="flex-row  absolute bottom-2 right-2 py-1 px-4  items-end ">
+                    <LinearGradient
+                      colors={["#8B5CF6", "#EC4899", "#F59E0B"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      className="p-4 py-2 rounded-2xl"
+                      style={{ borderRadius: 23, opacity: 0.8 }}
+                    >
+                      <View className="flex-row items-end ">
+                        <Image
+                          source={icons.aiImage}
+                          className="w-5 h-5"
+                          tintColor={"white"}
+                        />
+                        <Text className="font-pmedium text-xs text-white ">
+                          Ai Enabled
+                        </Text>
+                      </View>
+                    </LinearGradient>
+                    {/* 
+                    <Image
+                      source={icons.aiImage}
+                      className="w-6 h-6"
+                      tintColor={"#EC4899"}
+                    />
+                    <Text className="font-pmedium text-sm text-white ">
+                      Ai Enabled
+                    </Text> */}
+                  </View>
+                )}
+
                 {/* Move price and title to bottom with gradient */}
                 <View className="absolute bottom-0 left-6 right-6 flex-row justify-between items-end">
                   {/* Title and Price Container (Left) */}
@@ -798,23 +816,45 @@ export default function ItemDetails() {
                     {activeIndex + 1}/{item.images.length}
                   </Text>
                 </View>
-                {distanceToItem && (
+                {/* Distance indicator with loading state */}
+                {(isLocationLoading || distanceToItem) && (
                   <View className="absolute top-6 left-6 bg-black/50 px-3 py-1 rounded-full flex-row items-center justify-center">
-                    <Image
-                      source={icons.location}
-                      className="w-4 h-4 mr-1"
-                      resizeMode="contain"
-                      tintColor={
-                        userLocation?.source === "profile" ? "#9CA3AF" : "white"
-                      }
-                    />
-
-                    <Text className="text-white font-psemibold">
-                      {distanceToItem < 1
-                        ? `${Math.round(distanceToItem * 1000)}m`
-                        : `${distanceToItem.toFixed(1)}km`}
-                      {/* {userLocation?.source === 'profile' && ' (Profile)'} */}
-                    </Text>
+                    {isLocationLoading ? (
+                      <>
+                        <ActivityIndicator
+                          size="small"
+                          color="white"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text className="text-white font-psemibold text-sm">
+                          Finding location...
+                        </Text>
+                      </>
+                    ) : distanceToItem ? (
+                      <>
+                        {userLocation?.source === "profile" ? (
+                          <View className="flex-row gap-1 items-center">
+                            <ActivityIndicator size={"small"} color="#9CA3AF" />
+                          </View>
+                        ) : (
+                          <View className="flex-row gap-1 items-center">
+                            <Image
+                              source={icons.footstep}
+                              className="w-4 h-4 mr-1"
+                              resizeMode="contain"
+                              tintColor="white"
+                            />
+                            <Text className="text-white font-psemibold">
+                              {distanceToItem < 1
+                                ? `${Math.round(distanceToItem * 1000)}m`
+                                : distanceToItem < 10
+                                ? `${distanceToItem.toFixed(1)}km`
+                                : `${Math.round(distanceToItem)}km`}
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    ) : null}
                   </View>
                 )}
 
@@ -835,13 +875,9 @@ export default function ItemDetails() {
                 )}
               </>
             ) : (
-              <View className="flex-1 items-center justify-center">
-                <View className="w-24 h-24 bg-gray-200 rounded-2xl items-center justify-center mb-3">
-                  <Image
-                    source={images.logoSmall}
-                    className="w-40 h-40 opacity-10"
-                    resizeMode="contain"
-                  />
+              <View className="flex-1 items-center justify-center m-2 h-full rounded-2xl bg-gray-200">
+                <View className="w-24 h-24  rounded-2xl items-center justify-center mb-3">
+                  <LottieActivityIndicator size={100} color="white" />
                 </View>
               </View>
             )}
@@ -873,18 +909,18 @@ export default function ItemDetails() {
                 </>
               ) : (
                 <View className="relative">
-                  <View className="w-8 h-8 bg-primary/20 rounded-full items-center justify-center mr-3">
+                  <View className="w-12 h-12 bg-primary/20 rounded-full items-center justify-center mr-3">
                     <Text className="text-primary font-bold text-sm">
                       {(item &&
                         item.owner?.fullname?.charAt(0)?.toUpperCase()) ||
-                        "U"}
+                        ""}
                     </Text>
                   </View>
-                  <Image
+                  {/* <Image
                     source={icons.verified}
                     className="w-4 h-4 absolute -left-1 bottom-0"
                     resizeMode="contain"
-                  />
+                  /> */}
                 </View>
               )}
             </View>
@@ -1113,6 +1149,25 @@ export default function ItemDetails() {
           )} */}
                   </MapView>
                 </View>
+                <TouchableOpacity
+                  className="absolute bottom-2 right-2 flex-row justify-center  items-end bg-white rounded-lg p-2 shadow-md"
+                  onPress={() =>
+                    getDirectionsToLocation(
+                      item.itemLocation!.latitude,
+                      item.itemLocation!.longitude,
+                      item.itemLocation!.address
+                    )
+                  }
+                >
+                  <Text className="text-blue-600 text-sm font-medium">
+                    Get Direction
+                  </Text>
+                  <Image
+                    source={icons.rightArrow}
+                    className="w-5 h-5 mr-1"
+                    tintColor={"#2563eb"}
+                  />
+                </TouchableOpacity>
               </View>
 
               <View className="p-3 bg-gray-100 rounded-e-xl">
@@ -1127,26 +1182,6 @@ export default function ItemDetails() {
                       : `${item.itemLocation.radius}m`}
                   </Text>
                 )}
-
-                <TouchableOpacity
-                  className="absolute top-2 right-2 flex-row bg-white rounded-e-lg p-2 shadow-md"
-                  onPress={() =>
-                    getDirectionsToLocation(
-                      item.itemLocation!.latitude,
-                      item.itemLocation!.longitude,
-                      item.itemLocation!.address
-                    )
-                  }
-                >
-                  <Text className="text-blue-600 text-xs font-medium">
-                    Get Direction
-                  </Text>
-                  <Image
-                    source={icons.rightArrow}
-                    className="w-4 h-4 mr-1"
-                    tintColor={"#2563eb"}
-                  />
-                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -1189,7 +1224,7 @@ export default function ItemDetails() {
         </SafeAreaView>
       )}
 
-      {isCurrentUserOwner && (
+      {/* {isCurrentUserOwner && (
         <SafeAreaView edges={["bottom"]}>
           <View className="bg-white border-t border-gray-100 px-4 py-4">
             <View className="flex-row gap-4">
@@ -1233,7 +1268,7 @@ export default function ItemDetails() {
             )}
           </View>
         </SafeAreaView>
-      )}
+      )} */}
 
       <RentRequestForm
         visible={showRequestForm}
@@ -1435,7 +1470,10 @@ const RentRequestForm = ({
         : 0;
 
     return (
-      <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+      <View
+        className="absolute inset-0 bg-white"
+        style={{ paddingTop: insets.top }}
+      >
         {/* Header */}
         <View className="flex-row justify-between items-center p-2  border-b border-gray-100">
           <TouchableOpacity

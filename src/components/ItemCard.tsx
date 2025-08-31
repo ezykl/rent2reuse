@@ -1,9 +1,14 @@
 // Enhanced ItemCard component with location optimizations
 
-import { View, Text, Image, TouchableOpacity } from "react-native";
-import React, { useCallback, useEffect, useState, useMemo } from "react";
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import React, { useMemo } from "react";
 import { icons } from "../constant";
-import { useLocation } from "../hooks/useLocation";
 import { LocationUtils, Position } from "../utils/locationUtils";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -17,7 +22,7 @@ interface ItemCardProps {
   itemLocation?: {
     latitude: number;
     longitude: number;
-    address?: string; // Add address for fallback display
+    address?: string;
   };
   owner?: {
     id: string;
@@ -26,12 +31,80 @@ interface ItemCardProps {
   showProtectionOverlay?: boolean;
   onPress?: () => void;
   enableAI?: boolean;
-  // NEW: Optional prop to pass user location from parent to avoid multiple location hooks
   userLocationProp?: {
     latitude: number;
     longitude: number;
   } | null;
+  isLocationLoading?: boolean;
 }
+
+// DistanceBadge component - MOVED OUTSIDE ItemCard to avoid hook issues
+const DistanceBadge = ({
+  itemLocation,
+  userLocation,
+  isLocationLoading,
+}: {
+  itemLocation: Position;
+  userLocation?: {
+    latitude: number;
+    longitude: number;
+  } | null;
+  isLocationLoading?: boolean;
+}) => {
+  // Show loading state
+  if (isLocationLoading) {
+    return (
+      <View className="bg-black/70 px-2 py-1 rounded-full flex-row items-center">
+        <ActivityIndicator
+          size="small"
+          color="white"
+          style={{ marginRight: 4 }}
+        />
+      </View>
+    );
+  }
+
+  // Don't show if no location
+  if (!userLocation || !itemLocation) return null;
+
+  // Calculate distance
+  const distanceResult = useMemo(() => {
+    if (!userLocation || !itemLocation) return null;
+    try {
+      return LocationUtils.Distance.calculateUserToItemDistance(
+        userLocation,
+        itemLocation
+      );
+    } catch (err) {
+      console.error("Error calculating distance:", err);
+      return null;
+    }
+  }, [userLocation, itemLocation]);
+
+  if (!distanceResult) return null;
+
+  // Format distance text
+  const distanceText = useMemo(() => {
+    if (distanceResult.kilometers < 1) {
+      return `${Math.round(distanceResult.meters)}m`;
+    } else if (distanceResult.kilometers < 10) {
+      return `${distanceResult.kilometers.toFixed(1)}km`;
+    } else {
+      return `${distanceResult.kilometers.toFixed(1)}km`;
+    }
+  }, [distanceResult]);
+
+  return (
+    <View className="bg-black/70 px-2 py-1 rounded-full flex-row items-center">
+      <Image
+        source={icons.footstep}
+        className="w-3 h-3 mr-1"
+        tintColor="#FFFFFF"
+      />
+      <Text className="text-xs text-white font-pmedium">{distanceText}</Text>
+    </View>
+  );
+};
 
 const ItemCard = ({
   title,
@@ -45,66 +118,9 @@ const ItemCard = ({
   itemLocation,
   showProtectionOverlay = false,
   onPress,
-  userLocationProp, // NEW: Accept user location from parent
+  userLocationProp,
+  isLocationLoading = false,
 }: ItemCardProps) => {
-  // Optimized DistanceBadge component
-  const DistanceBadge = ({ itemLocation }: { itemLocation: Position }) => {
-    // Use prop location if provided, otherwise use hook
-    const locationHook = useLocation({
-      autoStart: !userLocationProp, // Only auto-start if no prop provided
-      watchLocation: false, // Disable watching since parent handles it
-    });
-
-    const effectiveUserLocation = userLocationProp || locationHook.userLocation;
-    const effectiveHasPermission = userLocationProp
-      ? true
-      : locationHook.hasPermission;
-
-    // Memoize distance calculation for performance
-    const distanceResult = useMemo(() => {
-      if (!effectiveUserLocation || !itemLocation) return null;
-
-      try {
-        return LocationUtils.Distance.calculateUserToItemDistance(
-          effectiveUserLocation,
-          itemLocation
-        );
-      } catch (err) {
-        console.error("Error calculating distance:", err);
-        return null;
-      }
-    }, [effectiveUserLocation, itemLocation]);
-
-    // Memoize distance text formatting
-    const distanceText = useMemo(() => {
-      if (!distanceResult) return null;
-
-      if (distanceResult.kilometers < 0.1) {
-        return "< 100m";
-      } else if (distanceResult.kilometers < 1) {
-        return `${Math.round(distanceResult.meters)}m`;
-      } else if (distanceResult.kilometers < 10) {
-        return `${distanceResult.kilometers.toFixed(1)}km`;
-      } else {
-        return `${Math.round(distanceResult.kilometers)}km`;
-      }
-    }, [distanceResult]);
-
-    // Don't show if no permission or no distance calculated
-    if (!effectiveHasPermission || !distanceText) return null;
-
-    return (
-      <View className="bg-black/70 px-2 py-1 rounded-full flex-row items-center">
-        <Image
-          source={icons.location}
-          className="w-3 h-3 mr-1"
-          tintColor="#FFFFFF"
-        />
-        <Text className="text-xs text-white font-pmedium">{distanceText}</Text>
-      </View>
-    );
-  };
-
   // Status color mapping with memoization
   const statusColorConfig = useMemo(() => {
     switch (status?.toLowerCase()) {
@@ -185,22 +201,11 @@ const ItemCard = ({
                   latitude: itemLocation.latitude,
                   longitude: itemLocation.longitude,
                 }}
+                userLocation={userLocationProp}
+                isLocationLoading={isLocationLoading}
               />
             </View>
           )}
-
-        {/* NEW: Location address as fallback when no coordinates */}
-        {!itemLocation?.latitude && itemLocation?.address && (
-          <View className="absolute top-2 left-2 flex-row">
-            <Text>Ts</Text>
-            <DistanceBadge
-              itemLocation={{
-                latitude: itemLocation.latitude,
-                longitude: itemLocation.longitude,
-              }}
-            />
-          </View>
-        )}
 
         <LinearGradient
           colors={["transparent", "rgba(0,0,0,0.7)"]}
@@ -220,7 +225,7 @@ const ItemCard = ({
           </View>
         )}
 
-        {!enableAI && (
+        {enableAI && (
           <Image
             source={icons.aiImage}
             className="w-6 h-6 absolute bottom-2 right-2"
@@ -234,24 +239,11 @@ const ItemCard = ({
         {/* Title - Always visible */}
         <View className="flex-row items-center">
           <Text
-            className="text-base font-pmedium text-gray-800"
+            className="flex-1 text-base font-pmedium text-gray-800"
             numberOfLines={1}
           >
             {title || "Untitled"}
           </Text>
-
-          {!showProtectionOverlay && condition && (
-            <View
-              className={`ml-1 px-2 py-1 rounded-full ${conditionColorConfig.bg}`}
-              style={{ opacity: 0.7 }}
-            >
-              <Text
-                className={`text-xs font-pmedium ${conditionColorConfig.text}`}
-              >
-                {condition}
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* Protected Content - Only show if profile is complete */}
@@ -274,7 +266,7 @@ const ItemCard = ({
                 {description}
               </Text>
             )}
-            <View className="flex-row items-center justify-between mt-2">
+            <View className="flex-row items-center justify-start  mt-2">
               {/* Price */}
               {price !== undefined && (
                 <Text className="text-lg font-psemibold text-primary mt-2">
@@ -282,7 +274,7 @@ const ItemCard = ({
                 </Text>
               )}
 
-              {/* {!showProtectionOverlay && condition && (
+              {!showProtectionOverlay && condition && (
                 <View className="ml-2">
                   <View
                     className={`px-2 py-1 rounded-full ${conditionColorConfig.bg}`}
@@ -295,7 +287,7 @@ const ItemCard = ({
                     </Text>
                   </View>
                 </View>
-              )} */}
+              )}
             </View>
           </>
         ) : (

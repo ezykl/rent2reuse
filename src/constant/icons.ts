@@ -106,7 +106,9 @@ import flashOn from "../assets/icons/light-on.png";
 import flashOff from "../assets/icons/light-off.png";
 import aiImage from "../assets/icons/aiImage.png";
 import sparkle from "../assets/icons/stars.png";
+import footstep from "../assets/icons/footstep.png";
 export default {
+  footstep,
   aiImage,
   sparkle,
   flashOn,

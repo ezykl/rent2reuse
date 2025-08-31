@@ -149,13 +149,14 @@ const Profile: React.FC = () => {
       try {
         setIsLoading(true);
         const currentUser = auth.currentUser;
-        if (!currentUser) return;
+        if (!currentUser) return; // 🚨 stop if not logged in
 
         const userDoc = await getDoc(doc(db, "users", currentUser.uid));
 
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
-          console.log("Fetched user data:", userData); // For debugging
+          console.log("Fetched user data:", userData);
+
           setProfileData({
             firstname: userData.firstname || "",
             middlename: userData.middlename || "",
@@ -173,7 +174,7 @@ const Profile: React.FC = () => {
             currentPlan: userData.currentPlan
               ? {
                   planId: userData.currentPlan.planId || "",
-                  planType: userData.currentPlan?.planType
+                  planType: userData.currentPlan.planType
                     ? userData.currentPlan.planType.charAt(0).toUpperCase() +
                       userData.currentPlan.planType.slice(1).toLowerCase()
                     : "Free",
@@ -182,6 +183,7 @@ const Profile: React.FC = () => {
                   rentUsed: userData.currentPlan.rentUsed || 0,
                   listUsed: userData.currentPlan.listUsed || 0,
                   status: userData.currentPlan.status || "inactive",
+                  subscriptionId: userData.currentPlan.subscriptionId,
                 }
               : undefined,
           });
@@ -197,15 +199,18 @@ const Profile: React.FC = () => {
       setIsLoading(false);
     };
 
-    // Fetch initial data
+    const currentUser = auth.currentUser;
+    if (!currentUser) return; // 🚨 don’t set up snapshot if logged out
+
+    // Fetch once
     fetchProfileData();
 
-    // Set up real-time listener for profile updates
+    // Set up real-time listener
     const unsubscribe = onSnapshot(
-      doc(db, "users", auth.currentUser?.uid || ""),
-      (doc) => {
-        if (doc.exists()) {
-          const userData = doc.data() as User;
+      doc(db, "users", currentUser.uid),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const userData = docSnap.data() as User;
           setProfileData({
             firstname: userData.firstname || "",
             middlename: userData.middlename || "",
@@ -240,9 +245,108 @@ const Profile: React.FC = () => {
       }
     );
 
-    // Cleanup listener on unmount
     return () => unsubscribe();
   }, [auth.currentUser?.uid]);
+
+  // useEffect(() => {
+  //   const fetchProfileData = async () => {
+  //     try {
+  //       setIsLoading(true);
+  //       const currentUser = auth.currentUser;
+  //       if (!currentUser) return;
+
+  //       const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+
+  //       if (userDoc.exists()) {
+  //         const userData = userDoc.data() as User;
+  //         console.log("Fetched user data:", userData); // For debugging
+  //         setProfileData({
+  //           firstname: userData.firstname || "",
+  //           middlename: userData.middlename || "",
+  //           lastname: userData.lastname || "",
+  //           profileImage: userData.profileImage || "",
+  //           createdAt: userData.createdAt || new Date().toISOString(),
+  //           contactNumber: userData.contactNumber || "",
+  //           location: {
+  //             address: userData.location?.address || "",
+  //             latitude: userData.location?.latitude || 0,
+  //             longitude: userData.location?.longitude || 0,
+  //             updatedAt:
+  //               userData.location?.updatedAt || new Date().toISOString(),
+  //           },
+  //           currentPlan: userData.currentPlan
+  //             ? {
+  //                 planId: userData.currentPlan.planId || "",
+  //                 planType: userData.currentPlan?.planType
+  //                   ? userData.currentPlan.planType.charAt(0).toUpperCase() +
+  //                     userData.currentPlan.planType.slice(1).toLowerCase()
+  //                   : "Free",
+  //                 rentLimit: userData.currentPlan.rentLimit || 0,
+  //                 listLimit: userData.currentPlan.listLimit || 0,
+  //                 rentUsed: userData.currentPlan.rentUsed || 0,
+  //                 listUsed: userData.currentPlan.listUsed || 0,
+  //                 status: userData.currentPlan.status || "inactive",
+  //               }
+  //             : undefined,
+  //         });
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching profile data:", error);
+  //       Toast.show({
+  //         type: ALERT_TYPE.DANGER,
+  //         title: "Error",
+  //         textBody: "Failed to load profile data",
+  //       });
+  //     }
+  //     setIsLoading(false);
+  //   };
+
+  //   // Fetch initial data
+  //   fetchProfileData();
+
+  //   // Set up real-time listener for profile updates
+  //   const unsubscribe = onSnapshot(
+  //     doc(db, "users", auth.currentUser?.uid || ""),
+  //     (doc) => {
+  //       if (doc.exists()) {
+  //         const userData = doc.data() as User;
+  //         setProfileData({
+  //           firstname: userData.firstname || "",
+  //           middlename: userData.middlename || "",
+  //           lastname: userData.lastname || "",
+  //           profileImage: userData.profileImage || "",
+  //           createdAt: userData.createdAt || new Date().toISOString(),
+  //           contactNumber: userData.contactNumber || "",
+  //           location: {
+  //             address: userData.location?.address || "",
+  //             latitude: userData.location?.latitude || 0,
+  //             longitude: userData.location?.longitude || 0,
+  //             updatedAt:
+  //               userData.location?.updatedAt || new Date().toISOString(),
+  //           },
+  //           currentPlan: userData.currentPlan
+  //             ? {
+  //                 planId: userData.currentPlan.planId || "",
+  //                 planType: userData.currentPlan.planType || "Free",
+  //                 rentLimit: userData.currentPlan.rentLimit || 0,
+  //                 listLimit: userData.currentPlan.listLimit || 0,
+  //                 rentUsed: userData.currentPlan.rentUsed || 0,
+  //                 listUsed: userData.currentPlan.listUsed || 0,
+  //                 status: userData.currentPlan.status || "inactive",
+  //                 subscriptionId: userData.currentPlan.subscriptionId,
+  //               }
+  //             : undefined,
+  //         });
+  //       }
+  //     },
+  //     (error) => {
+  //       console.error("Error in profile snapshot:", error);
+  //     }
+  //   );
+
+  //   // Cleanup listener on unmount
+  //   return () => unsubscribe();
+  // }, [auth.currentUser?.uid]);
 
   const ensureUserProfileExists = async (uid: string) => {
     try {
