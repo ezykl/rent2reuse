@@ -26,6 +26,8 @@ import { getToolCategory, TOOL_CATEGORIES } from "@/constant/tool-categories";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 import { API__URL } from "@/constant/api";
 import { useLoader } from "@/context/LoaderContext";
+import { useProhibitedChecker } from "../utils/useProhibitedChecker";
+
 import {
   doc,
   getDoc,
@@ -41,6 +43,13 @@ import { auth, db, storage } from "@/lib/firebaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
 import { generateDescriptionTemplate } from "@/constant/item-specifications";
+import {
+  MapView,
+  Camera,
+  MarkerView,
+  ShapeSource,
+  FillLayer,
+} from "@maplibre/maplibre-react-native";
 
 const { width } = Dimensions.get("window");
 
@@ -87,6 +96,8 @@ const AddListing = () => {
   const cameraRef = useRef<CameraView>(null);
   const [useAI, setUseAI] = useState(false);
   const [userLocation, setUserLocation] = useState("");
+  const { isProhibited, validateClassification, isAllowedClass } =
+    useProhibitedChecker();
 
   const [showManualModal, setShowManualModal] = useState(false);
   const [showConditionDropdown, setShowConditionDropdown] = useState(false);
@@ -499,7 +510,12 @@ const AddListing = () => {
       price: "",
       minimumDays: "",
       condition: "",
-      location: userLocation || "",
+      location: {
+        latitude: 0,
+        longitude: 0,
+        address: "",
+        radius: 0,
+      },
       owner: { id: "", fullname: "" },
       downpaymentPercentage: "",
       enableDownpayment: false,
@@ -550,7 +566,7 @@ const AddListing = () => {
           if (userDoc.exists() && userDoc.data().location?.address) {
             setFormData((prev) => ({
               ...prev,
-              location: userDoc.data().location.address,
+              location: userDoc.data().location,
             }));
           }
         } catch (error) {
@@ -562,6 +578,71 @@ const AddListing = () => {
     }, []);
 
     // Validation for Step 1 (Basic Info)
+
+    const validateStep1Accepted = () => {
+      const newErrors = {
+        title: "",
+        category: "",
+        price: "",
+        minimumDays: "",
+        description: "",
+        condition: "",
+        images: "",
+        downpaymentPercentage: "",
+      };
+
+      let isValid = true;
+
+      // Check product title
+      const titleCheck = isProhibited(formData.title);
+      if (titleCheck.prohibited) {
+        newErrors.title = `Product title contains prohibited item: ${
+          titleCheck.category
+        }(matched: ${titleCheck.matchedKeywords?.join(", ")})`;
+        isValid = false;
+      }
+
+      // Check description
+      const descCheck = isProhibited(formData.description);
+      if (descCheck.prohibited) {
+        newErrors.description = `Description contains prohibited content: ${
+          descCheck.category
+        } (matched: ${descCheck.matchedKeywords?.join(", ")})`;
+        isValid = false;
+      }
+
+      setErrors(newErrors);
+      return isValid;
+    };
+
+    const createCirclePolygon = (
+      center: [number, number],
+      radiusInMeters: number,
+      points: number = 64
+    ) => {
+      const coords: number[][] = [];
+      const distanceX =
+        radiusInMeters / (111320 * Math.cos((center[1] * Math.PI) / 180));
+      const distanceY = radiusInMeters / 110540;
+
+      for (let i = 0; i < points; i++) {
+        const theta = (i / points) * (2 * Math.PI);
+        const x = distanceX * Math.cos(theta);
+        const y = distanceY * Math.sin(theta);
+        coords.push([center[0] + x, center[1] + y]);
+      }
+      coords.push(coords[0]);
+
+      return {
+        type: "Feature" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [coords],
+        },
+        properties: {},
+      };
+    };
+
     const validateStep1 = () => {
       const newErrors = {
         title: "",
@@ -664,8 +745,18 @@ const AddListing = () => {
       if (!validateStep1()) {
         Toast.show({
           type: ALERT_TYPE.DANGER,
-          title: "Validation Error",
-          textBody: "Please fill in all required fields",
+          title: "Incomplete Information",
+          textBody:
+            "Some required fields are missing. Please complete all mandatory fields.",
+        });
+        return;
+      }
+
+      if (!validateStep1Accepted()) {
+        Toast.show({
+          type: ALERT_TYPE.DANGER,
+          title: "Item Not Allowed",
+          textBody: "This item is prohibited and cannot be listed.",
         });
         return;
       }
@@ -1469,7 +1560,7 @@ const AddListing = () => {
                       }));
                     }
                   }}
-                  trackColor={{ false: "#767577", true: "#5C6EF6" }}
+                  trackColor={{ false: "#767577", true: "#4BD07F" }}
                   thumbColor={
                     formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
                   }
@@ -1520,7 +1611,7 @@ const AddListing = () => {
                       ))}
                     </View>
 
-                    <TextInput
+                    {/* <TextInput
                       value={formData.downpaymentPercentage}
                       onChangeText={(text) => {
                         setFormData((prev) => ({
@@ -1542,8 +1633,8 @@ const AddListing = () => {
                       }`}
                       keyboardType="numeric"
                       placeholder="Enter percentage (e.g., 30 for 30%)"
-                    />
-                    {errors.downpaymentPercentage ? (
+                    /> */}
+                    {/* {errors.downpaymentPercentage ? (
                       <Text className="text-red-500 text-xs mt-1">
                         {errors.downpaymentPercentage}
                       </Text>
@@ -1551,7 +1642,7 @@ const AddListing = () => {
                       <Text className="text-secondary-300 font-pregular text-xs mt-1">
                         Minimum 10%, Maximum 100%
                       </Text>
-                    )}
+                    )} */}
                   </View>
 
                   {/* Payment Example */}
@@ -1623,21 +1714,101 @@ const AddListing = () => {
             </View>
           </View>
 
-          {/* Location Section */}
-          <View>
-            <Text className="text-secondary-400 font-pmedium mt-2">
-              Pickup Location
-            </Text>
-            <View className="bg-gray-100 border-gray-200 border rounded-xl p-3">
-              <Text className="font-pregular text-gray-500">
-                {formData.location || "Loading address..."}
-              </Text>
-            </View>
-            <Text className="text-secondary-300 font-pregular text-xs mt-2 italic">
-              This is your default pickup location. You can change this in your
-              profile settings.
-            </Text>
-          </View>
+          {/* Location Display - Static Map */}
+          {formData.location &&
+            formData.location.latitude &&
+            formData.location.longitude && (
+              <View className="my-2">
+                <View className="flex-row items-center ">
+                  <Text className="text-secondary-400 font-pmedium">
+                    Location
+                  </Text>
+                  <Text className="text-secondary-300 font-pregular text-xs ml-2">
+                    (Pickup location cannot be changed here)
+                  </Text>
+                </View>
+
+                {/* Static Map Container */}
+                <View className="relative">
+                  <View className="h-48 rounded-s-xloverflow-hidden border border-gray-200">
+                    <MapView
+                      style={{ flex: 1 }}
+                      rotateEnabled={false}
+                      scrollEnabled={false}
+                      zoomEnabled={false}
+                      pitchEnabled={false}
+                      attributionEnabled={false}
+                      compassViewPosition={3}
+                      mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+                    >
+                      <Camera
+                        defaultSettings={{
+                          centerCoordinate: [
+                            formData.location.longitude,
+                            formData.location.latitude,
+                          ],
+                          zoomLevel: 15,
+                        }}
+                      />
+
+                      {/* Radius circle if available */}
+                      {formData.location.radius && (
+                        <ShapeSource
+                          id="pickup-radius"
+                          shape={createCirclePolygon(
+                            [
+                              formData.location.longitude,
+                              formData.location.latitude,
+                            ],
+                            formData.location.radius
+                          )}
+                        >
+                          <FillLayer
+                            id="pickup-radius-fill"
+                            style={{
+                              fillColor: "rgba(33, 150, 243, 0.15)",
+                              fillOutlineColor: "#2196F3",
+                            }}
+                          />
+                        </ShapeSource>
+                      )}
+
+                      {/* Location marker */}
+                      <MarkerView
+                        coordinate={[
+                          formData.location.longitude,
+                          formData.location.latitude,
+                        ]}
+                        anchor={{ x: 0.5, y: 1 }}
+                      >
+                        <View>
+                          <Image
+                            source={require("@/assets/images/marker-home.png")}
+                            style={{ width: 32, height: 40 }}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      </MarkerView>
+                    </MapView>
+                  </View>
+
+                  {/* Location Info Card */}
+                  <View className="p-3 bg-gray-100 rounded-b-xl">
+                    <Text className="text-secondary-400 font-pmedium text-sm">
+                      {formData.location.address}
+                    </Text>
+                    {formData.location.radius && (
+                      <Text className="text-gray-500 text-xs mt-1">
+                        Pickup radius:{" "}
+                        {formData.location.radius >= 1000
+                          ? `${formData.location.radius / 1000}km`
+                          : `${formData.location.radius}m`}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
         </View>
 
         {/* Action Buttons */}

@@ -1,4 +1,4 @@
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, Image, TouchableOpacity, Alert } from "react-native";
 import React from "react";
 import { icons } from "../constant";
 
@@ -22,6 +22,32 @@ interface ListingCardProps {
 const ListingCard = ({ item, onEdit, onDelete, onPress }: ListingCardProps) => {
   const isAvailable = item.itemStatus.toLowerCase() === "available";
   const isUnavailable = item.itemStatus.toLowerCase() === "unavailable";
+
+  // Handle edit button press
+  const handleEditPress = () => {
+    if (!isAvailable) {
+      Alert.alert(
+        "Edit Unavailable",
+        "You can only edit items that are currently available.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    onEdit(item.id);
+  };
+
+  // Handle delete button press
+  const handleDeletePress = () => {
+    if (!isAvailable) {
+      Alert.alert(
+        "Delete Unavailable",
+        "You can only delete items that are currently available.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+    onDelete(item.id);
+  };
 
   return (
     <TouchableOpacity
@@ -91,20 +117,33 @@ const ListingCard = ({ item, onEdit, onDelete, onPress }: ListingCardProps) => {
 
         {/* Right Actions */}
         <View className="justify-center pr-4 gap-2">
+          {/* Edit Button */}
           <TouchableOpacity
-            onPress={() => onEdit(item.id)}
-            className="p-3 rounded-xl bg-blue-50"
+            onPress={handleEditPress}
+            className={`p-3 rounded-xl ${
+              isAvailable ? "bg-blue-50" : "bg-gray-100"
+            }`}
+            style={{ opacity: isAvailable ? 1 : 0.5 }}
           >
-            <Image source={icons.edit} className="w-5 h-5" tintColor="blue" />
+            <Image
+              source={icons.edit}
+              className="w-5 h-5"
+              tintColor={isAvailable ? "blue" : "#9CA3AF"}
+            />
           </TouchableOpacity>
+
+          {/* Delete Button */}
           <TouchableOpacity
-            onPress={() => onDelete(item.id)}
-            className="p-3 rounded-xl bg-red-50"
+            onPress={handleDeletePress}
+            className={`p-3 rounded-xl ${
+              isAvailable ? "bg-red-50" : "bg-gray-100"
+            }`}
+            style={{ opacity: isAvailable ? 1 : 0.5 }}
           >
             <Image
               source={icons.trash}
               className="w-5 h-5"
-              tintColor="#EF4444"
+              tintColor={isAvailable ? "#EF4444" : "#9CA3AF"}
             />
           </TouchableOpacity>
         </View>

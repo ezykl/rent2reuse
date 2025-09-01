@@ -17,11 +17,17 @@ interface Item {
   itemCategory: string;
   itemCondition: string;
   itemDesc: string;
-  itemLocation: string;
+  itemLocation?: {
+    // Change this line
+    latitude: number;
+    longitude: number;
+    address?: string;
+  };
   itemMinRentDuration: number;
   itemName: string;
   itemPrice: number;
   itemStatus: string;
+  enableAI: boolean;
   owner: {
     fullname: string;
     id: string;
@@ -68,10 +74,14 @@ export const useItems = (
             itemCategory: data.itemCategory || "",
             itemCondition: data.itemCondition || "",
             itemDesc: data.itemDesc || "",
-            itemLocation: data.itemLocation || "",
+            itemLocation:
+              data.itemLocation && typeof data.itemLocation === "object"
+                ? data.itemLocation
+                : undefined,
             itemMinRentDuration: data.itemMinRentDuration || 0,
             itemName: data.itemName || "",
             itemPrice: data.itemPrice || 0,
+            enableAI: data.enableAI || false,
             itemStatus: data.itemStatus || "Available",
             owner: {
               fullname: data.owner?.fullname || "Unknown User",
@@ -125,10 +135,14 @@ export const useItems = (
             itemCategory: data.itemCategory || "",
             itemCondition: data.itemCondition || "",
             itemDesc: data.itemDesc || "",
-            itemLocation: data.itemLocation || "",
+            itemLocation:
+              data.itemLocation && typeof data.itemLocation === "object"
+                ? data.itemLocation
+                : undefined,
             itemMinRentDuration: data.itemMinRentDuration || 0,
             itemName: data.itemName || "",
             itemPrice: data.itemPrice || 0,
+            enableAI: data.enableAI || false,
             itemStatus: data.itemStatus || "Available",
             owner: {
               fullname: data.owner?.fullname || "Unknown User",

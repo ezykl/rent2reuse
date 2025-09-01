@@ -1,11 +1,16 @@
-import { View, Text, Image, TouchableOpacity } from "react-native";
-import React, { useCallback, useEffect, useState } from "react";
-import * as Location from "expo-location";
+// Enhanced ItemCard component with location optimizations
+
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import React, { useMemo } from "react";
 import { icons } from "../constant";
-import { useLocation } from "../hooks/useLocation";
 import { LocationUtils, Position } from "../utils/locationUtils";
-import { auth, db } from "../lib/firebaseConfig";
-import { doc, getDoc } from "firebase/firestore";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface ItemCardProps {
   title: string;
@@ -17,6 +22,7 @@ interface ItemCardProps {
   itemLocation?: {
     latitude: number;
     longitude: number;
+    address?: string;
   };
   owner?: {
     id: string;
@@ -24,7 +30,81 @@ interface ItemCardProps {
   };
   showProtectionOverlay?: boolean;
   onPress?: () => void;
+  enableAI?: boolean;
+  userLocationProp?: {
+    latitude: number;
+    longitude: number;
+  } | null;
+  isLocationLoading?: boolean;
 }
+
+// DistanceBadge component - MOVED OUTSIDE ItemCard to avoid hook issues
+const DistanceBadge = ({
+  itemLocation,
+  userLocation,
+  isLocationLoading,
+}: {
+  itemLocation: Position;
+  userLocation?: {
+    latitude: number;
+    longitude: number;
+  } | null;
+  isLocationLoading?: boolean;
+}) => {
+  // Show loading state
+  if (isLocationLoading) {
+    return (
+      <View className="bg-black/70 px-2 py-1 rounded-full flex-row items-center">
+        <ActivityIndicator
+          size="small"
+          color="white"
+          style={{ marginRight: 4 }}
+        />
+      </View>
+    );
+  }
+
+  // Don't show if no location
+  if (!userLocation || !itemLocation) return null;
+
+  // Calculate distance
+  const distanceResult = useMemo(() => {
+    if (!userLocation || !itemLocation) return null;
+    try {
+      return LocationUtils.Distance.calculateUserToItemDistance(
+        userLocation,
+        itemLocation
+      );
+    } catch (err) {
+      console.error("Error calculating distance:", err);
+      return null;
+    }
+  }, [userLocation, itemLocation]);
+
+  if (!distanceResult) return null;
+
+  // Format distance text
+  const distanceText = useMemo(() => {
+    if (distanceResult.kilometers < 1) {
+      return `${Math.round(distanceResult.meters)}m`;
+    } else if (distanceResult.kilometers < 10) {
+      return `${distanceResult.kilometers.toFixed(1)}km`;
+    } else {
+      return `${distanceResult.kilometers.toFixed(1)}km`;
+    }
+  }, [distanceResult]);
+
+  return (
+    <View className="bg-black/70 px-2 py-1 rounded-full flex-row items-center">
+      <Image
+        source={icons.footstep}
+        className="w-3 h-3 mr-1"
+        tintColor="#FFFFFF"
+      />
+      <Text className="text-xs text-white font-pmedium">{distanceText}</Text>
+    </View>
+  );
+};
 
 const ItemCard = ({
   title,
@@ -33,94 +113,54 @@ const ItemCard = ({
   price,
   status,
   owner,
+  enableAI,
   condition,
   itemLocation,
   showProtectionOverlay = false,
   onPress,
+  userLocationProp,
+  isLocationLoading = false,
 }: ItemCardProps) => {
-  const DistanceBadge = ({ itemLocation }: { itemLocation: Position }) => {
-    const {
-      userLocation,
-      hasPermission,
-      isLoading,
-      firestoreLocation,
-      isUsingStoredLocation,
-    } = useLocation({
-      autoStart: true,
-      watchLocation: true, // Now uses 5-minute intervals instead of continuous watching
-      updateInterval: 5 * 60 * 1000, // 5 minutes
-    });
-
-    const [distanceText, setDistanceText] = useState<string | null>(null);
-
-    // Calculate distance using current location or Firestore location as fallback
-    useEffect(() => {
-      const locationToUse = userLocation || firestoreLocation;
-
-      if (hasPermission && locationToUse && itemLocation) {
-        try {
-          const result = LocationUtils.Distance.calculateUserToItemDistance(
-            locationToUse,
-            itemLocation
-          );
-          if (result.kilometers < 1) {
-            setDistanceText(`${Math.round(result.meters)}m`);
-          } else if (result.kilometers < 10) {
-            setDistanceText(`${result.kilometers.toFixed(1)}km`);
-          } else {
-            setDistanceText(`${Math.round(result.kilometers)}km`);
-          }
-        } catch (err) {
-          console.error("Error calculating distance:", err);
-          setDistanceText(null);
-        }
-      } else {
-        setDistanceText(null);
-      }
-    }, [userLocation, firestoreLocation, hasPermission, itemLocation]);
-
-    // Don't show anything if we don't have permission
-    if (!hasPermission) return null;
-
-    // Don't show if no distance calculated
-    if (!distanceText) return null;
-
-    return (
-      <View className="bg-gray-100/90 px-2 py-1 rounded-full flex-row items-center">
-        <Image
-          source={icons.location}
-          className="w-3 h-3 mr-1"
-          tintColor="#6B7280"
-        />
-        <Text className="text-xs text-gray-600 font-pmedium">
-          {distanceText}
-        </Text>
-        {/* Small indicator dot when using Firestore location */}
-        {isUsingStoredLocation && (
-          <View className="w-1 h-1 bg-blue-400 rounded-full ml-1" />
-        )}
-      </View>
-    );
-  };
-
-  // Status color mapping
-  const getStatusColor = (status: string | undefined) => {
+  // Status color mapping with memoization
+  const statusColorConfig = useMemo(() => {
     switch (status?.toLowerCase()) {
       case "available":
-        return "bg-green-400";
+        return { bg: "bg-green-400", text: "Available" };
       case "rented":
-        return "bg-blue-400";
+        return { bg: "bg-blue-400", text: "Rented" };
       case "reserved":
-        return "bg-yellow-400";
+        return { bg: "bg-yellow-400", text: "Reserved" };
+      case "unavailable":
+        return { bg: "bg-gray-400", text: "Unavailable" };
       default:
-        return "bg-gray-400";
+        return { bg: "bg-gray-400", text: "Unknown" };
     }
-  };
+  }, [status]);
+
+  const conditionColorConfig = useMemo(() => {
+    switch (condition?.toLowerCase()) {
+      case "brand new":
+        return { bg: "bg-emerald-100", text: "text-emerald-800" };
+      case "like new":
+        return { bg: "bg-teal-100", text: "text-teal-800" };
+      case "very good":
+        return { bg: "bg-blue-100", text: "text-blue-800" };
+      case "good":
+        return { bg: "bg-yellow-100", text: "text-yellow-800" };
+      case "fair":
+        return { bg: "bg-orange-100", text: "text-orange-800" };
+      case "worn but usable":
+        return { bg: "bg-red-100", text: "text-red-800" };
+      default:
+        return { bg: "bg-gray-100", text: "text-gray-700" };
+    }
+  }, [condition]);
 
   return (
     <TouchableOpacity
       className="w-[48%] bg-white border border-gray-200 shadow-sm mb-4 rounded-lg"
       onPress={onPress}
+      activeOpacity={0.7}
     >
       <View className="relative">
         <Image
@@ -130,14 +170,14 @@ const ItemCard = ({
                 ? thumbnail[0]
                 : undefined,
           }}
-          className="w-full h-[150px] rounded-t-lg"
+          className="w-full h-[160px] rounded-t-lg"
           resizeMode="cover"
         />
 
         {/* Protection Overlay */}
         {showProtectionOverlay && (
           <View className="absolute inset-0 bg-black/40 justify-center items-center rounded-t-lg">
-            <View className=" px-3 py-2 rounded-lg">
+            <View className="px-3 py-2 rounded-lg">
               <View className="flex-row items-center">
                 <Image
                   source={icons.lock}
@@ -150,7 +190,7 @@ const ItemCard = ({
           </View>
         )}
 
-        {/* Distance Badge - Only show if location data exists and profile is complete */}
+        {/* Distance Badge - Enhanced positioning and styling */}
         {!showProtectionOverlay &&
           itemLocation &&
           itemLocation.latitude &&
@@ -161,54 +201,94 @@ const ItemCard = ({
                   latitude: itemLocation.latitude,
                   longitude: itemLocation.longitude,
                 }}
+                userLocation={userLocationProp}
+                isLocationLoading={isLocationLoading}
               />
             </View>
           )}
 
-        {/* Status Badge - Only show if not protected */}
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.7)"]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          className="absolute bottom-0 left-0 right-0 h-12 rounded-b-2xl p-4"
+        />
+
+        {/* Status Badge - Moved to bottom-right for better visibility */}
         {!showProtectionOverlay && status && (
-          <View
-            className={`absolute top-2 right-2 px-2 py-1 rounded-full ${getStatusColor(
-              status
-            )}`}
-          >
-            <Text className="text-xs font-pmedium capitalize text-white">
-              {status || "Unknown"}
-            </Text>
+          <View className="absolute top-2 right-2">
+            <View className={`px-2 py-1 rounded-full ${statusColorConfig.bg}`}>
+              <Text className="text-xs font-pmedium text-white">
+                {statusColorConfig.text}
+              </Text>
+            </View>
           </View>
+        )}
+
+        {enableAI && (
+          <Image
+            source={icons.aiImage}
+            className="w-6 h-6 absolute bottom-2 right-2"
+            tintColor={"#ffffff"}
+            style={{ opacity: 0.8 }}
+          />
         )}
       </View>
 
-      <View className="p-2">
+      <View className="p-3">
         {/* Title - Always visible */}
-        <Text
-          className="text-base font-pmedium text-gray-800"
-          numberOfLines={1}
-        >
-          {title || "Untitled"}
-        </Text>
+        <View className="flex-row items-center">
+          <Text
+            className="flex-1 text-base font-pmedium text-gray-800"
+            numberOfLines={1}
+          >
+            {title || "Untitled"}
+          </Text>
+        </View>
 
         {/* Protected Content - Only show if profile is complete */}
         {!showProtectionOverlay ? (
           <>
             {/* Owner */}
-            <Text className="text-xs text-gray-500 mt-1 font-pregular">
-              by {owner?.fullname || "Unknown User"}
-            </Text>
+            {owner && (
+              <Text className="text-xs text-gray-500 mt-1 font-pregular">
+                by {owner.fullname || "Unknown User"}
+              </Text>
+            )}
 
             {/* Description */}
-            <Text
-              className="text-xs text-gray-400 mt-1"
-              numberOfLines={2}
-              style={{ lineHeight: 16 }}
-            >
-              {description || "No description available"}
-            </Text>
+            {description && (
+              <Text
+                className="text-xs text-gray-400 mt-1"
+                numberOfLines={2}
+                style={{ lineHeight: 16 }}
+              >
+                {description}
+              </Text>
+            )}
+            <View className="flex-row items-center justify-start  mt-2">
+              {/* Price */}
+              {price !== undefined && (
+                <Text className="text-lg font-psemibold text-primary mt-2">
+                  ₱{price.toLocaleString()}/day
+                </Text>
+              )}
 
-            {/* Price */}
-            <Text className="text-lg font-psemibold text-primary mt-1">
-              ₱ {price || "Price Negotiable"} / day
-            </Text>
+              {!showProtectionOverlay && condition && (
+                <View className="ml-2">
+                  <View
+                    className={`px-2 py-1 rounded-full ${conditionColorConfig.bg}`}
+                    style={{ opacity: 0.7 }}
+                  >
+                    <Text
+                      className={`text-xs font-pmedium ${conditionColorConfig.text}`}
+                    >
+                      {condition}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
           </>
         ) : (
           /* Protected Content Placeholder */

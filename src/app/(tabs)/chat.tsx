@@ -664,7 +664,7 @@ const ChatList = () => {
                 setIsSelectMode(false);
                 setSelectedChats([]);
               }}
-              className="mr-4"
+              className="mr-4 items-center"
             >
               <Text className="text-gray-500 font-pmedium">Cancel</Text>
             </TouchableOpacity>

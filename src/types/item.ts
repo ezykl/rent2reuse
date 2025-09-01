@@ -14,7 +14,7 @@ export interface Item {
   };
   downpaymentPercentage?: number;
   enableAI?: boolean;
-  itemCategory: string;
+  itemCategory?: string;
   itemMinRentDuration?: number;
   createdAt: any;
   owner: {

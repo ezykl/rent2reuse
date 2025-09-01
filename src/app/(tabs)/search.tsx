@@ -14,6 +14,7 @@ import {
   StyleSheet,
   BackHandler,
 } from "react-native";
+import { useLocation } from "@/hooks/useLocation";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
@@ -31,6 +32,7 @@ import useProfileCompletion from "@/hooks/useProfileCompletion";
 import { SearchBar } from "@/components/SearchBar";
 import Animated, { useSharedValue, withSpring } from "react-native-reanimated";
 import { useSearchTransition } from "@/context/SearchTransitionContext";
+import { LocationUtils } from "@/utils/locationUtils";
 
 const { width } = Dimensions.get("window");
 
@@ -49,6 +51,8 @@ const Search = () => {
     priceRange: { min: null as number | null, max: null as number | null },
     condition: [] as string[],
     location: [] as string[],
+    radius: null as number | null,
+    category: null as string | null,
   });
   const [showImagePicker, setShowImagePicker] = useState(false);
   const inputRef = useRef<TextInput>(null);
@@ -58,6 +62,11 @@ const Search = () => {
 
   const { searchItems, popularItems: popularSearches } = useItemSearch();
   const { trackItemView } = useItemViews();
+
+  const { userLocation, isLoading: locationLoading } = useLocation({
+    autoStart: true,
+    watchLocation: false,
+  });
 
   // Define handleImageSelection in parent scope
   const handleImageSelection = async (type: "camera" | "gallery") => {
@@ -216,7 +225,7 @@ const Search = () => {
       if (localSearchQuery.trim()) {
         setSearchQuery(localSearchQuery);
         Keyboard.dismiss();
-        handleSearch();
+        handleSearch(localSearchQuery.trim());
       }
     };
 
@@ -253,12 +262,15 @@ const Search = () => {
 
     return (
       <View>
-        <View className="mb-4 bg-white border-secondary-300 h-16 px-4 flex-row w-full border rounded-xl items-center shadow-sm">
-          <Image
-            source={icons.search}
-            className="w-6 h-6"
-            resizeMode="contain"
-          />
+        <View className="mb-4 bg-white border-secondary-300 h-16 pl-4 flex-row w-full border rounded-xl items-center shadow-sm">
+          {localSearchQuery ? undefined : (
+            <Image
+              source={icons.search}
+              className="w-6 h-6"
+              resizeMode="contain"
+            />
+          )}
+
           <TextInput
             ref={inputRef}
             value={localSearchQuery}
@@ -266,7 +278,7 @@ const Search = () => {
             textAlignVertical="center"
             placeholder="What are you looking for?"
             placeholderTextColor="#A0AEC0"
-            className="flex-1 text-secondary-400 text-base px-3 font-pregular"
+            className="flex-1 text-secondary-400 text-base px-3  py-4 font-pregular "
             returnKeyType="search"
             onSubmitEditing={handleSubmit}
             autoCapitalize="none"
@@ -274,21 +286,14 @@ const Search = () => {
           />
 
           {localSearchQuery ? (
-            <View className="flex-row items-center gap-2">
-              <TouchableOpacity
-                onPress={handleSubmit}
-                className="bg-primary p-2 rounded-full"
-              >
-                <Image
-                  source={icons.search}
-                  className="w-6 h-6 tint-white"
-                  style={{ tintColor: "white" }}
-                />
+            <View className="flex-row items-center gap-2 ">
+              <TouchableOpacity onPress={handleClear}>
+                <Image source={icons.close} className="w-6 h-6" />
               </TouchableOpacity>
               {/* Updated filter button */}
               <TouchableOpacity
                 onPress={() => setShowFilter(true)}
-                className="relative"
+                className="relative  "
               >
                 <Image
                   source={icons.filter}
@@ -301,12 +306,19 @@ const Search = () => {
                   <View className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full" />
                 )}
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleClear}>
-                <Image source={icons.close} className="w-6 h-6" />
+              <TouchableOpacity
+                onPress={handleSubmit}
+                className="bg-primary p-2 overflow-hidden rounded-r-xl  flex-row flex justify-center items-center"
+              >
+                <Image
+                  source={icons.search}
+                  className="w-6 h-6 tint-white m-3"
+                  style={{ tintColor: "white" }}
+                />
               </TouchableOpacity>
             </View>
           ) : (
-            <View className="flex-row items-center gap-2">
+            <View className="flex-row items-center gap-2 mr-4">
               {/* Updated filter button */}
               <TouchableOpacity
                 onPress={() => setShowFilter(true)}
@@ -388,8 +400,16 @@ const Search = () => {
   // Filter modal component
   const FilterModal = () => {
     const [tempFilters, setTempFilters] = useState(activeFilters);
-    const conditions = ["New", "Like New", "Good", "Fair"];
-    const locations = ["Manila", "Quezon City", "Makati", "Pasig"];
+    const conditions = [
+      "New",
+      "Like New",
+      "Very Good",
+      "Good",
+      "Fair",
+      "Worn but Usable",
+    ];
+
+    const radiusOptions = [1, 5, 10, 25, 50];
 
     return (
       <Modal
@@ -404,7 +424,7 @@ const Search = () => {
             <View className="p-4 border-b border-gray-200">
               <View className="flex-row justify-between items-center">
                 <TouchableOpacity onPress={() => setShowFilter(false)}>
-                  <Text className="text-primary">Cancel</Text>
+                  <Text className="text-red-600 font-pregular">Cancel</Text>
                 </TouchableOpacity>
                 <Text className="text-lg font-psemibold">Filters</Text>
                 <TouchableOpacity
@@ -414,7 +434,7 @@ const Search = () => {
                     handleSearch();
                   }}
                 >
-                  <Text className="text-primary">Apply</Text>
+                  <Text className="text-primary font-pregular">Apply</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -472,6 +492,69 @@ const Search = () => {
                 </View>
               </View>
 
+              <View className="mb-6">
+                <Text className="text-base font-psemibold mb-4">
+                  Distance from me
+                </Text>
+                {!userLocation ? (
+                  <Text className="text-sm text-gray-500 italic">
+                    Location permission required for distance filtering
+                  </Text>
+                ) : (
+                  <View className="flex-row flex-wrap gap-2">
+                    <TouchableOpacity
+                      className={`px-4 py-2 rounded-full border ${
+                        tempFilters.radius === null
+                          ? "bg-primary border-primary"
+                          : "border-gray-300"
+                      }`}
+                      onPress={() => {
+                        setTempFilters((prev) => ({
+                          ...prev,
+                          radius: null,
+                        }));
+                      }}
+                    >
+                      <Text
+                        className={
+                          tempFilters.radius === null
+                            ? "text-white"
+                            : "text-gray-600"
+                        }
+                      >
+                        Any distance
+                      </Text>
+                    </TouchableOpacity>
+                    {radiusOptions.map((radius) => (
+                      <TouchableOpacity
+                        key={radius}
+                        className={`px-4 py-2 rounded-full border ${
+                          tempFilters.radius === radius
+                            ? "bg-primary border-primary"
+                            : "border-gray-300"
+                        }`}
+                        onPress={() => {
+                          setTempFilters((prev) => ({
+                            ...prev,
+                            radius: radius,
+                          }));
+                        }}
+                      >
+                        <Text
+                          className={
+                            tempFilters.radius === radius
+                              ? "text-white"
+                              : "text-gray-600"
+                          }
+                        >
+                          Within {radius} km
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
               {/* Condition */}
               <View className="mb-6">
                 <Text className="text-base font-psemibold mb-4">Condition</Text>
@@ -501,41 +584,6 @@ const Search = () => {
                         }
                       >
                         {condition}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Location */}
-              <View>
-                <Text className="text-base font-psemibold mb-4">Location</Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {locations.map((location) => (
-                    <TouchableOpacity
-                      key={location}
-                      className={`px-4 py-2 rounded-full border ${
-                        tempFilters.location.includes(location)
-                          ? "bg-primary border-primary"
-                          : "border-gray-300"
-                      }`}
-                      onPress={() => {
-                        setTempFilters((prev) => ({
-                          ...prev,
-                          location: prev.location.includes(location)
-                            ? prev.location.filter((l) => l !== location)
-                            : [...prev.location, location],
-                        }));
-                      }}
-                    >
-                      <Text
-                        className={
-                          tempFilters.location.includes(location)
-                            ? "text-white"
-                            : "text-gray-600"
-                        }
-                      >
-                        {location}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -591,8 +639,30 @@ const Search = () => {
           // Location filter
           if (
             activeFilters.location.length > 0 &&
-            !activeFilters.location.includes(item.itemLocation)
+            !activeFilters.location.includes(item.itemLocation.address)
           ) {
+            return false;
+          }
+
+          if (
+            activeFilters.radius !== null &&
+            userLocation &&
+            item.itemLocation
+          ) {
+            const distance = LocationUtils.Distance.calculateUserToItemDistance(
+              userLocation,
+              {
+                latitude: item.itemLocation.latitude,
+                longitude: item.itemLocation.longitude,
+              }
+            );
+
+            if (distance && distance.kilometers > activeFilters.radius) {
+              return false;
+            }
+          }
+
+          if (activeFilters.category && activeFilters.category !== queryToUse) {
             return false;
           }
 
@@ -600,14 +670,33 @@ const Search = () => {
         });
       }
 
+      if (userLocation && results.length > 0) {
+        results = results
+          .map((item) => ({
+            ...item,
+            distanceResult:
+              item.itemLocation?.latitude && item.itemLocation?.longitude
+                ? LocationUtils.Distance.calculateUserToItemDistance(
+                    userLocation,
+                    {
+                      latitude: item.itemLocation.latitude,
+                      longitude: item.itemLocation.longitude,
+                    }
+                  )
+                : null,
+          }))
+          .sort((a, b) => {
+            // Items with no location go to end
+            if (!a.distanceResult && !b.distanceResult) return 0;
+            if (!a.distanceResult) return 1;
+            if (!b.distanceResult) return -1;
+            return a.distanceResult.kilometers - b.distanceResult.kilometers;
+          });
+      }
+
       setSearchResults(results);
     } catch (error) {
-      // console.error("Search error:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Failed to perform search. Please try again.",
-      });
+      // ... error handling
     } finally {
       setIsLoading(false);
     }
@@ -659,7 +748,8 @@ const Search = () => {
       filters.condition.length > 0 ||
       filters.location.length > 0 ||
       filters.priceRange.min !== null ||
-      filters.priceRange.max !== null
+      filters.priceRange.max !== null ||
+      filters.radius !== null
     );
   };
 
@@ -724,13 +814,16 @@ const Search = () => {
                     thumbnail={item.images}
                     description={isProfileComplete ? item.itemDesc : undefined}
                     price={isProfileComplete ? item.itemPrice : undefined}
-                    status="available" // Force status to available since we filtered
+                    status="available"
                     condition={
                       isProfileComplete ? item.itemCondition : undefined
                     }
-                    location={isProfileComplete ? item.itemLocation : undefined}
+                    itemLocation={
+                      isProfileComplete ? item.itemLocation : undefined
+                    }
                     owner={isProfileComplete ? item.owner : undefined}
                     showProtectionOverlay={!isProfileComplete}
+                    userLocationProp={userLocation}
                     onPress={() => {
                       trackItemView(item.id);
                       if (!isProfileComplete) {

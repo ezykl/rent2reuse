@@ -1048,10 +1048,12 @@ const ChatScreen = () => {
     ownerId: string;
     status: string;
     itemDetails?: {
+      downpaymentPercentage?: number;
       name?: string;
       price?: number;
       image?: string;
       itemId?: string;
+      totalPrice?: number;
     };
   } | null>(null);
 
@@ -2129,7 +2131,6 @@ const ChatScreen = () => {
       );
 
       const pendingRequestsSnap = await getDocs(pendingRequestsQuery);
-      const declinedRequesterIds: string[] = [];
 
       // Update all OTHER pending requests to declined
       pendingRequestsSnap.docs.forEach((doc) => {
@@ -2137,8 +2138,6 @@ const ChatScreen = () => {
 
         // Skip the accepted request
         if (doc.id === requestId) return;
-
-        declinedRequesterIds.push(requestData.requesterId);
 
         batch.update(doc.ref, {
           status: "declined",
@@ -2148,14 +2147,13 @@ const ChatScreen = () => {
         });
       });
 
-      // 6. Update current chat metadata - PRESERVE ITEM DETAILS
-      const chatRef = doc(db, "chat", String(chatId));
-      batch.update(chatRef, {
+      // 6. Update current chat metadata (ACCEPTED CHAT)
+      const currentChatRef = doc(db, "chat", String(chatId));
+      batch.update(currentChatRef, {
         status: "accepted",
         lastMessage: "Request accepted by owner",
         lastMessageTime: serverTimestamp(),
         hasOwnerResponded: true,
-        // IMPORTANT: Preserve item details from the accepted request
         itemDetails: {
           itemId: itemId,
           name: acceptedRequestData.itemName,
@@ -2164,65 +2162,93 @@ const ChatScreen = () => {
         },
       });
 
-      // 7. Update the specific rent request message in current chat
-      const messagesRef = collection(db, "chat", String(chatId), "messages");
-      const rentRequestQuery = query(
-        messagesRef,
+      // 7. Update the specific rent request message in current chat to accepted
+      const currentChatMessagesRef = collection(
+        db,
+        "chat",
+        String(chatId),
+        "messages"
+      );
+      const currentChatRentRequestQuery = query(
+        currentChatMessagesRef,
         where("rentRequestId", "==", requestId)
       );
 
-      const rentRequestMessages = await getDocs(rentRequestQuery);
-      rentRequestMessages.forEach((doc) => {
+      const currentChatRentRequestMessages = await getDocs(
+        currentChatRentRequestQuery
+      );
+      currentChatRentRequestMessages.forEach((doc) => {
         batch.update(doc.ref, {
           status: "accepted",
           updatedAt: serverTimestamp(),
         });
       });
 
-      // Commit all batch operations
+      // Commit the batch first (for the accepted request and item updates)
       await batch.commit();
 
-      // 8. Add status update message to current chat
-      await addDoc(messagesRef, {
-        type: "statusUpdate",
-        text: "Request accepted by owner",
-        senderId: currentUserId,
-        createdAt: serverTimestamp(),
-        read: false,
-        status: "accepted",
-      });
-
-      // 9. Handle all other chats for this item
-      const itemChatsQuery = query(
+      // 8. NOW HANDLE ALL OTHER CHATS FOR THIS ITEM
+      // Find all chats that have requests for this item (excluding current chat)
+      const allChatsWithItemQuery = query(
         collection(db, "chat"),
-        where("itemDetails.itemId", "==", itemId),
-        where("status", "in", ["pending", null])
+        where("itemDetails.itemId", "==", itemId)
       );
 
-      const unacceptedChatsSnap = await getDocs(itemChatsQuery);
+      const allChatsWithItemSnap = await getDocs(allChatsWithItemQuery);
 
-      for (const chatDoc of unacceptedChatsSnap.docs) {
-        // Skip the accepted chat
+      // Process each chat that's not the current accepted chat
+      for (const chatDoc of allChatsWithItemSnap.docs) {
+        // Skip the current chat (already handled above)
         if (chatDoc.id === String(chatId)) continue;
 
-        const chatRef = doc(db, "chat", chatDoc.id);
-        const chatData = chatDoc.data();
+        const otherChatData = chatDoc.data();
 
-        // Update chat status - PRESERVE EXISTING ITEM DETAILS
-        await updateDoc(chatRef, {
+        // Only process chats that are still pending
+        if (otherChatData.status !== "pending") continue;
+
+        const otherChatId = chatDoc.id;
+        const otherChatRef = doc(db, "chat", otherChatId);
+
+        // Update the other chat to declined status
+        await updateDoc(otherChatRef, {
           status: "declined",
           lastMessage: "This item has been rented to another user",
           lastMessageTime: serverTimestamp(),
           hasOwnerResponded: true,
-          // Keep existing item details so the card still renders properly
+          // Preserve existing item details so the card still renders
           itemDetails: {
-            ...chatData.itemDetails, // Preserve existing details
-            // You can add additional info here if needed
+            ...otherChatData.itemDetails,
           },
         });
 
-        // Add status message
-        await addDoc(collection(db, "chat", chatDoc.id, "messages"), {
+        // Find and update ALL rent request messages in this other chat
+        const otherChatMessagesRef = collection(
+          db,
+          "chat",
+          otherChatId,
+          "messages"
+        );
+        const otherChatRentRequestQuery = query(
+          otherChatMessagesRef,
+          where("type", "==", "rentRequest")
+        );
+
+        const otherChatRentRequestMessages = await getDocs(
+          otherChatRentRequestQuery
+        );
+        const otherChatBatch = writeBatch(db);
+
+        // Update all rent request messages in this chat to declined
+        otherChatRentRequestMessages.docs.forEach((msgDoc) => {
+          otherChatBatch.update(msgDoc.ref, {
+            status: "declined",
+            updatedAt: serverTimestamp(),
+          });
+        });
+
+        // Add a status update message to this chat
+        const statusMessageRef = doc(otherChatMessagesRef);
+        otherChatBatch.set(statusMessageRef, {
           type: "statusUpdate",
           text: "This item has been rented to another user",
           senderId: currentUserId,
@@ -2231,30 +2257,15 @@ const ChatScreen = () => {
           status: "declined",
         });
 
-        // Update all request messages in this chat
-        const chatMessagesQuery = query(
-          collection(db, "chat", chatDoc.id, "messages"),
-          where("type", "==", "rentRequest")
-        );
-
-        const chatMessagesSnap = await getDocs(chatMessagesQuery);
-        const msgBatch = writeBatch(db);
-
-        chatMessagesSnap.docs.forEach((msgDoc) => {
-          msgBatch.update(msgDoc.ref, {
-            status: "declined",
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-        if (!chatMessagesSnap.empty) {
-          await msgBatch.commit();
+        // Commit changes for this chat
+        if (!otherChatRentRequestMessages.empty || true) {
+          await otherChatBatch.commit();
         }
 
-        // Send notification to other user in chat
-        const otherUserId = chatDoc
-          .data()
-          .participants.find((uid: string) => uid !== currentUserId);
+        // Send notification to the other user in this chat
+        const otherUserId = otherChatData.participants?.find(
+          (uid: string) => uid !== currentUserId
+        );
 
         if (otherUserId) {
           await createInAppNotification(otherUserId, {
@@ -2263,12 +2274,184 @@ const ChatScreen = () => {
             message: `The item "${itemName}" has been rented to another user`,
             data: {
               route: "/chat",
-              params: { id: chatDoc.id },
+              params: { id: otherChatId },
             },
           });
         }
       }
-      // 13. Show success notification to owner
+
+      // 9. Add status update message to current (accepted) chat
+      await addDoc(currentChatMessagesRef, {
+        type: "statusUpdate",
+        text: "Request accepted by owner",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+        status: "accepted",
+      });
+
+      // 10. Create rental document (your existing rental creation code)
+      try {
+        const rentalData = {
+          rentalId: `rental_${Date.now()}_${Math.random()
+            .toString(36)
+            .substring(7)}`,
+          status: "pickup",
+          rentRequestId: requestId,
+          chatId: String(chatId),
+          itemId: itemId,
+          ownerId: currentUserId,
+          renterId: acceptedRequesterId,
+          itemDetails: {
+            itemId: itemId,
+            name: acceptedRequestData.itemName,
+            image: acceptedRequestData.itemImage,
+            description: acceptedRequestData.itemDescription || "",
+            category: acceptedRequestData.itemCategory || "",
+          },
+          rental: {
+            startDate: acceptedRequestData.startDate,
+            endDate: acceptedRequestData.endDate,
+            rentalDays: acceptedRequestData.rentalDays,
+            dailyRate: Math.round(
+              (acceptedRequestData.totalPrice || 0) /
+                (acceptedRequestData.rentalDays || 1)
+            ),
+            totalAmount: acceptedRequestData.totalPrice || 0,
+            pickupTime: acceptedRequestData.pickupTime || 480,
+            returnTime:
+              acceptedRequestData.returnTime ||
+              acceptedRequestData.pickupTime ||
+              480,
+            pickupLocation: acceptedRequestData.pickupLocation || "",
+            returnLocation:
+              acceptedRequestData.returnLocation ||
+              acceptedRequestData.pickupLocation ||
+              "",
+          },
+          payment: (() => {
+            const totalAmount = acceptedRequestData.totalPrice || 0;
+            const downpaymentPercentage =
+              chatData?.itemDetails?.downpaymentPercentage;
+            const hasDownpayment =
+              downpaymentPercentage && downpaymentPercentage > 0;
+
+            if (hasDownpayment) {
+              const downpaymentAmount = Math.round(
+                (totalAmount * downpaymentPercentage) / 100
+              );
+              const remainingAmount = totalAmount - downpaymentAmount;
+
+              return {
+                totalAmount: totalAmount,
+                hasDownpayment: true,
+                downpaymentPercentage: downpaymentPercentage,
+                downpayment: {
+                  amount: downpaymentAmount,
+                  status: "pending",
+                  method: null,
+                  paidAt: null,
+                  transactionId: null,
+                  dueDate: acceptedRequestData.startDate,
+                },
+                remainingPayment: {
+                  amount: remainingAmount,
+                  status: "pending",
+                  method: null,
+                  paidAt: null,
+                  transactionId: null,
+                  dueDate: acceptedRequestData.endDate,
+                },
+                overallStatus: "pending_downpayment",
+              };
+            } else {
+              return {
+                totalAmount: totalAmount,
+                hasDownpayment: false,
+                fullPayment: {
+                  amount: totalAmount,
+                  status: "pending",
+                  method: null,
+                  paidAt: null,
+                  transactionId: null,
+                  dueDate: acceptedRequestData.startDate,
+                },
+                overallStatus: "pending",
+              };
+            }
+          })(),
+          agreement: {
+            termsAccepted: true,
+            termsAcceptedAt: serverTimestamp(),
+            specialTerms: acceptedRequestData.message || "",
+            damagePolicy: "standard",
+            cancellationPolicy: "standard",
+          },
+          tracking: {
+            acceptedAt: serverTimestamp(),
+            pickedUpAt: null,
+            returnedAt: null,
+            completedAt: null,
+          },
+          metadata: {
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            createdBy: currentUserId,
+            lastUpdatedBy: currentUserId,
+            version: 1,
+          },
+          notifications: {
+            ownerNotified: true,
+            renterNotified: false,
+            lastNotificationSent: serverTimestamp(),
+          },
+          statusHistory: [
+            {
+              status: "active",
+              changedAt: new Date(),
+              changedBy: currentUserId,
+              reason: "Request accepted by owner",
+            },
+          ],
+        };
+
+        const rentalRef = doc(collection(db, "rentals"));
+        await setDoc(rentalRef, rentalData);
+
+        // Update chat with rental ID
+        await updateDoc(currentChatRef, {
+          rentalId: rentalRef.id,
+        });
+
+        console.log(`📋 Rental document created: ${rentalRef.id}`);
+      } catch (rentalError) {
+        console.error("Error creating rental document:", rentalError);
+      }
+
+      // 11. Create notifications
+      try {
+        const rentalNotificationData = {
+          type: "RENTAL_STARTED",
+          title: "Rental Agreement Created",
+          message: `Your rental for ${acceptedRequestData.itemName} has been confirmed`,
+          recipientId: acceptedRequesterId,
+          senderId: currentUserId,
+          data: {
+            itemId: itemId,
+            itemName: acceptedRequestData.itemName,
+          },
+          isRead: false,
+          createdAt: serverTimestamp(),
+        };
+
+        await addDoc(
+          collection(db, `users/${acceptedRequesterId}/notifications`),
+          rentalNotificationData
+        );
+      } catch (notificationError) {
+        console.error("Error creating rental notification:", notificationError);
+      }
+
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success! 🎉",
@@ -2278,7 +2461,7 @@ const ChatScreen = () => {
       console.log(`✅ Request accepted successfully:
     - Accepted request: ${requestId} for user: ${acceptedRequesterId}
     - Item marked unavailable: ${itemId}
-    - Declined ${declinedRequesterIds.length} other pending requests
+    - All other chats for this item declined
     - Notifications sent to all affected users`);
     } catch (error) {
       console.error("Error accepting request:", error);

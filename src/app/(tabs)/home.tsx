@@ -21,6 +21,7 @@ import { router } from "expo-router";
 import { db } from "@/lib/firebaseConfig";
 import { Image } from "expo-image";
 import * as Location from "expo-location";
+import { useLocation } from "../../hooks/useLocation";
 
 import {
   getDocs,
@@ -44,6 +45,11 @@ const Home = () => {
     loading: recentLoading,
     refreshItems,
   } = useItems("recent");
+
+  const locationHook = useLocation({
+    autoStart: true,
+    watchLocation: false,
+  });
 
   const [refreshing, setRefreshing] = useState(false);
   const { isLoading, setIsLoading } = useLoader();
@@ -225,7 +231,6 @@ const Home = () => {
     );
   }
 
-  // ENHANCED: Render function for ItemCard with profile completion logic
   interface ItemType {
     id: string;
     itemName: string;
@@ -234,12 +239,12 @@ const Home = () => {
     itemPrice: number;
     itemStatus: string;
     itemCondition: string;
-    itemLocation?:
-      | string
-      | {
-          latitude: number;
-          longitude: number;
-        };
+    enableAI: boolean;
+    itemLocation?: {
+      latitude: number;
+      longitude: number;
+      address?: string; //
+    };
     owner: {
       id: string;
       fullname: string;
@@ -270,7 +275,10 @@ const Home = () => {
         }
         owner={isProfileComplete ? item.owner : undefined}
         showProtectionOverlay={!isProfileComplete}
+        enableAI={item.enableAI}
         onPress={() => handleItemPress(item.id)}
+        userLocationProp={locationHook.userLocation}
+        isLocationLoading={locationHook.isLoading}
       />
     );
   };
@@ -285,7 +293,7 @@ const Home = () => {
       >
         <Header />
 
-        <FlatList
+        <FlatList<ItemType>
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
