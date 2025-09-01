@@ -11,6 +11,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Animated,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import DateTimePicker, {
@@ -18,7 +19,7 @@ import DateTimePicker, {
 } from "react-native-ui-datepicker";
 import type { DateType } from "react-native-ui-datepicker";
 import dayjs from "dayjs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "../../hooks/useLocation";
 import { LocationUtils } from "../../utils/locationUtils";
 import {
@@ -60,6 +61,8 @@ import {
 } from "@maplibre/maplibre-react-native";
 import * as Location from "expo-location";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
+import React from "react";
+import Skeleton from "@/components/Skeleton";
 
 type RangeChange = { startDate?: DateType; endDate?: DateType };
 
@@ -130,6 +133,23 @@ export default function ItemDetails() {
   const handleImageError = (index: number) => {
     setImageLoadError((prev) => new Set(prev).add(index));
   };
+
+  // const shimmer = useRef(new Animated.Value(0)).current;
+
+  // useEffect(() => {
+  //   Animated.loop(
+  //     Animated.timing(shimmer, {
+  //       toValue: 1,
+  //       duration: 1500,
+  //       useNativeDriver: true,
+  //     })
+  //   ).start();
+  // }, [shimmer]);
+
+  // const translateX = shimmer.interpolate({
+  //   inputRange: [0, 1],
+  //   outputRange: [-200, 200],
+  // });
 
   // Helper function to create circle polygon for radius display
   const createCirclePolygon = (
@@ -875,11 +895,11 @@ export default function ItemDetails() {
                 )}
               </>
             ) : (
-              <View className="flex-1 items-center justify-center m-2 h-full rounded-2xl bg-gray-200">
-                <View className="w-24 h-24  rounded-2xl items-center justify-center mb-3">
-                  <LottieActivityIndicator size={100} color="white" />
-                </View>
-              </View>
+              <Skeleton
+                dimension={"h-full"}
+                rounded="rounded-2xl"
+                className="m-2"
+              />
             )}
           </View>
         </View>
@@ -909,44 +929,47 @@ export default function ItemDetails() {
                 </>
               ) : (
                 <View className="relative">
-                  <View className="w-12 h-12 bg-primary/20 rounded-full items-center justify-center mr-3">
-                    <Text className="text-primary font-bold text-sm">
-                      {(item &&
-                        item.owner?.fullname?.charAt(0)?.toUpperCase()) ||
-                        ""}
-                    </Text>
-                  </View>
-                  {/* <Image
-                    source={icons.verified}
-                    className="w-4 h-4 absolute -left-1 bottom-0"
-                    resizeMode="contain"
-                  /> */}
+                  <Skeleton dimension={"w-12 h-12"} rounded="rounded-full" />
                 </View>
               )}
             </View>
 
             <View className="flex-1">
-              <Text className="text-gray-800 text-base font-pmedium">
-                {item?.owner?.fullname ?? ""}
-              </Text>
+              {item?.owner?.fullname &&
+              item.owner.fullname.trim().length > 0 ? (
+                <Text className="text-gray-800 text-base font-pmedium">
+                  {item.owner.fullname}
+                </Text>
+              ) : (
+                <Skeleton
+                  dimension={"w-20 h-5"}
+                  rounded="rounded-md"
+                  className="mb-2"
+                />
+              )}
+
               <View className="flex-row items-center font-pregular">
-                {ownerRating?.averageRating && ownerRating?.totalRatings ? (
-                  <>
-                    <View className="flex-row items-center mr-2">
-                      {renderStars(ownerRating.averageRating)}
-                    </View>
-                    <Text className="text-gray-600 text-sm font-pregular">
-                      {ownerRating.averageRating.toFixed(1)}
+                {ownerRating ? (
+                  ownerRating.averageRating && ownerRating.totalRatings ? (
+                    <>
+                      <View className="flex-row items-center mr-2">
+                        {renderStars(ownerRating.averageRating)}
+                      </View>
+                      <Text className="text-gray-600 text-sm font-pregular">
+                        {ownerRating.averageRating.toFixed(1)}
+                      </Text>
+                      <Text className="text-gray-400 text-sm ml-1 font-pregular">
+                        ({ownerRating.totalRatings}{" "}
+                        {ownerRating.totalRatings === 1 ? "review" : "reviews"})
+                      </Text>
+                    </>
+                  ) : (
+                    <Text className="text-gray-400 mt-1 text-sm font-pregular">
+                      No ratings yet
                     </Text>
-                    <Text className="text-gray-400 text-sm ml-1 font-pregular">
-                      ({ownerRating.totalRatings}{" "}
-                      {ownerRating.totalRatings === 1 ? "review" : "reviews"})
-                    </Text>
-                  </>
+                  )
                 ) : (
-                  <Text className="text-gray-400 text-sm font-pregular">
-                    No ratings yet
-                  </Text>
+                  <Skeleton dimension={"w-12 h-3"} rounded="rounded-md" />
                 )}
               </View>
             </View>
@@ -955,119 +978,137 @@ export default function ItemDetails() {
           {/* Condition, Location, and Distance Info */}
           <View className="flex-row mb-4 gap-3">
             {/* Condition Card */}
-            <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
-              <View className="flex-row items-center mb-1">
-                <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
-                <Text className="text-gray-500 text-xs font-pmedium">
-                  CONDITION
+            {item?.itemCondition ? (
+              <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
+                <View className="flex-row items-center mb-1">
+                  <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
+                  <Text className="text-gray-500 text-xs font-pmedium">
+                    CONDITION
+                  </Text>
+                </View>
+                <Text className="text-gray-800 text-base font-psemibold">
+                  {item?.itemCondition ?? "Not specified"}
                 </Text>
               </View>
-              <Text className="text-gray-800 text-base font-psemibold">
-                {item?.itemCondition ?? "Not specified"}
-              </Text>
-            </View>
+            ) : (
+              <Skeleton dimension="flex-1 h-28" rounded="rounded-xl" />
+            )}
 
             {/* Listed Date Card */}
-            <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
-              <View className="flex-row items-center mb-1">
-                <View className="w-2 h-2 bg-primary rounded-full mr-2" />
-                <Text className="text-gray-500 text-xs font-pmedium">
-                  LISTED
-                </Text>
-              </View>
-              <Text className="text-gray-800 font-psemibold">
-                {item?.createdAt
-                  ? dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
-                      "MMM D, YYYY"
-                    )
-                  : "Not available"}
-              </Text>
-              <Text className="text-gray-500 text-sm font-pregular">
-                {item?.createdAt
-                  ? dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
-                      "h:mm A"
-                    )
-                  : ""}
-              </Text>
-            </View>
-          </View>
-
-          {/* Description Section */}
-          <View className="mb-4 ">
-            <Text className="text-xl font-psemibold text-gray-900 mb-3">
-              About this item
-            </Text>
-            <View className="bg-gray-50 border border-gray-100 p-4 rounded-2xl">
-              <Text className="text-gray-700 text-base leading-6 font-pregular">
-                {item?.itemDesc}
-              </Text>
-            </View>
-          </View>
-
-          {/* Updated Rental Terms with downpayment */}
-          <View className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20  p-5 rounded-2xl mb-6">
-            <View className="flex-row items-center mb-4">
-              <View className="w-10 h-10 bg-primary/20 rounded-full items-center justify-center mr-3">
-                <Text className="text-primary text-lg">₱</Text>
-              </View>
-              <Text className="text-xl font-psemibold text-gray-900">
-                Rental Details
-              </Text>
-            </View>
-
-            <View className="gap-2">
-              <View className="flex-row justify-between items-center ">
-                <View className="flex-row items-center">
-                  <View className="w-2 h-2 bg-primary rounded-full mr-3" />
-                  <Text className="text-gray-700 font-pmedium">Daily Rate</Text>
-                </View>
-                <Text className="font-psemibold text-gray-900 text-lg">
-                  ₱{item?.itemPrice}
-                </Text>
-              </View>
-
-              <View className="flex-row justify-between items-center ">
-                <View className="flex-row items-center">
-                  <View className="w-2 h-2 bg-primary rounded-full mr-3" />
-                  <Text className="text-gray-700 font-pmedium">
-                    Minimum Rental
+            {item?.createdAt ? (
+              <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
+                <View className="flex-row items-center mb-1">
+                  <View className="w-2 h-2 bg-primary rounded-full mr-2" />
+                  <Text className="text-gray-500 text-xs font-pmedium">
+                    LISTED
                   </Text>
                 </View>
-                <Text className="font-psemibold text-gray-900">
-                  {item?.itemMinRentDuration}{" "}
-                  {item?.itemMinRentDuration && item.itemMinRentDuration > 1
-                    ? "days"
-                    : "day"}
+                <Text className="text-gray-800 font-psemibold">
+                  {dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
+                    "MMM D, YYYY"
+                  )}
+                </Text>
+                <Text className="text-gray-500 text-sm font-pregular">
+                  {dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
+                    "h:mm A"
+                  )}
+                </Text>
+              </View>
+            ) : (
+              <Skeleton dimension="flex-1 h-28" rounded="rounded-xl" />
+            )}
+          </View>
+
+          {item?.itemDesc ? (
+            <View className="mb-4 ">
+              <Text className="text-xl font-psemibold text-gray-900 mb-3">
+                About this item
+              </Text>
+              <View className="bg-gray-50 border border-gray-100 p-4 rounded-2xl">
+                <Text className="text-gray-700 text-base leading-6 font-pregular">
+                  {item?.itemDesc}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <Skeleton dimension="w-40 h-10 mb-3" rounded="rounded-xl" />
+              <Skeleton
+                dimension="flex-1 h-[200px] mb-3"
+                rounded="rounded-xl"
+              />
+            </View>
+          )}
+
+          {item?.itemPrice || item?.itemMinRentDuration ? (
+            <View className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20  p-5 rounded-2xl mb-6">
+              <View className="flex-row items-center mb-4">
+                <View className="w-10 h-10 bg-primary/20 rounded-full items-center justify-center mr-3">
+                  <Text className="text-primary text-lg">₱</Text>
+                </View>
+                <Text className="text-xl font-psemibold text-gray-900">
+                  Rental Details
                 </Text>
               </View>
 
-              {item?.downpaymentPercentage && (
+              <View className="gap-2">
                 <View className="flex-row justify-between items-center ">
                   <View className="flex-row items-center">
-                    <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
+                    <View className="w-2 h-2 bg-primary rounded-full mr-3" />
                     <Text className="text-gray-700 font-pmedium">
-                      Downpayment
+                      Daily Rate
                     </Text>
                   </View>
-                  <Text className="font-psemibold text-orange-600">
-                    {item.downpaymentPercentage}%
+                  <Text className="font-psemibold text-gray-900 text-lg">
+                    ₱{item?.itemPrice}
                   </Text>
                 </View>
-              )}
 
-              <View className="flex-row justify-between items-center">
-                <View className="flex-row items-center">
-                  <View className="w-2 h-2 bg-green-500 rounded-full mr-3" />
-                  <Text className="text-gray-700 font-pmedium">Status</Text>
-                </View>
-                <View className="bg-green-100 px-3 py-1 rounded-full">
-                  <Text className="font-psemibold text-green-700 text-sm">
-                    Available
+                <View className="flex-row justify-between items-center ">
+                  <View className="flex-row items-center">
+                    <View className="w-2 h-2 bg-primary rounded-full mr-3" />
+                    <Text className="text-gray-700 font-pmedium">
+                      Minimum Rental
+                    </Text>
+                  </View>
+                  <Text className="font-psemibold text-gray-900">
+                    {item?.itemMinRentDuration}{" "}
+                    {item?.itemMinRentDuration && item.itemMinRentDuration > 1
+                      ? "days"
+                      : "day"}
                   </Text>
+                </View>
+
+                {item?.downpaymentPercentage && (
+                  <View className="flex-row justify-between items-center ">
+                    <View className="flex-row items-center">
+                      <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
+                      <Text className="text-gray-700 font-pmedium">
+                        Downpayment
+                      </Text>
+                    </View>
+                    <Text className="font-psemibold text-orange-600">
+                      {item.downpaymentPercentage}%
+                    </Text>
+                  </View>
+                )}
+
+                <View className="flex-row justify-between items-center">
+                  <View className="flex-row items-center">
+                    <View className="w-2 h-2 bg-green-500 rounded-full mr-3" />
+                    <Text className="text-gray-700 font-pmedium">Status</Text>
+                  </View>
+                  <View className="bg-green-100 px-3 py-1 rounded-full">
+                    <Text className="font-psemibold text-green-700 text-sm">
+                      Available
+                    </Text>
+                  </View>
                 </View>
               </View>
             </View>
-          </View>
+          ) : (
+            <Skeleton dimension="w-40 h-10 mb-3" rounded="rounded-xl" />
+          )}
 
           {/* Pickup Location Map */}
           {item?.itemLocation && (
