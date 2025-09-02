@@ -21,6 +21,7 @@ export const sendRentRequestNotifications = async (
     itemId: string;
     itemName: string;
     requestId: string;
+    daysDifference: number;
     requesterName: string;
     startDate: any;
     endDate: any;
@@ -31,7 +32,7 @@ export const sendRentRequestNotifications = async (
     const notificationData = {
       type: "RENT_REQUEST",
       title: "New Rental Request",
-      message: `${requestData.requesterName} wants to rent your ${requestData.itemName}`,
+      message: `${requestData.requesterName} wants to rent your ${requestData.itemName} for ${requestData.daysDifference} days on ${requestData.startDate} to ${requestData.endDate}.`,
       isRead: false,
       createdAt: serverTimestamp(),
       data: {
@@ -90,7 +91,7 @@ export const sendRentRequestNotifications = async (
       await sendPushNotification({
         to: pushTokens.token,
         title: "New Rental Request",
-        body: `${requestData.requesterName} wants to rent your ${requestData.itemName}`,
+        body: `${requestData.requesterName} wants to rent your ${requestData.itemName} for ${requestData.daysDifference} days on ${requestData.startDate} to ${requestData.endDate}.`,
         data: {
           type: "RENT_REQUEST",
           itemId: requestData.itemId,

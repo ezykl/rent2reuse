@@ -130,13 +130,25 @@ const RequestCard: React.FC<{
   const getStatusColor = (status: string) => {
     switch (status) {
       case "pending":
-        return "bg-yellow-100 text-yellow-700";
+        return {
+          bgColor: "bg-yellow-100",
+          textColor: "text-yellow-700",
+        };
       case "approved":
-        return "bg-green-100 text-green-700";
+        return {
+          bgColor: "bg-green-100",
+          textColor: "text-green-700",
+        };
       case "rejected":
-        return "bg-red-100 text-red-700";
+        return {
+          bgColor: "bg-red-100",
+          textColor: "text-red-700",
+        };
       default:
-        return "bg-gray-100 text-gray-700";
+        return {
+          bgColor: "bg-gray-100",
+          textColor: "text-gray-700",
+        };
     }
   };
 
@@ -182,18 +194,22 @@ const RequestCard: React.FC<{
             </View>
 
             {/* Request Time Badge */}
-            <View className="flex-col items-end space-y-1">
+            <View className="flex-col items-end gap-2">
               <View className=" bg-gray-100/80 px-3 py-1 rounded-full">
                 <Text className="text-xs font-pmedium text-gray-600">
                   {dayjs(request.createdAt).fromNow()}
                 </Text>
               </View>
               <View
-                className={`px-3 py-1 rounded-full ${getStatusColor(
-                  request.status
-                )}`}
+                className={`px-3 py-1 rounded-full ${
+                  getStatusColor(request.status).bgColor
+                }`}
               >
-                <Text className="text-xs font-pbold capitalize">
+                <Text
+                  className={`text-xs font-pbold capitalize ${
+                    getStatusColor(request.status).textColor
+                  }`}
+                >
                   {request.status}
                 </Text>
               </View>

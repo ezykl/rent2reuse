@@ -57,6 +57,12 @@ const generateNotificationContent = (
         title: "New Rental Request",
         message: `Someone wants to rent your item. Check the details now.`,
       };
+    case "RENT_SENT":
+      return {
+        title: "Rental Request Submitted",
+        message:
+          "Your rental request has been submitted to the owner. You'll be notified when they respond.",
+      };
 
     case "RENT_ACCEPTED":
       return {

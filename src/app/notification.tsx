@@ -24,6 +24,7 @@ const NotificationScreen = () => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    deleteAllNotifications,
     isLoading,
   } = useNotifications();
   const [selectedNotification, setSelectedNotification] =
@@ -85,10 +86,20 @@ const NotificationScreen = () => {
         <View className="flex-1 items-center">
           <Text className="text-xl font-pbold text-gray-800">Notification</Text>
         </View>
-        {notifications?.some((n) => !n.isRead) && (
-          <TouchableOpacity onPress={markAllAsRead}>
-            <Text className="text-primary font-pmedium">Mark all as read</Text>
-          </TouchableOpacity>
+        {notifications?.length > 0 ? (
+          notifications.some((n) => !n.isRead) ? (
+            <TouchableOpacity onPress={markAllAsRead}>
+              <Text className="text-primary font-pmedium">
+                Mark all as read
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={deleteAllNotifications}>
+              <Text className="text-red-400 font-pmedium">Delete all</Text>
+            </TouchableOpacity>
+          )
+        ) : (
+          <View className="w-8 h-8" />
         )}
       </View>
 
@@ -100,7 +111,10 @@ const NotificationScreen = () => {
           contentContainerStyle={{ paddingBottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={() => (
-            <View className="flex-1 items-center justify-center py-8 px-4">
+            <View
+              className="flex-1 items-center   justify-center py-8 px-4"
+              style={{ height: 300 }}
+            >
               <Image
                 source={icons.emptyBox}
                 className="w-16 h-16 mb-4"

@@ -9,7 +9,7 @@ import {
   Dimensions,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { formatDistance, set } from "date-fns";
 import {
   collection,
@@ -24,6 +24,8 @@ import { icons, images } from "@/constant";
 import { Item } from "@/types/item";
 import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ItemCard from "@/components/ItemCard";
+import { useLocation } from "@/hooks/useLocation";
 
 interface UserProfile {
   id: string;
@@ -51,7 +53,10 @@ export default function UserProfile() {
   const { isLoading, setIsLoading } = useLoader();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userItems, setUserItems] = useState<Item[]>([]);
-
+  const locationHook = useLocation({
+    autoStart: true,
+    watchLocation: false,
+  });
   // Fetch user profile and items
   useEffect(() => {
     const fetchUserProfileAndItems = async () => {
@@ -100,6 +105,10 @@ export default function UserProfile() {
       : "?";
   };
 
+  const handleItemPress = useCallback((itemId: string) => {
+    router.push(`/items/${itemId}`);
+  }, []);
+
   const formatFirestoreDate = (firestoreTimestamp: any) => {
     try {
       if (!firestoreTimestamp) return "recently";
@@ -129,40 +138,68 @@ export default function UserProfile() {
   };
 
   // Render item card
-  const renderItemCard = ({ item }: { item: Item }) => (
-    <TouchableOpacity
-      className="w-[48%] mb-4"
-      onPress={() => router.push(`/items/${item.id}`)}
-    >
-      <View className="bg-white rounded-xl overflow-hidden border border-gray-100">
-        <View className="aspect-square">
-          {item.images && item.images[0] ? (
-            <Image
-              source={{ uri: item.images[0] }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
-          ) : (
-            <View className="w-full h-full bg-gray-100 items-center justify-center">
-              <Image source={images.empty} className="w-12 h-12 opacity-30" />
-            </View>
-          )}
-        </View>
-        <View className="p-3">
-          <Text
-            className="text-lg font-pbold text-gray-900 mb-1"
-            numberOfLines={1}
-          >
-            {item.itemName}
-          </Text>
-          <Text className="text-primary text-base font-pbold">
-            ₱{item.itemPrice}
-            <Text className="text-gray-500 text-sm font-pregular">/day</Text>
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  // const renderItemCard = ({ item }: { item: Item }) => (
+  //   <TouchableOpacity
+  //     className="w-[48%] mb-4"
+  //     onPress={() => router.push(`/items/${item.id}`)}
+  //   >
+  //     <View className="bg-white rounded-xl overflow-hidden border border-gray-100">
+  //       <View className="aspect-square">
+  //         {item.images && item.images[0] ? (
+  //           <Image
+  //             source={{ uri: item.images[0] }}
+  //             className="w-full h-full"
+  //             resizeMode="cover"
+  //           />
+  //         ) : (
+  //           <View className="w-full h-full bg-gray-100 items-center justify-center">
+  //             <Image source={images.empty} className="w-12 h-12 opacity-30" />
+  //           </View>
+  //         )}
+  //       </View>
+  //       <View className="p-3">
+  //         <Text
+  //           className="text-lg font-pbold text-gray-900 mb-1"
+  //           numberOfLines={1}
+  //         >
+  //           {item.itemName}
+  //         </Text>
+  //         <Text className="text-primary text-base font-pbold">
+  //           ₱{item.itemPrice}
+  //           <Text className="text-gray-500 text-sm font-pregular">/day</Text>
+  //         </Text>
+  //       </View>
+  //     </View>
+  //   </TouchableOpacity>
+  // );
+  const renderItemCard = ({ item }: { item: Item }) => {
+    if (!item) return null;
+
+    const locationData =
+      item.itemLocation && typeof item.itemLocation === "object"
+        ? {
+            latitude: item.itemLocation.latitude,
+            longitude: item.itemLocation.longitude,
+          }
+        : null;
+
+    return (
+      <ItemCard
+        title={item.itemName}
+        thumbnail={item.images}
+        description={item.itemDesc}
+        price={item.itemPrice}
+        status={item.itemStatus}
+        condition={item.itemCondition}
+        itemLocation={locationData ? locationData : undefined}
+        owner={item.owner}
+        enableAI={item.enableAI}
+        onPress={() => handleItemPress(item.id)}
+        userLocationProp={locationHook.userLocation}
+        isLocationLoading={locationHook.isLoading}
+      />
+    );
+  };
 
   // Render stars for rating
   const renderStars = (rating: number) => {

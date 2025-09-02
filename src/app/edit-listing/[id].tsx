@@ -35,6 +35,7 @@ import {
   ShapeSource,
   FillLayer,
 } from "@maplibre/maplibre-react-native";
+import { MAP_TILER_API_KEY } from "@env";
 
 // Update the interface to include all fields
 // interface ListingData extends Item {
@@ -739,7 +740,7 @@ const EditListing = () => {
                       pitchEnabled={false}
                       attributionEnabled={false}
                       compassViewPosition={3}
-                      mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+                      mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
                     >
                       <Camera
                         defaultSettings={{

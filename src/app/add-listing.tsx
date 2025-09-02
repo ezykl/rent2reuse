@@ -27,6 +27,7 @@ import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 import { API__URL } from "@/constant/api";
 import { useLoader } from "@/context/LoaderContext";
 import { useProhibitedChecker } from "../utils/useProhibitedChecker";
+import { OPEN_CAGE_API_KEY, MAP_TILER_API_KEY } from "@env";
 
 import {
   doc,
@@ -79,7 +80,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const API_URL = API__URL; // Update with your API URL
+const API_URL = API__URL;
 
 const AddListing = () => {
   const { openCamera: openCameraParam } = useLocalSearchParams();
@@ -1739,7 +1740,7 @@ const AddListing = () => {
                       pitchEnabled={false}
                       attributionEnabled={false}
                       compassViewPosition={3}
-                      mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+                      mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
                     >
                       <Camera
                         defaultSettings={{

@@ -131,7 +131,7 @@ const Setting = () => {
               provide honest descriptions.
             </Text>
 
-            <Text className="font-semibold text-xl text-gray-900 mb-2">
+            {/* <Text className="font-semibold text-xl text-gray-900 mb-2">
               3. Booking and Payment
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
@@ -139,10 +139,10 @@ const Setting = () => {
               any applicable taxes or charges. Payments are processed through
               secure channels, and you will receive a confirmation receipt via
               email.
-            </Text>
+            </Text> */}
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              4. Cancellations and Refunds
+              3. Cancellations and Refunds
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
               Cancellation policies vary by listing and are specified on the
@@ -151,7 +151,7 @@ const Setting = () => {
             </Text>
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              5. User Conduct
+              4. User Conduct
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
               Users are expected to communicate respectfully and promptly. Any
@@ -161,7 +161,7 @@ const Setting = () => {
             </Text>
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              6. Dispute Resolution
+              5. Dispute Resolution
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
               In the event of a dispute between users, Rent2Reuse encourages
@@ -170,7 +170,7 @@ const Setting = () => {
             </Text>
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              7. Limitation of Liability
+              6. Limitation of Liability
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
               Rent2Reuse is not liable for any indirect, incidental, or
@@ -180,7 +180,7 @@ const Setting = () => {
             </Text>
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              8. Governing Law
+              7. Governing Law
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
               These terms and conditions are governed by the laws of the
@@ -189,7 +189,7 @@ const Setting = () => {
             </Text>
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              9. Changes to Terms
+              8. Changes to Terms
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
               Rent2Reuse reserves the right to modify these terms and conditions
@@ -200,7 +200,7 @@ const Setting = () => {
             </Text>
 
             <Text className="font-semibold text-xl text-gray-900 mb-2">
-              10. Updates to Terms
+              9. Updates to Terms
             </Text>
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-8">
               <Text className="italic">Rent2Reuse</Text> reserves the right to
@@ -323,7 +323,7 @@ const Setting = () => {
             <Text className="font-pregular text-lg text-gray-700 leading-7 mb-6">
               • Secure and user-friendly rental platform{"\n"}• Verified user
               profiles and ratings{"\n"}• Transparent pricing and policies{"\n"}
-              • Protected payment systems{"\n"}• Community-driven marketplace
+              • Community-driven marketplace
             </Text>
 
             <Text className="font-pmedium text-xl text-gray-900 mb-3">

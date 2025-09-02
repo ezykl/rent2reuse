@@ -18,8 +18,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db, storage } from "@/lib/firebaseConfig";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
-
-const OCR_SPACE_API_KEY = "K84356591988957";
+import { OCR_SPACE_API_KEY } from "@env";
 
 interface IDVerificationContentProps {
   onSave: (idVerified: {

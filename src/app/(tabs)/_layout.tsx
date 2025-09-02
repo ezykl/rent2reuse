@@ -41,7 +41,7 @@ const TabIcon = ({ icon, color, name, focused }: TabIconProps) => {
       <Image
         source={icon}
         resizeMode="contain"
-        style={{ tintColor: color }}
+        style={{ tintColor: !focused ? color : undefined }}
         className="w-6 h-6"
       />
       <Text
@@ -228,7 +228,7 @@ const TabsLayout = () => {
             ),
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                icon={icons.home}
+                icon={icons.home2}
                 color={color}
                 name="Home"
                 focused={focused}
@@ -389,7 +389,7 @@ const TabsLayout = () => {
             headerShown: false,
             tabBarBadge: hasUnreadMessages ? " " : undefined,
             tabBarBadgeStyle: {
-              backgroundColor: "#FF0000",
+              backgroundColor: "#ef4444",
               minWidth: 10,
               minHeight: 10,
               width: 10,
@@ -429,7 +429,7 @@ const TabsLayout = () => {
             ),
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
-                icon={icons.profile}
+                icon={icons.user}
                 color={color}
                 name="Profile"
                 focused={focused}

@@ -2,6 +2,7 @@ export type NotificationType =
   | "WELCOME"
   | "RENT_REQUEST"
   | "RENT_ACCEPTED"
+  | "RENT_SENT"
   | "RENT_REQUEST_CANCELLED"
   | "RENT_REQUEST_DECLINED"
   | "RENT_REQUEST_COMPLETED"
