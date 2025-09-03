@@ -35,6 +35,7 @@ import {
   where,
   getDocs,
   Timestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -548,6 +549,7 @@ export default function ItemDetails() {
       const chatRef = await addDoc(collection(db, "chat"), {
         participants: [user.uid, item?.owner?.id],
         itemId: item?.id,
+
         requesterId: user.uid, // Add this explicitly
         ownerId: item?.owner?.id, // Add this explicitly
         itemDetails: {
@@ -557,6 +559,7 @@ export default function ItemDetails() {
           totalPrice: daysDifference * (item?.itemPrice ?? 0),
           rentalDays: daysDifference,
           downpaymentPercentage: item?.downpaymentPercentage ?? 0,
+          itemLocation: item?.itemLocation ?? null,
         },
         createdAt: serverTimestamp(),
         lastMessage: formData.message,
@@ -586,6 +589,9 @@ export default function ItemDetails() {
         chatId: chatRef.id,
       });
 
+      await updateDoc(chatRef, {
+        rentRequestId: rentRequestRef.id,
+      });
       // Add initial message to chat
       await addDoc(collection(db, "chat", chatRef.id, "messages"), {
         senderId: user.uid,
@@ -794,7 +800,7 @@ export default function ItemDetails() {
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
                       className="p-4 py-2 rounded-2xl"
-                      style={{ borderRadius: 23, opacity: 0.8 }}
+                      style={{ borderRadius: 23, opacity: 0.85 }}
                     >
                       <View className="flex-row items-end ">
                         <Image

@@ -37,7 +37,7 @@ const LoaderProviderWithOverlay = ({
             <View style={{ width: 100, height: 100 }}>
               <LottieView
                 style={{ height: "100%", width: "100%" }}
-                source={require("../assets/RR.json")}
+                source={require("../assets/lottie/RR.json")}
                 autoPlay
                 loop
               />
