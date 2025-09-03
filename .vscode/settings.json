@@ -15,5 +15,8 @@
         "psemibold",
         "pthin"
     ],
-    "git.ignoreLimitWarning": true
+    "git.ignoreLimitWarning": true,
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "typescript.tsserver.maxTsServerMemory": 4096,
+    "javascript.updateImportsOnFileMove.enabled": "always"
 }

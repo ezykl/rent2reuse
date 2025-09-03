@@ -101,7 +101,7 @@ const Welcome = () => {
       <View className="w-full h-80 justify-center items-center mb-8">
         {item.id === 1 && (
           <LottieView
-            source={require("../assets/searchingAnimation.json")}
+            source={require("../assets/lottie/searchingAnimation.json")}
             autoPlay
             loop
             style={{ width: "100%", height: "100%" }}
@@ -109,7 +109,7 @@ const Welcome = () => {
         )}
         {item.id === 2 && (
           <LottieView
-            source={require("../assets/cycleAnimation.json")}
+            source={require("../assets/lottie/cycleAnimation.json")}
             autoPlay
             loop
             style={{ width: "100%", height: "100%" }}
@@ -117,7 +117,7 @@ const Welcome = () => {
         )}
         {item.id === 3 && (
           <LottieView
-            source={require("../assets/communityAnimation.json")}
+            source={require("../assets/lottie/communityAnimation.json")}
             autoPlay
             loop
             style={{ width: "100%", height: "100%" }}

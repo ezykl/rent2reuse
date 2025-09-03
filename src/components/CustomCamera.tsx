@@ -113,7 +113,7 @@ export const CustomCamera = ({ onPhotoTaken, onCancel }: CustomCameraProps) => {
   const LottieOverlay = () => (
     <View style={styles.lottieContainer} pointerEvents="none">
       <LottieView
-        source={require("../assets/face.json")}
+        source={require("../assets/lottie/face.json")}
         autoPlay
         loop
         style={styles.lottieAnimation}
@@ -127,7 +127,7 @@ export const CustomCamera = ({ onPhotoTaken, onCancel }: CustomCameraProps) => {
   const AnalyzingOverlay = () => (
     <View style={styles.analyzingOverlay} pointerEvents="none">
       <LottieView
-        source={require("../assets/face.json")}
+        source={require("../assets/lottie/face.json")}
         autoPlay
         loop
         style={styles.lottieAnimation} // Same size as main animation

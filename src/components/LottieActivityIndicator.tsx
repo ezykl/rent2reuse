@@ -12,7 +12,7 @@ const LottieActivityIndicator = ({
 }) => (
   <View style={[styles.container, style]}>
     <LottieView
-      source={require("../assets/LoaderLottie.json")}
+      source={require("../assets/lottie/LoaderLottie.json")}
       autoPlay
       loop
       style={{ width: size, height: size }}

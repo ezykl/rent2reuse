@@ -39,12 +39,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useFocusEffect } from "@react-navigation/native";
 import useProfileCompletion from "@/hooks/useProfileCompletion";
-import { LocationModalContent } from "@/components/profile/modal-contents/LocationModalContent";
-import { EmailVerificationContent } from "@/components/profile/modal-contents/EmailVerificationContent";
-import { IDVerificationContent } from "@/components/profile/modal-contents/IDVerificationContent";
-import { ContactContent } from "@/components/profile/modal-contents/ContactContent";
-import { BirthdayContent } from "@/components/profile/modal-contents/BirthdayContent";
-import { ProfileImageContent } from "@/components/profile/modal-contents/ProfileImageContent";
+import { LocationModalContent } from "@/components/profile/LocationModalContent";
+import { EmailVerificationContent } from "@/components/profile/EmailVerificationContent";
+import { IDVerificationContent } from "@/components/profile/IDVerificationContent";
+import { ContactContent } from "@/components/profile/ContactContent";
+import { BirthdayContent } from "@/components/profile/BirthdayContent";
+import { ProfileImageContent } from "@/components/profile/ProfileImageContent";
 import PayPalPayment from "@/components/PaypalPayment";
 import PlanSubscription from "@/components/PlanSubscription";
 

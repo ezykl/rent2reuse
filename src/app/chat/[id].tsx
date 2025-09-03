@@ -2179,7 +2179,7 @@ const ChatScreen = () => {
       // 4. Update item status to "rented" (not "pickup")
       const itemRef = doc(db, "items", itemId);
       batch.update(itemRef, {
-        itemStatus: "rented", // Changed from "pickup" to "rented"
+        itemStatus: "rented",
         rentedTo: acceptedRequesterId,
         rentedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
