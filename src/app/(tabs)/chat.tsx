@@ -163,11 +163,12 @@ const ChatList = () => {
           }
           return true;
         case "sent":
-          // Requests sent by current user (current user is the requester)
-          return isRentRequest && chat.requesterId === userId;
+          return (
+            isRentRequest &&
+            chat.requesterId === userId &&
+            !["declined", "cancelled"].includes(chat.status)
+          );
         case "received":
-          // Requests received by current user (current user is the owner)
-          // Only show active requests (not declined or cancelled)
           return (
             isRentRequest &&
             chat.ownerId === userId &&
@@ -664,7 +665,7 @@ const ChatList = () => {
                 setIsSelectMode(false);
                 setSelectedChats([]);
               }}
-              className="mr-4 items-center"
+              className="mr-4 items-center px-4 py-2  "
             >
               <Text className="text-gray-500 font-pmedium">Cancel</Text>
             </TouchableOpacity>
@@ -676,12 +677,13 @@ const ChatList = () => {
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity
-            onPress={handleDeleteAll}
-            className="bg-gray-100 px-4 py-2 rounded-lg"
-          >
-            <Text className="text-gray-600 font-pmedium">Delete All</Text>
-          </TouchableOpacity>
+          // <TouchableOpacity
+          <></>
+          //   onPress={handleDeleteAll}
+          //   className="bg-red-500 px-4 py-2 rounded-lg"
+          // >
+          //   <Text className="text-white font-pbold">Delete All</Text>
+          // </TouchableOpacity>
         ))}
     </View>
   );

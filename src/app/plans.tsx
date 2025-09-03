@@ -28,7 +28,7 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanSubscription from "@/components/PlanSubscription";
 import PayPalPayment from "@/components/PaypalPayment";
-import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "@/constant/paypal";
+import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "@env";
 import { User, Plan } from "@/types";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";

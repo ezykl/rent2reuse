@@ -1,9 +1,3 @@
-// Install required packages:
-// npm install firebase @react-native-firebase/app @react-native-firebase/firestore @react-native-firebase/auth @react-native-firebase/storage
-
-// 1. Create a firebase.js configuration file in your /lib directory
-
-// /lib/firebase.js
 import { initializeApp, getApps } from "firebase/app";
 import {
   getFirestore,
@@ -35,18 +29,27 @@ import { Payment } from "../models/payment";
 import { Platform } from "react-native";
 import { writeBatch } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  FIREBASE_API_KEY,
+  FIREBASE_AUTH_DOMAIN,
+  FIREBASE_DATABASE_URL,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  FIREBASE_MESSAGING_SENDER_ID,
+  FIREBASE_APP_ID,
+  FIREBASE_MEASUREMENT_ID,
+} from "@env";
 
 // Your Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD9ZhSYTsgJf7TDbkKojz3qod_V_aBRgI4",
-  authDomain: "petshelapp.firebaseapp.com",
-  databaseURL:
-    "https://petshelapp-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "petshelapp",
-  storageBucket: "petshelapp.appspot.com",
-  messagingSenderId: "304641362081",
-  appId: "1:304641362081:web:0fa946a78ae1abe4f608e0",
-  measurementId: "G-PTB7SXPN8S",
+  apiKey: FIREBASE_API_KEY,
+  authDomain: FIREBASE_AUTH_DOMAIN,
+  databaseURL: FIREBASE_DATABASE_URL,
+  projectId: FIREBASE_PROJECT_ID,
+  storageBucket: FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: FIREBASE_MESSAGING_SENDER_ID,
+  appId: FIREBASE_APP_ID,
+  measurementId: FIREBASE_MEASUREMENT_ID,
 };
 
 // Initialize Firebase if it hasn't been initialized
@@ -306,24 +309,6 @@ export const terminateCurrentSession = async () => {
     return { success: false, error: error.message };
   }
 };
-
-// async function sendRentalRequestNotification(
-//   ownerId: string,
-//   itemName: string,
-//   requesterId: string
-// ) {
-//   await addDoc(collection(db, "notifications"), {
-//     userId: ownerId,
-//     title: `Rental Request for ${itemName}`,
-//     description:
-//       "Someone wants to rent your item. Accept or decline the request.",
-//     type: "rental-request",
-//     status: "unread",
-//     createdAt: serverTimestamp(),
-//     actions: { accept: false, decline: false },
-//     requesterId,
-//   });
-// }
 
 interface Item {
   id: string;

@@ -75,38 +75,6 @@ import {
 } from "firebase/storage";
 import { ChatCamera } from "@/components/ChatCamera";
 
-// First fix the ChatHeader props interface
-interface ChatHeaderProps {
-  recipientName: {
-    firstname: string;
-    lastname: string;
-    middlename?: string;
-  };
-  recipientImage?: string;
-  itemDetails?: {
-    name?: string;
-    image?: string;
-  };
-  recipientStatus?: any;
-  status: any;
-  recipientId: string;
-  onBack: () => void;
-  isOwner: boolean;
-  showFullProgress?: boolean;
-  onToggleProgress?: () => void;
-}
-
-const RENTAL_STATUS = {
-  PENDING: "pending",
-  ACCEPTED: "accepted",
-  PAID: "paid",
-  PICKED_UP: "pickedup",
-  ACTIVE: "active",
-  COMPLETED: "completed",
-  DECLINED: "declined",
-  CANCELLED: "cancelled",
-} as const;
-
 // Helper function to check if a request has expired
 const isRequestExpired = (startDate: any): boolean => {
   if (!startDate) return false;
@@ -199,6 +167,38 @@ const MessageActionsModal = ({
   );
 };
 
+// First fix the ChatHeader props interface
+interface ChatHeaderProps {
+  recipientName: {
+    firstname: string;
+    lastname: string;
+    middlename?: string;
+  };
+  recipientImage?: string;
+  itemDetails?: {
+    name?: string;
+    image?: string;
+  };
+  recipientStatus?: any;
+  status: any;
+  recipientId: string;
+  onBack: () => void;
+  isOwner: boolean;
+  showFullProgress?: boolean;
+  onToggleProgress?: () => void;
+}
+
+const RENTAL_STATUS = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  PAID: "paid",
+  PICKED_UP: "pickedup",
+  ACTIVE: "active",
+  COMPLETED: "completed",
+  DECLINED: "declined",
+  CANCELLED: "cancelled",
+} as const;
+
 const ChatHeader = ({
   recipientName,
   recipientImage,
@@ -211,7 +211,6 @@ const ChatHeader = ({
   showFullProgress,
   onToggleProgress,
 }: ChatHeaderProps) => {
-  // Format full name helper function
   const formatFullName = () => {
     const middleInitial = recipientName.middlename
       ? ` ${recipientName.middlename.charAt(0)}.`
@@ -363,10 +362,36 @@ const ActionMenu = ({
       <TouchableOpacity
         activeOpacity={1}
         onPress={onClose}
-        className="flex-1 bg-black/10 px-3 justify-center items-center"
+        className="flex-1 bg-black/10 px-2 justify-end"
       >
-        <View className=" absolute bottom-0 mb-2 w-full py-4 bg-white rounded-2xl shadow-lg">
-          <View className="flex-row flex-wrap justify-center">
+        <View className="flex flex-col mb-2 w-full py-4 bg-white rounded-3xl shadow-lg">
+          <View className="flex-row flex-wrap justify-center ">
+            {items.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                onPress={() => {
+                  onClose();
+                  item.action();
+                }}
+                className="items-center w-[72px]"
+              >
+                <View
+                  className={`w-12 h-12 rounded-full items-center justify-center mb-1`}
+                  style={{ backgroundColor: item.bgColor }}
+                >
+                  <Image
+                    source={item.icon}
+                    className="w-6 h-6"
+                    tintColor={item.iconColor}
+                  />
+                </View>
+                <Text className="text-xs text-center text-gray-600 font-pmedium">
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View className="flex-row flex-wrap justify-center ">
             {items.map((item) => (
               <TouchableOpacity
                 key={item.id}
@@ -530,7 +555,6 @@ const RentRequestMessage = ({
             endDate: new Date(),
           };
 
-          // Try to enhance with rentRequest data if available and not cancelled/declined
           if (
             item.rentRequestId &&
             effectiveStatus !== "cancelled" &&
@@ -568,16 +592,28 @@ const RentRequestMessage = ({
       } catch (error) {
         console.error("Error setting up request data:", error);
         // Fallback to minimal data
+        const rentRequestRef = query(
+          collection(db, "chat", String(chatId), "messages"),
+          where("type", "==", "rentRequest"),
+          where("id", "==", item.id),
+          limit(1)
+        );
+
+        const rentRequestSnap = await getDocs(rentRequestRef);
+        const rentRequestMessage = !rentRequestSnap.empty
+          ? rentRequestSnap.docs[0].data()
+          : null;
+
         setRentRequestData({
-          itemName: "Unknown Item",
-          itemImage: chatData.itemImage,
-          totalPrice: 0,
+          itemName: chatData.itemDetails?.name || "Unknown Item",
+          itemImage: chatData.itemDetails?.image,
+          totalPrice: chatData.itemDetails?.price || 0,
           status: effectiveStatus,
-          rentalDays: 1,
-          pickupTime: 480,
-          message: "Error loading request details",
-          startDate: new Date(),
-          endDate: new Date(),
+          rentalDays: chatData.rentalDays || 1,
+          pickupTime: chatData.pickupTime || 480,
+          message: rentRequestMessage?.text || "Error loading request details",
+          startDate: chatData.startDate || new Date(),
+          endDate: chatData.endDate || new Date(),
         });
       }
     };
@@ -605,16 +641,32 @@ const RentRequestMessage = ({
     switch (status?.toLowerCase()) {
       case "approved":
       case "accepted":
-        return "bg-green-100 text-green-600";
+        return {
+          bgColor: "bg-green-100",
+          textColor: "text-green-700",
+        };
+      case "cancelled":
       case "declined":
       case "rejected":
-        return "bg-red-100 text-red-600";
-      case "cancelled":
-        return "bg-gray-100 text-gray-600";
+        return {
+          bgColor: "bg-red-100",
+          textColor: "text-red-700",
+        };
+      // case "cancelled":
+      //   return {
+      //     bgColor: "bg-gray-100",
+      //     textColor: "text-gray-700",
+      //   };
       case "pending":
-        return "bg-yellow-100 text-yellow-600";
+        return {
+          bgColor: "bg-yellow-100",
+          textColor: "text-yellow-700",
+        };
       default:
-        return "bg-gray-100 text-gray-600";
+        return {
+          bgColor: "bg-gray-100",
+          textColor: "text-gray-700",
+        };
     }
   };
 
@@ -652,11 +704,15 @@ const RentRequestMessage = ({
       >
         {/* Status Badge - Use effectiveStatus */}
         <View
-          className={`absolute top-4 right-4 px-2 py-1 rounded-full ${getStatusBadge(
-            effectiveStatus
-          )}`}
+          className={`absolute top-4 right-4 px-2 py-1 rounded-full ${
+            getStatusBadge(effectiveStatus).bgColor
+          }`}
         >
-          <Text className="text-xs font-pmedium capitalize">
+          <Text
+            className={`text-xs font-psemibold capitalize ${
+              getStatusBadge(effectiveStatus).textColor
+            }`}
+          >
             {effectiveStatus}
           </Text>
         </View>
@@ -674,18 +730,39 @@ const RentRequestMessage = ({
                 rentRequestData?.itemImage ||
                 "https://placehold.co/200x200.png",
             }}
-            className="w-16 h-16 rounded-lg"
+            className="w-24 h-24 rounded-lg"
             resizeMode="cover"
           />
           <View className="flex-1">
-            <Text className="font-pbold text-base mb-1 text-gray-900">
+            <Text className="font-pbold text-base  text-gray-900">
               {rentRequestData.itemName}
             </Text>
-            <Text className="text-sm text-gray-600">
-              {formatDate(rentRequestData.startDate)} -{" "}
-              {formatDate(rentRequestData.endDate)}
-            </Text>
-            <Text className="font-pmedium mt-1 text-primary">
+            <View className="flex-row items-center">
+              <Image
+                source={icons.calendar}
+                className="w-4 h-4 mr-2"
+                tintColor="#4B5563"
+                resizeMode="contain"
+              />
+              <Text className="text-sm mt-1 font-pmedium text-gray-600">
+                {formatDate(rentRequestData.startDate)} -{" "}
+                {formatDate(rentRequestData.endDate)}
+              </Text>
+            </View>
+
+            <View className="flex-row items-center">
+              <Image
+                source={icons.clock}
+                className="w-4 h-4 mr-2"
+                tintColor="#4B5563"
+                resizeMode="contain"
+              />
+              <Text className="text-sm mt-1 font-pmedium text-gray-600">
+                {minutesToTime(rentRequestData.pickupTime)}
+              </Text>
+            </View>
+
+            <Text className="font-psemibold mt-1 text-primary">
               ₱
               {Math.round(
                 (rentRequestData.totalPrice || 0) /
@@ -702,12 +779,12 @@ const RentRequestMessage = ({
               <Text className="text-xs font-pbold uppercase text-gray-400">
                 Message
               </Text>
-              <Text className="text-sm mt-1 text-gray-700">
+              <Text className="text-sm mt-1 font-pregular text-gray-700">
                 {rentRequestData.message}
               </Text>
             </View>
 
-            <View className="space-y-3">
+            <View className=" mt-3">
               <View>
                 <Text className="text-xs font-pbold uppercase text-gray-400">
                   Rental Period
@@ -717,21 +794,12 @@ const RentRequestMessage = ({
                 </Text>
               </View>
 
-              <View>
+              <View className=" mt-3">
                 <Text className="text-xs font-pbold uppercase text-gray-400">
                   Total Amount
                 </Text>
                 <Text className="text-sm font-pmedium mt-1 text-gray-700">
                   ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
-                </Text>
-              </View>
-
-              <View>
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Pickup Time
-                </Text>
-                <Text className="text-sm mt-1 font-pmedium text-gray-700">
-                  {minutesToTime(rentRequestData.pickupTime)}
                 </Text>
               </View>
             </View>
@@ -944,13 +1012,13 @@ const ImageMessage = ({
         delayLongPress={300}
         activeOpacity={0.9}
       >
-        <View className="rounded-xl overflow-hidden bg-gray-100">
+        <View className="rounded-xl overflow-hidden bg-gray-200">
           {isLoading ? (
             <View
               style={{ width: imageWidth, height: imageHeight }}
               className="items-center justify-center bg-gray-100"
             >
-              <ActivityIndicator color="#6B7280" />
+              <ActivityIndicator color="#4285F4" size="large" />
             </View>
           ) : (
             <Image
@@ -1924,10 +1992,12 @@ const ChatScreen = () => {
     []
   );
 
-  const memoizedHandleDecline = useCallback(
-    (requestId: string) => handleDeclineRequest(requestId),
-    []
-  );
+  const memoizedHandleDecline = useCallback((requestId: string | string[]) => {
+    // If single ID, convert to array
+    const requestIds = Array.isArray(requestId) ? requestId : [requestId];
+    // Process each request ID
+    requestIds.forEach((id) => handleDeclineRequest(id));
+  }, []);
 
   const memoizedHandleCancel = useCallback(
     (requestId: string) => handleCancelRequest(requestId),
@@ -2011,25 +2081,18 @@ const ChatScreen = () => {
       icon: icons.camera,
       label: "Camera",
       action: () => setShowCamera(true), // Update this line
-      bgColor: "#E3F2FD",
-      iconColor: "#2196F3",
+      bgColor: "#2196F3",
+      iconColor: "#FFF",
     },
     {
       id: "gallery",
       icon: icons.gallery, // Make sure you have an image/gallery icon
       label: "Gallery",
       action: pickImage,
-      bgColor: "#E8F5E8",
-      iconColor: "#4CAF50",
+      bgColor: "#1CCF10",
+      iconColor: "#FFF",
     },
-    {
-      id: "location",
-      icon: icons.location,
-      label: "Location",
-      action: handleSendLocation,
-      bgColor: "#E0F2F1",
-      iconColor: "#009688",
-    },
+
     // Add conditional status progression actions based on current status and user role
     ...(chatData?.status === "accepted" && currentUserId === chatData?.ownerId
       ? [
@@ -2091,7 +2154,7 @@ const ChatScreen = () => {
     try {
       setIsLoading(true);
 
-      // 1. Get the accepted request details first
+      // 1. Get the accepted request details
       const acceptedRequestRef = doc(db, "rentRequests", requestId);
       const acceptedRequestSnap = await getDoc(acceptedRequestRef);
 
@@ -2102,67 +2165,35 @@ const ChatScreen = () => {
       const acceptedRequestData = acceptedRequestSnap.data();
       const itemId = acceptedRequestData.itemId;
       const acceptedRequesterId = acceptedRequestData.requesterId;
-      const itemName = acceptedRequestData.itemName;
 
-      // 2. Create a batch for atomic operations
+      // 2. Create batch for atomic operations
       const batch = writeBatch(db);
 
-      // 3. Update the accepted request status
+      // 3. Update the rent request status to accepted
       batch.update(acceptedRequestRef, {
         status: "accepted",
         acceptedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // 4. Update item status to unavailable
+      // 4. Update item status to "rented" (not "pickup")
       const itemRef = doc(db, "items", itemId);
       batch.update(itemRef, {
-        itemStatus: "rented",
+        itemStatus: "rented", // Changed from "pickup" to "rented"
         rentedTo: acceptedRequesterId,
         rentedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // 5. Find and decline all other pending requests for this item
-      const pendingRequestsQuery = query(
-        collection(db, "rentRequests"),
-        where("itemId", "==", itemId),
-        where("status", "==", "pending")
-      );
-
-      const pendingRequestsSnap = await getDocs(pendingRequestsQuery);
-
-      // Update all OTHER pending requests to declined
-      pendingRequestsSnap.docs.forEach((doc) => {
-        const requestData = doc.data();
-
-        // Skip the accepted request
-        if (doc.id === requestId) return;
-
-        batch.update(doc.ref, {
-          status: "declined",
-          declinedReason: "Item no longer available - accepted by another user",
-          declinedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      });
-
-      // 6. Update current chat metadata (ACCEPTED CHAT)
+      // 5. Update current chat status to accepted
       const currentChatRef = doc(db, "chat", String(chatId));
       batch.update(currentChatRef, {
         status: "accepted",
         lastMessage: "Request accepted by owner",
         lastMessageTime: serverTimestamp(),
         hasOwnerResponded: true,
-        itemDetails: {
-          itemId: itemId,
-          name: acceptedRequestData.itemName,
-          image: acceptedRequestData.itemImage,
-          price: acceptedRequestData.totalPrice,
-        },
       });
 
-      // 7. Update the specific rent request message in current chat to accepted
       const currentChatMessagesRef = collection(
         db,
         "chat",
@@ -2184,103 +2215,157 @@ const ChatScreen = () => {
         });
       });
 
-      // Commit the batch first (for the accepted request and item updates)
+      // 7. Commit initial updates first
       await batch.commit();
 
-      // 8. NOW HANDLE ALL OTHER CHATS FOR THIS ITEM
-      // Find all chats that have requests for this item (excluding current chat)
-      const allChatsWithItemQuery = query(
-        collection(db, "chat"),
-        where("itemDetails.itemId", "==", itemId)
+      // 8. Handle OTHER pending requests for the same item (decline them)
+      const otherPendingRequestsQuery = query(
+        collection(db, "rentRequests"),
+        where("itemId", "==", itemId),
+        where("status", "==", "pending")
       );
 
-      const allChatsWithItemSnap = await getDocs(allChatsWithItemQuery);
+      const otherPendingRequestsSnap = await getDocs(otherPendingRequestsQuery);
+      const declinePromises: Promise<void>[] = [];
 
-      // Process each chat that's not the current accepted chat
-      for (const chatDoc of allChatsWithItemSnap.docs) {
-        // Skip the current chat (already handled above)
-        if (chatDoc.id === String(chatId)) continue;
+      otherPendingRequestsSnap.docs.forEach((requestDoc) => {
+        if (requestDoc.id === requestId) return;
 
-        const otherChatData = chatDoc.data();
+        const otherRequestData = requestDoc.data();
+        const otherRequesterId = otherRequestData.requesterId;
 
-        // Only process chats that are still pending
-        if (otherChatData.status !== "pending") continue;
-
-        const otherChatId = chatDoc.id;
-        const otherChatRef = doc(db, "chat", otherChatId);
-
-        // Update the other chat to declined status
-        await updateDoc(otherChatRef, {
-          status: "declined",
-          lastMessage: "This item has been rented to another user",
-          lastMessageTime: serverTimestamp(),
-          hasOwnerResponded: true,
-          // Preserve existing item details so the card still renders
-          itemDetails: {
-            ...otherChatData.itemDetails,
-          },
-        });
-
-        // Find and update ALL rent request messages in this other chat
-        const otherChatMessagesRef = collection(
-          db,
-          "chat",
-          otherChatId,
-          "messages"
-        );
-        const otherChatRentRequestQuery = query(
-          otherChatMessagesRef,
-          where("type", "==", "rentRequest")
-        );
-
-        const otherChatRentRequestMessages = await getDocs(
-          otherChatRentRequestQuery
-        );
-        const otherChatBatch = writeBatch(db);
-
-        // Update all rent request messages in this chat to declined
-        otherChatRentRequestMessages.docs.forEach((msgDoc) => {
-          otherChatBatch.update(msgDoc.ref, {
+        const declinePromise = (async () => {
+          await updateDoc(requestDoc.ref, {
             status: "declined",
+            declinedReason: `${acceptedRequestData.itemName} has been rented to another user`,
+            declinedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
-        });
 
-        // Add a status update message to this chat
-        const statusMessageRef = doc(otherChatMessagesRef);
-        otherChatBatch.set(statusMessageRef, {
-          type: "statusUpdate",
-          text: "This item has been rented to another user",
-          senderId: currentUserId,
-          createdAt: serverTimestamp(),
-          read: false,
-          status: "declined",
-        });
+          const otherChatQuery = query(
+            collection(db, "chat"),
+            where("requesterId", "==", requestDoc.ref),
+            where("ownerId", "==", currentUserId),
+            where("itemDetails.itemId", "==", itemId)
+          );
 
-        // Commit changes for this chat
-        if (!otherChatRentRequestMessages.empty || true) {
-          await otherChatBatch.commit();
-        }
+          const otherChatSnap = await getDocs(otherChatQuery);
 
-        // Send notification to the other user in this chat
-        const otherUserId = otherChatData.participants?.find(
-          (uid: string) => uid !== currentUserId
-        );
+          if (!otherChatSnap.empty) {
+            const otherChatDoc = otherChatSnap.docs[0];
+            const otherChatId = otherChatDoc.id;
 
-        if (otherUserId) {
-          await createInAppNotification(otherUserId, {
-            type: "ITEM_RENTED",
-            title: "Item No Longer Available",
-            message: `The item "${itemName}" has been rented to another user`,
-            data: {
-              route: "/chat",
-              params: { id: otherChatId },
-            },
-          });
-        }
-      }
+            // Update other chat status
+            await updateDoc(otherChatDoc.ref, {
+              status: "declined",
+              lastMessage: "This item has been rented to another user",
+              lastMessageTime: serverTimestamp(),
+              hasOwnerResponded: true,
+            });
 
-      // 9. Add status update message to current (accepted) chat
+            // Update rentRequest messages in that chat
+            const otherChatMessagesRef = collection(
+              db,
+              "chat",
+              otherChatId,
+              "messages"
+            );
+            const otherRentRequestQuery = query(
+              otherChatMessagesRef,
+              where("type", "==", "rentRequest")
+            );
+
+            const otherRentRequestMessages = await getDocs(
+              otherRentRequestQuery
+            );
+            const otherBatch = writeBatch(db);
+
+            otherRentRequestMessages.docs.forEach((msgDoc) => {
+              otherBatch.update(msgDoc.ref, {
+                status: "declined",
+                updatedAt: serverTimestamp(),
+              });
+            });
+
+            // Add status update message
+            const statusMessageRef = doc(otherChatMessagesRef);
+            otherBatch.set(statusMessageRef, {
+              type: "statusUpdate",
+              text: "This item has been rented to another user",
+              senderId: currentUserId,
+              createdAt: serverTimestamp(),
+              read: false,
+              status: "declined",
+            });
+
+            await otherBatch.commit();
+
+            // Send notifications to declined user
+            await createInAppNotification(otherRequesterId, {
+              type: "RENT_REQUEST_DECLINED",
+              title: "Item No Longer Available",
+              message: `${acceptedRequestData.itemName} has been rented to another user`,
+              data: {
+                route: "/chat",
+                params: { id: otherChatId },
+              },
+            });
+
+            // Send push notification if available
+            try {
+              const otherUserRef = doc(db, "users", otherRequesterId);
+              const otherUserSnap = await getDoc(otherUserRef);
+              if (otherUserSnap.exists()) {
+                const otherUserData = otherUserSnap.data();
+                if (otherUserData.pushToken) {
+                  await sendPushNotification({
+                    to: otherUserData.pushToken,
+                    title: "Item No Longer Available",
+                    body: `${acceptedRequestData.itemName} has been rented to another user`,
+                    data: {
+                      type: "RENT_REQUEST_DECLINED",
+                      chatId: otherChatId,
+                      itemId: itemId,
+                    },
+                  });
+                }
+              }
+            } catch (pushError) {
+              console.log(
+                "Push notification failed for user:",
+                otherRequesterId
+              );
+            }
+          }
+        })();
+
+        declinePromises.push(declinePromise);
+      });
+
+      await Promise.allSettled(declinePromises);
+
+      //Create simple rental document with only needed data
+      const rentalData = {
+        rentalId: `rental_${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(7)}`,
+        status: "active",
+        rentRequestId: requestId,
+        chatId: String(chatId),
+        itemId: itemId,
+        ownerId: currentUserId,
+        renterId: acceptedRequesterId,
+        itemName: acceptedRequestData.itemName,
+        totalAmount: acceptedRequestData.totalPrice || 0,
+        startDate: acceptedRequestData.startDate,
+        endDate: acceptedRequestData.endDate,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      const rentalRef = doc(collection(db, "rentals"));
+      await setDoc(rentalRef, rentalData);
+
       await addDoc(currentChatMessagesRef, {
         type: "statusUpdate",
         text: "Request accepted by owner",
@@ -2290,179 +2375,21 @@ const ChatScreen = () => {
         status: "accepted",
       });
 
-      // 10. Create rental document (your existing rental creation code)
-      try {
-        const rentalData = {
-          rentalId: `rental_${Date.now()}_${Math.random()
-            .toString(36)
-            .substring(7)}`,
-          status: "pickup",
-          rentRequestId: requestId,
-          chatId: String(chatId),
-          itemId: itemId,
-          ownerId: currentUserId,
-          renterId: acceptedRequesterId,
-          itemDetails: {
-            itemId: itemId,
-            name: acceptedRequestData.itemName,
-            image: acceptedRequestData.itemImage,
-            description: acceptedRequestData.itemDescription || "",
-            category: acceptedRequestData.itemCategory || "",
-          },
-          rental: {
-            startDate: acceptedRequestData.startDate,
-            endDate: acceptedRequestData.endDate,
-            rentalDays: acceptedRequestData.rentalDays,
-            dailyRate: Math.round(
-              (acceptedRequestData.totalPrice || 0) /
-                (acceptedRequestData.rentalDays || 1)
-            ),
-            totalAmount: acceptedRequestData.totalPrice || 0,
-            pickupTime: acceptedRequestData.pickupTime || 480,
-            returnTime:
-              acceptedRequestData.returnTime ||
-              acceptedRequestData.pickupTime ||
-              480,
-            pickupLocation: acceptedRequestData.pickupLocation || "",
-            returnLocation:
-              acceptedRequestData.returnLocation ||
-              acceptedRequestData.pickupLocation ||
-              "",
-          },
-          payment: (() => {
-            const totalAmount = acceptedRequestData.totalPrice || 0;
-            const downpaymentPercentage =
-              chatData?.itemDetails?.downpaymentPercentage;
-            const hasDownpayment =
-              downpaymentPercentage && downpaymentPercentage > 0;
-
-            if (hasDownpayment) {
-              const downpaymentAmount = Math.round(
-                (totalAmount * downpaymentPercentage) / 100
-              );
-              const remainingAmount = totalAmount - downpaymentAmount;
-
-              return {
-                totalAmount: totalAmount,
-                hasDownpayment: true,
-                downpaymentPercentage: downpaymentPercentage,
-                downpayment: {
-                  amount: downpaymentAmount,
-                  status: "pending",
-                  method: null,
-                  paidAt: null,
-                  transactionId: null,
-                  dueDate: acceptedRequestData.startDate,
-                },
-                remainingPayment: {
-                  amount: remainingAmount,
-                  status: "pending",
-                  method: null,
-                  paidAt: null,
-                  transactionId: null,
-                  dueDate: acceptedRequestData.endDate,
-                },
-                overallStatus: "pending_downpayment",
-              };
-            } else {
-              return {
-                totalAmount: totalAmount,
-                hasDownpayment: false,
-                fullPayment: {
-                  amount: totalAmount,
-                  status: "pending",
-                  method: null,
-                  paidAt: null,
-                  transactionId: null,
-                  dueDate: acceptedRequestData.startDate,
-                },
-                overallStatus: "pending",
-              };
-            }
-          })(),
-          agreement: {
-            termsAccepted: true,
-            termsAcceptedAt: serverTimestamp(),
-            specialTerms: acceptedRequestData.message || "",
-            damagePolicy: "standard",
-            cancellationPolicy: "standard",
-          },
-          tracking: {
-            acceptedAt: serverTimestamp(),
-            pickedUpAt: null,
-            returnedAt: null,
-            completedAt: null,
-          },
-          metadata: {
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-            createdBy: currentUserId,
-            lastUpdatedBy: currentUserId,
-            version: 1,
-          },
-          notifications: {
-            ownerNotified: true,
-            renterNotified: false,
-            lastNotificationSent: serverTimestamp(),
-          },
-          statusHistory: [
-            {
-              status: "active",
-              changedAt: new Date(),
-              changedBy: currentUserId,
-              reason: "Request accepted by owner",
-            },
-          ],
-        };
-
-        const rentalRef = doc(collection(db, "rentals"));
-        await setDoc(rentalRef, rentalData);
-
-        // Update chat with rental ID
-        await updateDoc(currentChatRef, {
-          rentalId: rentalRef.id,
-        });
-
-        console.log(`📋 Rental document created: ${rentalRef.id}`);
-      } catch (rentalError) {
-        console.error("Error creating rental document:", rentalError);
-      }
-
-      // 11. Create notifications
-      try {
-        const rentalNotificationData = {
-          type: "RENTAL_STARTED",
-          title: "Rental Agreement Created",
-          message: `Your rental for ${acceptedRequestData.itemName} has been confirmed`,
-          recipientId: acceptedRequesterId,
-          senderId: currentUserId,
-          data: {
-            itemId: itemId,
-            itemName: acceptedRequestData.itemName,
-          },
-          isRead: false,
-          createdAt: serverTimestamp(),
-        };
-
-        await addDoc(
-          collection(db, `users/${acceptedRequesterId}/notifications`),
-          rentalNotificationData
-        );
-      } catch (notificationError) {
-        console.error("Error creating rental notification:", notificationError);
-      }
+      await createInAppNotification(acceptedRequesterId, {
+        type: "RENT_REQUEST_ACCEPTED",
+        title: "Request Accepted!",
+        message: `Your rental request for ${acceptedRequestData.itemName} has been accepted`,
+        data: {
+          route: "/chat",
+          params: { id: chatId },
+        },
+      });
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
-        title: "Success! 🎉",
-        textBody: `Request accepted! ${itemName} is now unavailable for other users.`,
+        title: "Success!",
+        textBody: `Request accepted successfully!`,
       });
-
-      console.log(`✅ Request accepted successfully:
-    - Accepted request: ${requestId} for user: ${acceptedRequesterId}
-    - Item marked unavailable: ${itemId}
-    - All other chats for this item declined
-    - Notifications sent to all affected users`);
     } catch (error) {
       console.error("Error accepting request:", error);
       Toast.show({
@@ -2475,19 +2402,17 @@ const ChatScreen = () => {
     }
   };
 
-  // 6. Add these status constants for better maintainability:
   const RENTAL_STATUS = {
     PENDING: "pending",
     ACCEPTED: "accepted",
     PAID: "paid",
     PICKED_UP: "pickedup",
-    ACTIVE: "active", // Alternative to pickedup
+    ACTIVE: "active",
     COMPLETED: "completed",
     DECLINED: "declined",
     CANCELLED: "cancelled",
   } as const;
 
-  // Add this useEffect in ChatScreen
   useEffect(() => {
     if (!messages.length) return;
 
@@ -2768,7 +2693,7 @@ const ChatScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 70}
         className="flex-1"
-        style={{ flex: 1 }} // Add this
+        style={{ flex: 1 }}
       >
         <FlatList
           ref={flatListRef}
@@ -2837,7 +2762,7 @@ const ChatScreen = () => {
                       isCurrentUser={isCurrentUser}
                       onLongPress={() =>
                         handleMessageLongPress(item.id, item.senderId, item)
-                      } // Add this
+                      }
                     />
                   </View>
                 ) : (
@@ -2954,24 +2879,7 @@ const ChatScreen = () => {
         />
 
         {/* Message Input */}
-        <View className="flex-row p-2 bg-white border-t border-gray-100 gap-2">
-          {editingMessageId && (
-            <View className="items-center  justify-center">
-              <TouchableOpacity
-                onPress={() => {
-                  setEditingMessageId(null);
-                  setEditText("");
-                }}
-                className="w-12 h-12 bg-red-100 rounded-full items-center justify-center"
-              >
-                <Image
-                  source={icons.close}
-                  className="w-6 h-6"
-                  tintColor="#ef4444"
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+        <View className="flex-row px-2 pb-2  gap-2 ">
           {!canSendMessage ? (
             // Show appropriate message based on status and user role
             (() => {
@@ -2987,7 +2895,7 @@ const ChatScreen = () => {
               const isOwner = currentUserId === chatData?.ownerId;
               if (!isOwner && chatData?.status === "pending") {
                 return (
-                  <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
+                  <View className="flex-1 bg-white rounded-full py-3 px-4">
                     <Text className="text-gray-500 text-center">
                       Waiting for owner to respond to your request...
                     </Text>
@@ -2998,15 +2906,32 @@ const ChatScreen = () => {
               return null;
             })()
           ) : (
-            <View className="flex-1 flex-row items-center gap-2">
+            <View className="flex-1 flex-row items-end gap-2 p-2 bg-white rounded-3xl ">
+              {editingMessageId && (
+                <View className="items-end  justify-end">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditingMessageId(null);
+                      setEditText("");
+                    }}
+                    className="w-10 h-10 bg-red-500 rounded-full items-center justify-center"
+                  >
+                    <Image
+                      source={icons.close}
+                      className="w-6 h-6"
+                      tintColor="#ffffff"
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
               {!editingMessageId && (
                 <TouchableOpacity
                   onPress={() => setShowActionMenu(true)}
-                  className="w-12 h-12 bg-blue-500 rounded-full items-center justify-center"
+                  className="w-10 h-10 bg-blue-500 rounded-full items-center justify-center"
                 >
                   <Image
                     source={icons.bigPlus}
-                    className="w-6 h-6"
+                    className="w-4 h-4"
                     tintColor="#ffffff"
                   />
                 </TouchableOpacity>
@@ -3019,23 +2944,25 @@ const ChatScreen = () => {
                   editingMessageId ? "Edit message..." : "Type a message..."
                 }
                 multiline
-                className="flex-1 bg-gray-100 rounded-full px-5 py-4 max-h-24"
+                className="flex-1 min-h-8 max-h-24"
                 style={{ textAlignVertical: "top" }}
               />
 
-              <TouchableOpacity
-                onPress={editingMessageId ? handleEditSubmit : sendMessage}
-                className="w-12 h-12 bg-primary rounded-full items-center justify-center"
-                disabled={
-                  editingMessageId ? !editText.trim() : !newMessage.trim()
-                }
-              >
-                <Image
-                  source={editingMessageId ? icons.check : icons.plane}
-                  className="w-6 h-6"
-                  tintColor="white"
-                />
-              </TouchableOpacity>
+              {(newMessage.trim() || (editingMessageId && editText.trim())) && (
+                <TouchableOpacity
+                  onPress={editingMessageId ? handleEditSubmit : sendMessage}
+                  className="w-10 h-10 bg-primary rounded-full items-center justify-center"
+                  disabled={
+                    editingMessageId ? !editText.trim() : !newMessage.trim()
+                  }
+                >
+                  <Image
+                    source={editingMessageId ? icons.check : icons.plane}
+                    className="w-4 h-4"
+                    tintColor="white"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -3071,7 +2998,7 @@ const ChatScreen = () => {
             <ChatCamera
               onPhotoTaken={async (uri) => {
                 setShowCamera(false);
-                setIsLoading(true);
+                // setIsLoading(true);
                 try {
                   await uploadAndSendImage({
                     uri,
@@ -3092,7 +3019,7 @@ const ChatScreen = () => {
                     textBody: "Failed to send photo",
                   });
                 } finally {
-                  setIsLoading(false);
+                  // setIsLoading(false);
                 }
               }}
               onClose={() => setShowCamera(false)}

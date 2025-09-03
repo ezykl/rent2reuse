@@ -41,16 +41,12 @@ const NotificationCard = ({
           iconColor: "#EF4444",
         };
       case "REPORT_ISSUE":
-        return {
-          icon: icons.report,
-          bgColor: "bg-red-400",
-          iconColor: "#FFF",
-        };
+
       case "REPORT_RESPONSE":
         return {
           icon: icons.report,
-          bgColor: "bg-red-400",
-          iconColor: "#FFF",
+          bgColor: "bg-red-100",
+          iconColor: "#EF4444",
         };
       case "RENT_REQUEST_CANCELLED":
         return {
@@ -88,6 +84,19 @@ const NotificationCard = ({
           bgColor: "bg-orange-100",
           iconColor: "#d96c00",
         };
+      case "RENTAL_STARTED":
+        return {
+          icon: icons.ticket,
+          bgColor: "bg-blue-100",
+          iconColor: "#3B82F6",
+        };
+      case "RENT_SENT":
+        return {
+          icon: icons.plane,
+          bgColor: "bg-green-100",
+          iconColor: "#22C55E",
+        };
+
       case "REPORT_RESPOSE":
         return {
           icon: icons.report,
@@ -153,27 +162,29 @@ const NotificationCard = ({
   };
 
   return (
-    <TouchableOpacity onPress={handlePress} className="w-full px-4">
+    <TouchableOpacity onPress={handlePress} className="w-full">
       <View
-        className={`p-4 rounded-lg border ${
+        className={`p-4  border ${
           !notification.isRead
-            ? "bg-white border-blue-200 shadow-sm"
-            : "bg-gray-50 border-gray-100"
+            ? "bg-blue-50 border-blue-200 shadow-sm"
+            : "bg-white border-gray-100"
         }`}
+        style={{ minHeight: 100, maxHeight: 110 }}
       >
-        <View className="flex-row items-start gap-3 px-4">
+        <View className="flex-row items-start gap-3 px-4 ">
           {/* Type Indicator */}
-          <View
-            className={`w-10 h-10 rounded-full items-center justify-center ${config.bgColor}`}
-          >
-            <Image
-              source={config.icon}
-              className="w-5 h-5"
-              resizeMode="contain"
-              tintColor={config.iconColor}
-            />
+          <View className=" flex h-full justify-center">
+            <View
+              className={`w-10 h-10  rounded-full items-center justify-center ${config.bgColor}`}
+            >
+              <Image
+                source={config.icon}
+                className="w-5 h-5"
+                resizeMode="contain"
+                tintColor={config.iconColor}
+              />
+            </View>
           </View>
-
           {/* Content */}
           <View className="flex-1">
             {/* Header */}
@@ -193,36 +204,37 @@ const NotificationCard = ({
             </View>
 
             {/* Message */}
-            <Text
-              className={`text-sm mt-1 ${
-                !notification.isRead ? "text-gray-800" : "text-gray-600"
-              }`}
-              numberOfLines={2}
-            >
-              {notification.message}
-            </Text>
+            <View className=" pr-4">
+              <Text
+                className={`text-sm mt-1 ${
+                  !notification.isRead ? "text-gray-800" : "text-gray-600"
+                }`}
+                numberOfLines={2}
+              >
+                {notification.message}
+              </Text>
+            </View>
 
-            {notification.description && (
+            {/* {notification.description && (
               <Text className="text-sm mt-1 text-gray-600" numberOfLines={4}>
                 {notification.description}
               </Text>
-            )}
-
-            {/* Delete Action */}
-            <TouchableOpacity
-              className="self-end mt-2 px-3rounded-full py-1"
-              onPress={handleDelete}
-            >
-              <Text className="text-red-500">Delete</Text>
-            </TouchableOpacity>
+            )} */}
           </View>
 
-          {/* Unread indicator */}
           {!notification.isRead && (
             <View className="absolute -top-2 -right-2 w-2 h-2 bg-blue-500 rounded-full" />
           )}
         </View>
       </View>
+      {notification.isRead && (
+        <TouchableOpacity
+          className="absolute bottom-4 right-4 justify-center items-center p-4  w-2 h-2"
+          onPress={handleDelete}
+        >
+          <Image source={icons.trash} className="w-5 h-5" tintColor="#f87171" />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 };

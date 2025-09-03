@@ -11,14 +11,17 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Animated,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
+import { BackHandler } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import DateTimePicker, {
   useDefaultClassNames,
 } from "react-native-ui-datepicker";
 import type { DateType } from "react-native-ui-datepicker";
 import dayjs from "dayjs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "../../hooks/useLocation";
 import { LocationUtils } from "../../utils/locationUtils";
 import {
@@ -42,7 +45,6 @@ import { useLoader } from "@/context/LoaderContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { Item } from "@/types/item";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { PinchGestureHandlerGestureEvent } from "react-native-gesture-handler";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
 import { Toast, ALERT_TYPE } from "react-native-alert-notification";
 import CustomImageViewer from "@/components/CustomImageViewer";
@@ -59,21 +61,13 @@ import {
   FillLayer,
 } from "@maplibre/maplibre-react-native";
 import * as Location from "expo-location";
-import LottieActivityIndicator from "@/components/LottieActivityIndicator";
+import React from "react";
+import Skeleton from "@/components/Skeleton";
+import { StatusBar } from "expo-status-bar";
+import { MAP_TILER_API_KEY } from "@env";
 
 type RangeChange = { startDate?: DateType; endDate?: DateType };
 
-interface RentRequest {
-  itemId: string;
-  itemName: string;
-  price: number;
-  requesterId: string;
-  ownerId: string;
-  status: "pending" | "accepted" | "rejected";
-  createdAt: any;
-}
-
-// Update the UserRating interface to make properties optional
 interface UserRating {
   averageRating?: number;
   totalRatings?: number;
@@ -93,6 +87,7 @@ export default function ItemDetails() {
   const { id } = useLocalSearchParams();
   const [item, setItem] = useState<Item | null>(null);
   const { isLoading, setIsLoading } = useLoader();
+  const [isLocalLoad, setIsLocalLoad] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const { user } = useAuth();
   const { timeToMinutes } = useTimeConverter();
@@ -117,6 +112,7 @@ export default function ItemDetails() {
   const [timePickerMode, setTimePickerMode] = useState<"start" | "end">(
     "start"
   );
+
   const [imageLoadError, setImageLoadError] = useState<Set<number>>(new Set());
   const [imageDebugInfo, setImageDebugInfo] = useState<any[]>([]);
 
@@ -131,7 +127,6 @@ export default function ItemDetails() {
     setImageLoadError((prev) => new Set(prev).add(index));
   };
 
-  // Helper function to create circle polygon for radius display
   const createCirclePolygon = (
     center: [number, number],
     radiusInMeters: number,
@@ -172,8 +167,8 @@ export default function ItemDetails() {
     // URL schemes for directions
     const url =
       Platform.select({
-        ios: `maps:?daddr=${latLng}&dirflg=d`, // d = driving directions
-        android: `google.navigation:q=${latLng}`, // Opens Google Maps in navigation mode
+        ios: `maps:?daddr=${latLng}&dirflg=w`,
+        android: `google.navigation:q=${latLng}&mode=w`,
       }) || "";
 
     // Fallback to web Google Maps directions
@@ -325,7 +320,7 @@ export default function ItemDetails() {
   useEffect(() => {
     const fetchItem = async () => {
       try {
-        // setIsLoading(true);
+        setIsLocalLoad(true);
         const docRef = doc(db, "items", id as string);
         const docSnap = await getDoc(docRef);
 
@@ -366,7 +361,7 @@ export default function ItemDetails() {
         console.error("Error fetching item:", error);
         Alert.alert("Error", "Failed to load item details");
       } finally {
-        // setIsLoading(false);
+        setIsLocalLoad(false);
       }
     };
 
@@ -493,6 +488,18 @@ export default function ItemDetails() {
     }
   };
 
+  const formatDistance = (distance: number | null) => {
+    if (distance === null || distance === undefined) return null;
+
+    if (distance < 1) {
+      return `${Math.round(distance * 1000)}m`;
+    } else if (distance < 10) {
+      return `${distance.toFixed(1)}km`;
+    } else {
+      return `${Math.round(distance)}km`;
+    }
+  };
+
   // Add new function to handle form submission
   const handleRequestSubmit = async (formData: {
     startDate: Date;
@@ -597,9 +604,33 @@ export default function ItemDetails() {
         itemName: item?.itemName!,
         requestId: rentRequestRef.id,
         requesterName: requesterFullName,
-        startDate: Timestamp.fromDate(startDateTime.toDate()),
-        endDate: Timestamp.fromDate(endDateTime.toDate()),
+        daysDifference: daysDifference,
+        startDate: startDateTime.format("MMMM D, YYYY"),
+        endDate: endDateTime.format("MMMM D, YYYY"),
       });
+
+      if (user?.uid) {
+        try {
+          const userNotificationsRef = collection(
+            db,
+            `users/${user?.uid}/notifications`
+          );
+
+          await addDoc(userNotificationsRef, {
+            type: "RENT_SENT",
+            title: "Rental Request Submitted",
+            message: `Your rental request for ${item?.itemName!} has been submitted to the owner. You'll be notified when they respond.`,
+            isRead: false,
+            createdAt: serverTimestamp(),
+          });
+        } catch (error) {
+          console.error("Error creating welcome notification:", error);
+        }
+
+        // await createNotification(auth.currentUser.uid, "REPORT_ISSUE", {
+        //   reportReason: reportData.reason,
+        // });
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
@@ -845,11 +876,7 @@ export default function ItemDetails() {
                               tintColor="white"
                             />
                             <Text className="text-white font-psemibold">
-                              {distanceToItem < 1
-                                ? `${Math.round(distanceToItem * 1000)}m`
-                                : distanceToItem < 10
-                                ? `${distanceToItem.toFixed(1)}km`
-                                : `${Math.round(distanceToItem)}km`}
+                              {formatDistance(distanceToItem)}
                             </Text>
                           </View>
                         )}
@@ -875,11 +902,11 @@ export default function ItemDetails() {
                 )}
               </>
             ) : (
-              <View className="flex-1 items-center justify-center m-2 h-full rounded-2xl bg-gray-200">
-                <View className="w-24 h-24  rounded-2xl items-center justify-center mb-3">
-                  <LottieActivityIndicator size={100} color="white" />
-                </View>
-              </View>
+              <Skeleton
+                dimension={"h-full"}
+                rounded="rounded-2xl"
+                className="m-2"
+              />
             )}
           </View>
         </View>
@@ -909,44 +936,47 @@ export default function ItemDetails() {
                 </>
               ) : (
                 <View className="relative">
-                  <View className="w-12 h-12 bg-primary/20 rounded-full items-center justify-center mr-3">
-                    <Text className="text-primary font-bold text-sm">
-                      {(item &&
-                        item.owner?.fullname?.charAt(0)?.toUpperCase()) ||
-                        ""}
-                    </Text>
-                  </View>
-                  {/* <Image
-                    source={icons.verified}
-                    className="w-4 h-4 absolute -left-1 bottom-0"
-                    resizeMode="contain"
-                  /> */}
+                  <Skeleton dimension={"w-12 h-12"} rounded="rounded-full" />
                 </View>
               )}
             </View>
 
             <View className="flex-1">
-              <Text className="text-gray-800 text-base font-pmedium">
-                {item?.owner?.fullname ?? ""}
-              </Text>
+              {item?.owner?.fullname &&
+              item.owner.fullname.trim().length > 0 ? (
+                <Text className="text-gray-800 text-base font-pmedium">
+                  {item.owner.fullname}
+                </Text>
+              ) : (
+                <Skeleton
+                  dimension={"w-20 h-5"}
+                  rounded="rounded-md"
+                  className="mb-2"
+                />
+              )}
+
               <View className="flex-row items-center font-pregular">
-                {ownerRating?.averageRating && ownerRating?.totalRatings ? (
-                  <>
-                    <View className="flex-row items-center mr-2">
-                      {renderStars(ownerRating.averageRating)}
-                    </View>
-                    <Text className="text-gray-600 text-sm font-pregular">
-                      {ownerRating.averageRating.toFixed(1)}
+                {ownerRating ? (
+                  ownerRating.averageRating && ownerRating.totalRatings ? (
+                    <>
+                      <View className="flex-row items-center mr-2">
+                        {renderStars(ownerRating.averageRating)}
+                      </View>
+                      <Text className="text-gray-600 text-sm font-pregular">
+                        {ownerRating.averageRating.toFixed(1)}
+                      </Text>
+                      <Text className="text-gray-400 text-sm ml-1 font-pregular">
+                        ({ownerRating.totalRatings}{" "}
+                        {ownerRating.totalRatings === 1 ? "review" : "reviews"})
+                      </Text>
+                    </>
+                  ) : (
+                    <Text className="text-gray-400 mt-1 text-sm font-pregular">
+                      No ratings yet
                     </Text>
-                    <Text className="text-gray-400 text-sm ml-1 font-pregular">
-                      ({ownerRating.totalRatings}{" "}
-                      {ownerRating.totalRatings === 1 ? "review" : "reviews"})
-                    </Text>
-                  </>
+                  )
                 ) : (
-                  <Text className="text-gray-400 text-sm font-pregular">
-                    No ratings yet
-                  </Text>
+                  <Skeleton dimension={"w-12 h-3"} rounded="rounded-md" />
                 )}
               </View>
             </View>
@@ -955,247 +985,260 @@ export default function ItemDetails() {
           {/* Condition, Location, and Distance Info */}
           <View className="flex-row mb-4 gap-3">
             {/* Condition Card */}
-            <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
-              <View className="flex-row items-center mb-1">
-                <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
-                <Text className="text-gray-500 text-xs font-pmedium">
-                  CONDITION
+            {item?.itemCondition ? (
+              <View className="flex-1 bg-gray-50 border border-gray-200 p-4 rounded-xl">
+                <View className="flex-row items-center mb-1">
+                  <View className="w-2 h-2 bg-green-500 rounded-full mr-2" />
+                  <Text className="text-gray-500 text-xs font-pmedium">
+                    CONDITION
+                  </Text>
+                </View>
+                <Text className="text-gray-800 text-base font-psemibold">
+                  {item?.itemCondition ?? "Not specified"}
                 </Text>
               </View>
-              <Text className="text-gray-800 text-base font-psemibold">
-                {item?.itemCondition ?? "Not specified"}
-              </Text>
-            </View>
+            ) : (
+              <Skeleton dimension="flex-1 h-28" rounded="rounded-xl" />
+            )}
 
             {/* Listed Date Card */}
-            <View className="flex-1 bg-gray-50 border border-gray-100 p-4 rounded-xl">
-              <View className="flex-row items-center mb-1">
-                <View className="w-2 h-2 bg-primary rounded-full mr-2" />
-                <Text className="text-gray-500 text-xs font-pmedium">
-                  LISTED
-                </Text>
-              </View>
-              <Text className="text-gray-800 font-psemibold">
-                {item?.createdAt
-                  ? dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
-                      "MMM D, YYYY"
-                    )
-                  : "Not available"}
-              </Text>
-              <Text className="text-gray-500 text-sm font-pregular">
-                {item?.createdAt
-                  ? dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
-                      "h:mm A"
-                    )
-                  : ""}
-              </Text>
-            </View>
-          </View>
-
-          {/* Description Section */}
-          <View className="mb-4 ">
-            <Text className="text-xl font-psemibold text-gray-900 mb-3">
-              About this item
-            </Text>
-            <View className="bg-gray-50 border border-gray-100 p-4 rounded-2xl">
-              <Text className="text-gray-700 text-base leading-6 font-pregular">
-                {item?.itemDesc}
-              </Text>
-            </View>
-          </View>
-
-          {/* Updated Rental Terms with downpayment */}
-          <View className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20  p-5 rounded-2xl mb-6">
-            <View className="flex-row items-center mb-4">
-              <View className="w-10 h-10 bg-primary/20 rounded-full items-center justify-center mr-3">
-                <Text className="text-primary text-lg">₱</Text>
-              </View>
-              <Text className="text-xl font-psemibold text-gray-900">
-                Rental Details
-              </Text>
-            </View>
-
-            <View className="gap-2">
-              <View className="flex-row justify-between items-center ">
-                <View className="flex-row items-center">
-                  <View className="w-2 h-2 bg-primary rounded-full mr-3" />
-                  <Text className="text-gray-700 font-pmedium">Daily Rate</Text>
-                </View>
-                <Text className="font-psemibold text-gray-900 text-lg">
-                  ₱{item?.itemPrice}
-                </Text>
-              </View>
-
-              <View className="flex-row justify-between items-center ">
-                <View className="flex-row items-center">
-                  <View className="w-2 h-2 bg-primary rounded-full mr-3" />
-                  <Text className="text-gray-700 font-pmedium">
-                    Minimum Rental
+            {item?.createdAt ? (
+              <View className="flex-1 bg-gray-50 border border-gray-200 p-4 rounded-xl">
+                <View className="flex-row items-center mb-1">
+                  <View className="w-2 h-2 bg-primary rounded-full mr-2" />
+                  <Text className="text-gray-500 text-xs font-pmedium">
+                    LISTED
                   </Text>
                 </View>
-                <Text className="font-psemibold text-gray-900">
-                  {item?.itemMinRentDuration}{" "}
-                  {item?.itemMinRentDuration && item.itemMinRentDuration > 1
-                    ? "days"
-                    : "day"}
+                <Text className="text-gray-800 font-psemibold">
+                  {dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
+                    "MMM D, YYYY"
+                  )}
+                </Text>
+                <Text className="text-gray-500 text-sm font-pregular">
+                  {dayjs(item.createdAt.toDate?.() ?? item.createdAt).format(
+                    "h:mm A"
+                  )}
                 </Text>
               </View>
+            ) : (
+              <Skeleton dimension="flex-1 h-28" rounded="rounded-xl" />
+            )}
+          </View>
 
-              {item?.downpaymentPercentage && (
-                <View className="flex-row justify-between items-center ">
-                  <View className="flex-row items-center">
-                    <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
-                    <Text className="text-gray-700 font-pmedium">
-                      Downpayment
+          {item?.itemDesc ? (
+            <View className="mb-4 ">
+              <Text className="text-xl font-psemibold text-gray-900 mb-3">
+                About this item
+              </Text>
+              <View className="bg-gray-50 border border-gray-200 p-4 rounded-2xl">
+                <Text className="text-gray-700 text-base leading-6 font-pregular">
+                  {item?.itemDesc}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View>
+              <Skeleton dimension="w-40 h-10 mb-3" rounded="rounded-xl" />
+              <Skeleton
+                dimension="flex-1 h-[200px] mb-3"
+                rounded="rounded-xl"
+              />
+            </View>
+          )}
+
+          {item?.itemPrice || item?.itemMinRentDuration ? (
+            <>
+              <View className="flex-row items-center mb-4">
+                <Text className="text-xl font-psemibold text-gray-900">
+                  Rental Details
+                </Text>
+              </View>
+              <View className="bg-gray-50   p-5 rounded-2xl mb-6  border border-gray-200">
+                <View className="gap-2">
+                  <View className="flex-row justify-between items-center ">
+                    <View className="flex-row items-center">
+                      <View className="w-2 h-2 bg-primary rounded-full mr-3" />
+                      <Text className="text-gray-700 font-pmedium">
+                        Daily Rate
+                      </Text>
+                    </View>
+                    <Text className="font-psemibold text-gray-900 text-lg">
+                      ₱{item?.itemPrice}
                     </Text>
                   </View>
-                  <Text className="font-psemibold text-orange-600">
-                    {item.downpaymentPercentage}%
-                  </Text>
-                </View>
-              )}
 
-              <View className="flex-row justify-between items-center">
-                <View className="flex-row items-center">
-                  <View className="w-2 h-2 bg-green-500 rounded-full mr-3" />
-                  <Text className="text-gray-700 font-pmedium">Status</Text>
-                </View>
-                <View className="bg-green-100 px-3 py-1 rounded-full">
-                  <Text className="font-psemibold text-green-700 text-sm">
-                    Available
-                  </Text>
+                  <View className="flex-row justify-between items-center ">
+                    <View className="flex-row items-center">
+                      <View className="w-2 h-2 bg-primary rounded-full mr-3" />
+                      <Text className="text-gray-700 font-pmedium">
+                        Minimum Rental
+                      </Text>
+                    </View>
+                    <Text className="font-psemibold text-gray-900">
+                      {item?.itemMinRentDuration}{" "}
+                      {item?.itemMinRentDuration && item.itemMinRentDuration > 1
+                        ? "days"
+                        : "day"}
+                    </Text>
+                  </View>
+
+                  {item?.downpaymentPercentage && (
+                    <View className="flex-row justify-between items-center ">
+                      <View className="flex-row items-center">
+                        <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
+                        <Text className="text-gray-700 font-pmedium">
+                          Downpayment
+                        </Text>
+                      </View>
+                      <Text className="font-psemibold text-orange-600">
+                        {item.downpaymentPercentage}%
+                      </Text>
+                    </View>
+                  )}
+
+                  <View className="flex-row justify-between items-center">
+                    <View className="flex-row items-center">
+                      <View className="w-2 h-2 bg-green-500 rounded-full mr-3" />
+                      <Text className="text-gray-700 font-pmedium">Status</Text>
+                    </View>
+                    <View className="bg-green-100 px-3 py-1 rounded-full">
+                      <Text className="font-psemibold text-green-700 text-sm">
+                        Available
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               </View>
-            </View>
-          </View>
+            </>
+          ) : (
+            <Skeleton dimension="w-40 h-10 mb-3" rounded="rounded-xl" />
+          )}
 
           {/* Pickup Location Map */}
-          {item?.itemLocation && (
-            <View className="mb-6">
-              <Text className="text-lg font-semibold text-gray-900 mb-3">
-                Pickup Location
-              </Text>
+          {item?.itemLocation &&
+            item.itemLocation.latitude &&
+            item.itemLocation.longitude && (
+              <View className="mb-6 ">
+                <Text className="text-xl font-psemibold text-gray-900 mb-3">
+                  Pickup Location
+                </Text>
 
-              {/* Map container with touchable overlay for Google Maps */}
-              <View className="relative">
-                <View className="h-48 rounded-s-xl overflow-hidden border border-gray-200">
-                  <MapView
-                    style={{ flex: 1 }}
-                    rotateEnabled={false}
-                    attributionEnabled={false}
-                    compassViewPosition={3}
-                    mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
-                  >
-                    <Camera
-                      defaultSettings={{
-                        centerCoordinate: [
-                          item.itemLocation.longitude,
-                          item.itemLocation.latitude,
-                        ],
-                        zoomLevel: 15,
-                      }}
-                    />
-
-                    {/* Radius circle if available */}
-                    {item.itemLocation.radius && (
-                      <ShapeSource
-                        id="pickup-radius"
-                        shape={createCirclePolygon(
-                          [
+                {/* Map container with touchable overlay for Google Maps */}
+                <View className="relative">
+                  <View className="h-48 rounded-s-xl overflow-hidden border border-gray-200">
+                    <MapView
+                      style={{ flex: 1 }}
+                      rotateEnabled={false}
+                      attributionEnabled={false}
+                      logoEnabled={false}
+                      compassEnabled={false}
+                      compassViewPosition={3}
+                      mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
+                    >
+                      <Camera
+                        defaultSettings={{
+                          centerCoordinate: [
                             item.itemLocation.longitude,
                             item.itemLocation.latitude,
                           ],
-                          item.itemLocation.radius
-                        )}
+                          zoomLevel: 15,
+                        }}
+                      />
+
+                      {/* Radius circle if available */}
+                      {item.itemLocation.radius && (
+                        <ShapeSource
+                          id="pickup-radius"
+                          shape={createCirclePolygon(
+                            [
+                              item.itemLocation.longitude,
+                              item.itemLocation.latitude,
+                            ],
+                            item.itemLocation.radius
+                          )}
+                        >
+                          <FillLayer
+                            id="pickup-radius-fill"
+                            style={{
+                              fillColor: "rgba(33, 150, 243, 0.15)",
+                              fillOutlineColor: "#2196F3",
+                            }}
+                          />
+                        </ShapeSource>
+                      )}
+
+                      {/* Pickup location marker */}
+                      <MarkerView
+                        coordinate={[
+                          item.itemLocation.longitude,
+                          item.itemLocation.latitude,
+                        ]}
+                        anchor={{ x: 0.5, y: 1 }}
                       >
-                        <FillLayer
-                          id="pickup-radius-fill"
+                        <View
                           style={{
-                            fillColor: "rgba(33, 150, 243, 0.15)",
-                            fillOutlineColor: "#2196F3",
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
-                        />
-                      </ShapeSource>
-                    )}
-
-                    {/* Pickup location marker */}
-                    <MarkerView
-                      coordinate={[
-                        item.itemLocation.longitude,
-                        item.itemLocation.latitude,
-                      ]}
-                      anchor={{ x: 0.5, y: 1 }}
-                    >
-                      <View>
-                        <Image
-                          source={require("@/assets/images/marker-home.png")}
-                          style={{ width: 32, height: 40 }}
-                          resizeMode="contain"
-                        />
-                      </View>
-                    </MarkerView>
-
-                    {/* User location marker if available */}
-                    {/* {userLocation && (
-            <MarkerView
-              coordinate={[
-                userLocation.longitude,
-                userLocation.latitude,
-              ]}
-              anchor={{ x: 0.5, y: 0.5 }}
-            >
-              <View className="w-3 h-3 bg-blue-500 rounded-full border-2 border-white" />
-            </MarkerView>
-          )} */}
-                  </MapView>
+                        >
+                          <Image
+                            source={require("@/assets/images/marker-home.png")}
+                            style={{ width: 32, height: 40 }}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      </MarkerView>
+                    </MapView>
+                  </View>
+                  <TouchableOpacity
+                    className="absolute bottom-2 right-2 flex-row justify-center  items-end bg-white rounded-lg p-2 shadow-md"
+                    onPress={() =>
+                      getDirectionsToLocation(
+                        item.itemLocation!.latitude,
+                        item.itemLocation!.longitude,
+                        item.itemLocation!.address
+                      )
+                    }
+                  >
+                    <Text className="text-blue-600 text-sm font-medium">
+                      Get Direction
+                    </Text>
+                    <Image
+                      source={icons.rightArrow}
+                      className="w-5 h-5 mr-1"
+                      tintColor={"#2563eb"}
+                    />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  className="absolute bottom-2 right-2 flex-row justify-center  items-end bg-white rounded-lg p-2 shadow-md"
-                  onPress={() =>
-                    getDirectionsToLocation(
-                      item.itemLocation!.latitude,
-                      item.itemLocation!.longitude,
-                      item.itemLocation!.address
-                    )
-                  }
-                >
-                  <Text className="text-blue-600 text-sm font-medium">
-                    Get Direction
-                  </Text>
-                  <Image
-                    source={icons.rightArrow}
-                    className="w-5 h-5 mr-1"
-                    tintColor={"#2563eb"}
-                  />
-                </TouchableOpacity>
-              </View>
 
-              <View className="p-3 bg-gray-100 rounded-e-xl">
-                <Text className="text-gray-600  font-pmedium text-sm">
-                  {item.itemLocation.address}
-                </Text>
-                {item.itemLocation.radius && (
-                  <Text className="text-gray-500 text-xs ">
-                    Pickup radius:{" "}
-                    {item.itemLocation.radius >= 1000
-                      ? `${item.itemLocation.radius / 1000}km`
-                      : `${item.itemLocation.radius}m`}
+                <View className="p-3 bg-gray-50 rounded-e-xl border border-gray-200">
+                  <Text className="text-gray-600 font-pmedium text-sm">
+                    {item.itemLocation?.address || "Address not available"}
                   </Text>
-                )}
+                  {item.itemLocation?.radius &&
+                    typeof item.itemLocation.radius === "number" && (
+                      <Text className="text-gray-500 text-xs">
+                        Pickup radius:{" "}
+                        {item.itemLocation.radius >= 1000
+                          ? `${(item.itemLocation.radius / 1000).toFixed(1)}km`
+                          : `${item.itemLocation.radius}m`}
+                      </Text>
+                    )}
+                </View>
               </View>
-            </View>
-          )}
+            )}
         </View>
       </ScrollView>
 
       {/* Bottom Action Bar */}
-      {!isCurrentUserOwner && (
+      {!isCurrentUserOwner && !isLocalLoad ? (
         <SafeAreaView edges={["bottom"]}>
           <View className="bg-white border-t border-gray-100 px-4 py-4">
             <TouchableOpacity
               className={`rounded-xl ${
-                hasExistingRequest ? "bg-primary" : "bg-primary"
-              } ${isLoading ? "opacity-50" : ""}`}
+                hasExistingRequest ? "bg-blue-500" : "bg-primary"
+              } ${isLocalLoad ? "opacity-50" : ""}`}
               onPress={() => {
                 if (hasExistingRequest && existingRequestData) {
                   router.push({
@@ -1206,11 +1249,11 @@ export default function ItemDetails() {
                   handleRentRequest();
                 }
               }}
-              disabled={isLoading}
+              disabled={isLocalLoad}
             >
               <View className="flex-row py-4 items-center justify-center">
                 <Image
-                  source={hasExistingRequest ? icons.bookmark : icons.plane}
+                  source={hasExistingRequest ? icons.box : icons.plane}
                   className="w-5 h-5 mr-2"
                   resizeMode="contain"
                   tintColor="white"
@@ -1222,53 +1265,7 @@ export default function ItemDetails() {
             </TouchableOpacity>
           </View>
         </SafeAreaView>
-      )}
-
-      {/* {isCurrentUserOwner && (
-        <SafeAreaView edges={["bottom"]}>
-          <View className="bg-white border-t border-gray-100 px-4 py-4">
-            <View className="flex-row gap-4">
-              <TouchableOpacity
-                onPress={handleEdit}
-                className={`flex-1 rounded-xl flex-row justify-center items-center gap-3 py-4 ${
-                  isItemAvailable() ? "bg-blue-500" : "bg-gray-300"
-                }`}
-              >
-                <Image
-                  source={icons.edit}
-                  className="w-5 h-5"
-                  tintColor="white"
-                />
-                <Text className="text-white text-center font-pbold">
-                  Edit Listing
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleDelete}
-                className={`flex-1 rounded-xl  flex-row justify-center items-start gap-3 py-4  ${
-                  isItemAvailable() ? "bg-red-500" : "bg-gray-300"
-                }`}
-              >
-                <Image
-                  source={icons.trash}
-                  className="w-5 h-5"
-                  tintColor="white"
-                />
-                <Text className="text-white text-center font-pbold">
-                  Delete
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!isItemAvailable() && (
-              <Text className="text-orange-700 text-center text-sm mt-3">
-                Edit and delete actions are only available when the item status
-                is "Available"
-              </Text>
-            )}
-          </View>
-        </SafeAreaView>
-      )} */}
+      ) : null}
 
       <RentRequestForm
         visible={showRequestForm}
@@ -1278,6 +1275,7 @@ export default function ItemDetails() {
         itemPrice={item?.itemPrice ?? 0}
         itemImage={item?.images?.[0] ?? ""}
         itemMinRentDuration={item?.itemMinRentDuration ?? 1}
+        downpaymentPercentage={item?.downpaymentPercentage ?? 0}
       />
 
       <CustomImageViewer
@@ -1321,6 +1319,7 @@ const RentRequestForm = ({
   itemName,
   itemPrice,
   itemImage,
+  downpaymentPercentage,
   itemMinRentDuration,
 }: {
   visible: boolean;
@@ -1334,6 +1333,7 @@ const RentRequestForm = ({
   itemName: string;
   itemPrice: number;
   itemImage: string;
+  downpaymentPercentage: number;
   itemMinRentDuration: number;
 }) => {
   if (!visible) return null;
@@ -1361,13 +1361,33 @@ const RentRequestForm = ({
 
   // State to track current viewing month/year
   const [currentViewDate, setCurrentViewDate] = useState(today);
-
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const calculateTotalPrice = () => {
     if (!selectedDates.startDate || !selectedDates.endDate) return itemPrice;
 
     const days = selectedDates.endDate.diff(selectedDates.startDate, "day");
     return Math.max(1, days) * itemPrice;
   };
+
+  // useFocusEffect(
+  //   React.useCallback(() => {
+  //     const onBackPress = () => {
+  //       if (visible) {
+  //         onClose();
+  //         return true;
+  //       }
+  //       return false;
+  //     };
+
+  //     const subscription = BackHandler.addEventListener(
+  //       "hardwareBackPress",
+  //       onBackPress
+  //     );
+
+  //     return () => subscription.remove();
+  //   }, [visible, onClose])
+  // );
 
   const handleDateChange = ({ startDate, endDate }: RangeChange) => {
     if (startDate) {
@@ -1619,6 +1639,160 @@ const RentRequestForm = ({
     );
   };
 
+  const TermsModal = () => {
+    if (!showTermsModal) return null;
+
+    return (
+      <Modal
+        visible={showTermsModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowTermsModal(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-center px-4">
+          <View
+            className="bg-white rounded-2xl"
+            style={{
+              maxHeight: height * 0.9, // Use 90% of screen height
+              minHeight: height * 0.9, // Minimum height to ensure content fits
+            }}
+          >
+            {/* Header */}
+            <View className="flex-row justify-between items-center px-6 py-4 border-b border-gray-100">
+              <Text className="text-xl font-pbold text-gray-800">
+                Terms & Conditions
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowTermsModal(false)}
+                className="w-8 h-8 items-center justify-center"
+              >
+                <Image source={icons.close} className="w-6 h-6" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Terms Content - Fixed ScrollView */}
+            <ScrollView
+              className="flex-1 px-6 py-4"
+              showsVerticalScrollIndicator={true}
+              style={{ maxHeight: height * 0.8 }} // Constrain scroll area
+            >
+              <Text className="text-base font-psemibold text-gray-800 mb-4">
+                Rental Agreement Terms
+              </Text>
+
+              <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  1. Rental Responsibility
+                </Text>
+                <Text className="text-sm font-pregular text-gray-600 leading-5 mb-3">
+                  By submitting this rental request, you agree to take full
+                  responsibility for the rented item during the rental period.
+                  You will return the item in the same condition as received,
+                  except for normal wear and tear.
+                </Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  2. Damage and Loss Policy
+                </Text>
+                <Text className="text-sm font-pregular text-gray-600 leading-5 mb-3">
+                  You are liable for any damage, loss, or theft of the rented
+                  item during the rental period. Repair or replacement costs
+                  will be your responsibility and may exceed the item's rental
+                  fee.
+                </Text>
+              </View>
+
+              {/* <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  3. Payment Terms
+                </Text>
+                <Text className="text-sm font-pregular text-gray-600 leading-5 mb-3">
+                  Payment must be made as agreed with the owner. Late returns
+                  may incur additional daily charges at the standard rental
+                  rate. Any required downpayment must be paid before item
+                  pickup.
+                </Text>
+              </View> */}
+
+              <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  3. Pickup and Return
+                </Text>
+                <Text className="text-sm font-pregular text-gray-600 leading-5 mb-3">
+                  You must pick up and return the item at the agreed time and
+                  location. Late pickup or return without prior arrangement may
+                  result in cancellation or additional fees.
+                </Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  4. Cancellation Policy
+                </Text>
+                <Text className="text-sm text-gray-600 leading-5 mb-3">
+                  Rental requests can be cancelled by either party before
+                  pickup. Once the item is picked up, cancellation terms will be
+                  determined by mutual agreement between renter and owner.
+                </Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  5. Platform Limitation
+                </Text>
+                <Text className="text-sm text-gray-600 leading-5 mb-3">
+                  This platform facilitates connections between renters and
+                  owners but is not responsible for disputes, damages, or issues
+                  arising from rental agreements. All transactions are between
+                  users.
+                </Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-sm font-pmedium text-gray-700 mb-2">
+                  6. Safety and Proper Use
+                </Text>
+                <Text className="text-sm text-gray-600 leading-5 mb-3">
+                  You agree to use the rented item safely and as intended.
+                  Misuse that results in damage or safety hazards is strictly
+                  prohibited and may result in account suspension.
+                </Text>
+              </View>
+
+              <View className="bg-amber-50 border border-orange-200 p-3 rounded-lg mb-4">
+                <Text className="text-sm font-pmedium text-orange-600 mb-1">
+                  Important Notice:
+                </Text>
+                <Text className="text-xs text-amber-500 leading-4">
+                  By accepting these terms, you acknowledge that you have read,
+                  understood, and agree to be bound by these conditions for the
+                  duration of your rental period.
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer - Fixed positioning */}
+            <View className="px-6 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+              <TouchableOpacity
+                className="bg-primary py-3 rounded-xl"
+                onPress={() => {
+                  setAcceptedTerms(true);
+                  setShowTermsModal(false);
+                }}
+              >
+                <Text className="text-white font-pbold text-center">
+                  Accept Terms
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <View
       className="absolute inset-0 bg-white"
@@ -1642,7 +1816,7 @@ const RentRequestForm = ({
 
       <ScrollView className="flex-1 px-4">
         {/* Item Preview */}
-        <View className="flex-row items-center p-3 bg-gray-50 rounded-xl my-4">
+        <View className="flex-row items-center p-3 bg-gray-50 border border-gray-200 rounded-xl my-4">
           <Image
             source={itemImage ? { uri: itemImage } : images.thumbnail}
             className="w-16 h-16 rounded-lg"
@@ -1659,68 +1833,81 @@ const RentRequestForm = ({
         </View>
 
         {/* Rental Period Section */}
-        <View className="mb-6">
-          <Text className="text-base font-psemibold text-gray-700 mb-2">
+        <View className="mb-6 p-3 border border-gray-200 rounded-xl">
+          <Text className="text-lg font-psemibold text-gray-700 mb-2">
             Rental Period
           </Text>
 
           {/* Date Selection Button */}
+
+          <Text className="text-sm text-gray-500 font-pregular mb-1">
+            Rental Dates
+          </Text>
           <TouchableOpacity
             onPress={() => setShowDatePicker(true)}
-            className="p-4 bg-gray-50 rounded-xl mb-3"
+            className="  flex-row  overflow-hidden bg-white border border-gray-200 rounded-lg mb-3"
           >
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-xs text-gray-500 mb-1">Rental Dates</Text>
-                <Text className="font-psemibold text-gray-800">
-                  {selectedDates.startDate && selectedDates.endDate
-                    ? `${selectedDates.startDate.format(
-                        "MMM DD"
-                      )} - ${selectedDates.endDate.format("MMM DD, YYYY")}`
-                    : "Select rental dates"}
+            <View className="flex-1  justify-center p-4 ">
+              <Text className="font-psemibold text-gray-800 ">
+                {selectedDates.startDate && selectedDates.endDate
+                  ? `${selectedDates.startDate.format(
+                      "MMM DD"
+                    )} - ${selectedDates.endDate.format("MMM DD, YYYY")}`
+                  : "Select rental dates"}
+              </Text>
+
+              {selectedDates.startDate && selectedDates.endDate && (
+                <Text className="text-xl font-psemibold text-primary ">
+                  {selectedDates.endDate.diff(selectedDates.startDate, "day")}{" "}
+                  {selectedDates.endDate.diff(
+                    selectedDates.startDate,
+                    "day"
+                  ) === 1
+                    ? "day"
+                    : "days"}
                 </Text>
-                {selectedDates.startDate && selectedDates.endDate && (
-                  <Text className="text-sm text-gray-500 mt-1">
-                    {selectedDates.endDate.diff(selectedDates.startDate, "day")}{" "}
-                    days
-                  </Text>
-                )}
-              </View>
+              )}
+            </View>
+
+            <View className="bg-primary rounded-r-lg justify-center p-4">
               <Image
                 source={icons.calendar}
                 className="w-5 h-5"
-                tintColor="#6B7280"
+                tintColor="#fff"
               />
             </View>
           </TouchableOpacity>
 
           {/* Time Selection */}
+
+          <Text className="text-sm text-gray-500 font-pregular mb-1">
+            Pickup Time
+          </Text>
           <TouchableOpacity
             onPress={() => setShowTimePicker(true)}
-            className="p-4 bg-gray-50 rounded-xl"
+            className=" flex-row border border-gray-200 rounded-lg overflow-hidden "
           >
-            <View className="flex-row items-center justify-between">
-              <View>
-                <Text className="text-xs text-gray-500 mb-1">Pickup Time</Text>
-                <Text className="font-psemibold text-gray-800">
-                  {selectedTime}
-                </Text>
-                <Text className="text-sm text-gray-500 mt-1">
-                  Avoid any delays
-                </Text>
-              </View>
+            <View className="flex-1 p-4  border-gray-200">
+              <Text className="font-psemibold text-gray-800">
+                {selectedTime}
+              </Text>
+              <Text className="text-sm italic text-red-400 mt-1">
+                Avoid any delays
+              </Text>
+            </View>
+            <View className="bg-primary  rounded-r-md justify-center p-4">
               <Image
                 source={icons.clock}
                 className="w-5 h-5"
-                tintColor="#6B7280"
+                tintColor="#fff"
               />
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Message */}
-        <View className="mb-6">
-          <Text className="text-base font-psemibold text-gray-700 mb-2">
+        <View className="mb-6  rounded-xl border p-3 border-gray-200">
+          <Text className="text-lg font-psemibold text-gray-700 mb-2">
             Message to Owner
           </Text>
           <Text className="text-xs text-gray-500 mb-2">
@@ -1729,12 +1916,14 @@ const RentRequestForm = ({
           </Text>
           <View>
             <TextInput
-              className={`p-3 bg-gray-50 rounded-xl ${
+              style={{ height: 100, textAlignVertical: "top" }}
+              className={`p-3  border border-gray-200 rounded-lg ${
                 message.trim().length > 0 && message.trim().length < 10
                   ? "border border-orange-400"
                   : ""
               }`}
               placeholder="Enter your message here..."
+              placeholderClassName="text-gray-400 font-pregular"
               multiline
               numberOfLines={4}
               value={message}
@@ -1748,22 +1937,110 @@ const RentRequestForm = ({
           </View>
         </View>
 
-        {/* Total Price with Duration */}
-        <View className="flex-row justify-between items-center p-4 bg-gray-50 rounded-xl mb-6">
-          <View>
-            <Text className="text-base font-psemibold text-gray-700">
-              Total Price
+        <View className="p-4 border  border-gray-200 rounded-xl mb-6">
+          <View className="flex-row justify-between items-center mb-3">
+            <Text className="text-lg font-psemibold text-gray-800">
+              Price Breakdown
             </Text>
             {selectedDates.startDate && selectedDates.endDate && (
               <Text className="text-sm text-gray-500">
-                for {selectedDates.endDate.diff(selectedDates.startDate, "day")}{" "}
+                {selectedDates.endDate.diff(selectedDates.startDate, "day")}{" "}
                 days
               </Text>
             )}
           </View>
-          <Text className="text-xl font-pbold text-primary">
-            ₱{calculateTotalPrice()}
+
+          <View className="flex-row justify-between items-center mb-2">
+            <Text className="text-gray-600">
+              ₱{itemPrice} ×{" "}
+              {selectedDates.startDate && selectedDates.endDate
+                ? selectedDates.endDate.diff(selectedDates.startDate, "day")
+                : 1}{" "}
+              days
+            </Text>
+            <Text className="font-pmedium text-gray-800">
+              ₱{calculateTotalPrice()}
+            </Text>
+          </View>
+
+          {downpaymentPercentage && (
+            <View>
+              <View className="border-t border-gray-200 my-2" />
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-orange-400 font-pmedium">
+                  Required Downpayment ({downpaymentPercentage}%)
+                </Text>
+                <Text className="font-psemibold text-orange-400">
+                  ₱
+                  {(
+                    calculateTotalPrice() *
+                    (downpaymentPercentage / 100)
+                  ).toFixed(2)}
+                </Text>
+              </View>
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-gray-600 font-pmedium">
+                  Balance on Return ({100 - downpaymentPercentage}%)
+                </Text>
+                <Text className="font-psemibold text-gray-800">
+                  ₱
+                  {(
+                    calculateTotalPrice() *
+                    ((100 - downpaymentPercentage) / 100)
+                  ).toFixed(2)}
+                </Text>
+              </View>
+            </View>
+          )}
+          <View className="border-t border-gray-200 my-2" />
+          <View className="flex-row justify-between items-center">
+            <Text className="text-lg font-psemibold text-gray-800">
+              Total Amount
+            </Text>
+            <Text className="text-lg font-pbold text-primary">
+              ₱{calculateTotalPrice().toFixed(2)}
+            </Text>
+          </View>
+        </View>
+
+        <View className="mb-6 p-4 border border-gray-200 rounded-xl">
+          <Text className="text-lg font-psemibold text-gray-700 mb-3">
+            Agreement
           </Text>
+
+          {/* <TouchableOpacity
+            onPress={() => setShowTermsModal(true)}
+            className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg"
+          >
+            <Text className="text-blue-600 font-pmedium text-sm text-center">
+              Read Terms & Conditions
+            </Text>
+          </TouchableOpacity> */}
+
+          <TouchableOpacity
+            onPress={() => setAcceptedTerms(!acceptedTerms)}
+            className="flex-row items-center"
+          >
+            <View
+              className={`w-5 h-5 border-2 rounded mr-3 items-center justify-center ${
+                acceptedTerms ? "bg-primary border-primary" : "border-gray-300"
+              }`}
+            >
+              {acceptedTerms && (
+                <Text className="text-white text-xs font-bold">✓</Text>
+              )}
+            </View>
+            <Text className="flex-1 text-sm text-gray-600 leading-5">
+              I have read and agree to the{" "}
+              <Text
+                className="text-primary font-pmedium"
+                onPress={() => setShowTermsModal(true)}
+              >
+                Terms & Conditions
+              </Text>{" "}
+              for this rental agreement
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -1774,7 +2051,8 @@ const RentRequestForm = ({
             !selectedDates.startDate ||
             !selectedDates.endDate ||
             !message.trim() ||
-            message.trim().length < 10
+            message.trim().length < 10 ||
+            !acceptedTerms
               ? "bg-gray-300"
               : "bg-primary"
           }`}
@@ -1810,7 +2088,8 @@ const RentRequestForm = ({
             !selectedDates.startDate ||
             !selectedDates.endDate ||
             !message.trim() ||
-            message.trim().length < 10
+            message.trim().length < 10 ||
+            !acceptedTerms
           }
         >
           <Text className="text-white font-pbold text-base">
@@ -1865,6 +2144,7 @@ const RentRequestForm = ({
           />
         </View>
       )}
+      <TermsModal />
     </View>
   );
 };

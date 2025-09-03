@@ -1112,7 +1112,7 @@ const Tools = () => {
                             : "text-gray-400"
                         }`}
                       >
-                        Incoming
+                        Received
                       </Text>
                       <View
                         className={`min-w-[24px] h-6 rounded-full items-center justify-center px-2 ${
@@ -1165,7 +1165,7 @@ const Tools = () => {
                             : "text-gray-400"
                         }`}
                       >
-                        Outgoing
+                        Sent
                       </Text>
                       <View
                         className={`min-w-[24px] h-6 rounded-full items-center justify-center px-2 ${

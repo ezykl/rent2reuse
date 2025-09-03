@@ -1,7 +1,8 @@
 import axios from "axios";
+import { FACE_PLUS_PLUS_API_KEY, FACE_PLUS_PLUS_API_SECRET } from "@env";
 
-const API_KEY = "6KxriioDHyVjJL5tmzblw2ci_lfrjjDa";
-const API_SECRET = "TEXQUjpzY6w6ZCq_poA-fjZsGTXrij-N";
+const API_KEY = FACE_PLUS_PLUS_API_KEY;
+const API_SECRET = FACE_PLUS_PLUS_API_SECRET;
 
 export interface FaceDetectionResult {
   success: boolean;

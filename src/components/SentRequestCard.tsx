@@ -217,8 +217,8 @@ const SentRequestCard = ({
                 className="w-4 h-4 mr-2"
                 tintColor="#6B7280"
               />
-              <Text className="text-sm text-gray-600">
-                Pickup: {formattedTime.toString()}
+              <Text className="font-psemibold text-gray-800">
+                {formattedTime.toString()}
               </Text>
             </View>
           </View>

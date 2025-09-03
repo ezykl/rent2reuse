@@ -16,6 +16,7 @@ import {
   FillLayer,
   SymbolLayer,
 } from "@maplibre/maplibre-react-native";
+import { OPEN_CAGE_API_KEY, MAP_TILER_API_KEY } from "@env";
 
 import * as Location from "expo-location";
 import { icons } from "@/constant";
@@ -41,7 +42,7 @@ const getAddressFromCoordinates = async (
 ): Promise<string> => {
   try {
     const response = await fetch(
-      `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=60e64bf3f33b40158223b9ea8354791b`
+      `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${OPEN_CAGE_API_KEY}`
     );
     const data = await response.json();
     console.log(JSON.stringify(data, null, 2));
@@ -307,7 +308,7 @@ export const LocationModalContent = ({
         results.map(async (result) => {
           const { latitude, longitude } = result;
           const response = await fetch(
-            `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=60e64bf3f33b40158223b9ea8354791b`
+            `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${OPEN_CAGE_API_KEY}`
           );
           const data = await response.json();
           return {
@@ -407,7 +408,7 @@ export const LocationModalContent = ({
           rotateEnabled={false}
           attributionEnabled={false}
           compassViewPosition={3}
-          mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+          mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
           onPress={handleMapPress}
         >
           <Camera

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API__URL } from "@/constant/api";
+import { R2R_MODEL } from "@/constant/api";
 
 export const useImageSearch = () => {
   const [loading, setLoading] = useState(false);
@@ -15,7 +15,7 @@ export const useImageSearch = () => {
         name: "image.jpg",
       } as any);
 
-      const response = await fetch(API__URL, {
+      const response = await fetch(R2R_MODEL, {
         method: "POST",
         body: formData,
         headers: {

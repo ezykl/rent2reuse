@@ -31,6 +31,7 @@ interface NotificationContextType {
   isLoading: boolean;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteAllNotifications: () => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
   getUnreadCount: () => number;
 }
@@ -108,6 +109,22 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const deleteAllNotifications = async () => {
+    try {
+      if (!user?.uid) return;
+      const unreadNotifications = notifications.filter((n) => n.isRead);
+      await Promise.all(
+        unreadNotifications.map((n) => deleteNotification(n.id))
+      );
+
+      setNotifications((prev) =>
+        prev.filter((notification) => notification.isRead)
+      );
+    } catch (error) {
+      console.error("Error deleting all notifications:", error);
+    }
+  };
+
   // Update other functions to use proper user reference
   const deleteNotification = async (notificationId: string) => {
     try {
@@ -139,6 +156,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    deleteAllNotifications,
     getUnreadCount,
   };
 

@@ -55,6 +55,7 @@ const Home = () => {
   const { isLoading, setIsLoading } = useLoader();
   const insets = useSafeAreaInsets();
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [isFetchingAnnouncement, setIsFetchingAnnouncement] = useState(false);
   const [showProfileAlert, setShowProfileAlert] = useState(false);
   const [modalKey, setModalKey] = useState(0); // NEW: Force modal re-render
   const [selectedAnnouncement, setSelectedAnnouncement] =
@@ -76,6 +77,7 @@ const Home = () => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setIsFetchingAnnouncement(true);
     try {
       // Refresh announcements
       const q = query(
@@ -100,6 +102,7 @@ const Home = () => {
       console.error("Error refreshing:", error);
     } finally {
       setRefreshing(false);
+      setIsFetchingAnnouncement(false);
     }
   }, [refreshItems]);
 
@@ -413,11 +416,13 @@ const Home = () => {
               )}
 
               {/* Announcements Carousel */}
+
               {Array.isArray(announcements) && announcements.length > 0 && (
                 <View className="mt-4">
                   <Text className="text-2xl text-secondary-400 font-psemibold mb-2">
                     Latest News
                   </Text>
+
                   <Carousel
                     loop
                     width={width - 32}

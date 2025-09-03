@@ -44,9 +44,8 @@ const useClaimFreePlan = () => {
       // Define the free plan details
       const freePlanDetails = {
         planType: "Free",
-        rentLimit: 5, // Example limit
-        listLimit: 10, // Example limit
-        // ... other plan details ...
+        rentLimit: 5,
+        listLimit: 10,
       };
 
       // Grant the free plan by creating a plan document

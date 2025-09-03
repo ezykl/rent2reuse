@@ -24,9 +24,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { getToolCategory, TOOL_CATEGORIES } from "@/constant/tool-categories";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
-import { API__URL } from "@/constant/api";
+import { R2R_MODEL } from "@/constant/api";
 import { useLoader } from "@/context/LoaderContext";
 import { useProhibitedChecker } from "../utils/useProhibitedChecker";
+import { OPEN_CAGE_API_KEY, MAP_TILER_API_KEY } from "@env";
 
 import {
   doc,
@@ -79,7 +80,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const API_URL = API__URL; // Update with your API URL
+const API_URL = R2R_MODEL;
 
 const AddListing = () => {
   const { openCamera: openCameraParam } = useLocalSearchParams();
@@ -162,8 +163,8 @@ const AddListing = () => {
       "Brand New": 1,
       "Like New": 0.9,
       "Very Good": 0.8,
-      Good: 0.7,
-      Fair: 0.6,
+      "Good": 0.7,
+      "Fair": 0.6,
       "Worn but Usable": 0.5,
     };
     return weights[condition as ConditionType] || 0.7;
@@ -802,7 +803,7 @@ const AddListing = () => {
         // Calculate suggested prices with condition adjustment
         const suggestedPrices = {
           low: Math.round(basePrice * conditionWeight * 0.8), // 20% below adjusted base
-          mid: Math.round(basePrice * conditionWeight), // At adjusted base
+          mid: Math.round(basePrice * conditionWeight), 
           high: Math.round(basePrice * conditionWeight * 1.2), // 20% above adjusted base
         };
 
@@ -1739,7 +1740,7 @@ const AddListing = () => {
                       pitchEnabled={false}
                       attributionEnabled={false}
                       compassViewPosition={3}
-                      mapStyle="https://api.maptiler.com/maps/streets-v2/style.json?key=JsHqOp9SqKGMUgYiibdt"
+                      mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
                     >
                       <Camera
                         defaultSettings={{
