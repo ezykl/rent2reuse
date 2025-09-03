@@ -362,10 +362,36 @@ const ActionMenu = ({
       <TouchableOpacity
         activeOpacity={1}
         onPress={onClose}
-        className="flex-1 bg-black/10 px-3 justify-center items-center"
+        className="flex-1 bg-black/10 px-2 justify-end"
       >
-        <View className=" absolute bottom-0 mb-2 w-full py-4 bg-white rounded-2xl shadow-lg">
-          <View className="flex-row flex-wrap justify-center">
+        <View className="flex flex-col mb-2 w-full py-4 bg-white rounded-3xl shadow-lg">
+          <View className="flex-row flex-wrap justify-center ">
+            {items.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                onPress={() => {
+                  onClose();
+                  item.action();
+                }}
+                className="items-center w-[72px]"
+              >
+                <View
+                  className={`w-12 h-12 rounded-full items-center justify-center mb-1`}
+                  style={{ backgroundColor: item.bgColor }}
+                >
+                  <Image
+                    source={item.icon}
+                    className="w-6 h-6"
+                    tintColor={item.iconColor}
+                  />
+                </View>
+                <Text className="text-xs text-center text-gray-600 font-pmedium">
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View className="flex-row flex-wrap justify-center ">
             {items.map((item) => (
               <TouchableOpacity
                 key={item.id}
@@ -2055,25 +2081,18 @@ const ChatScreen = () => {
       icon: icons.camera,
       label: "Camera",
       action: () => setShowCamera(true), // Update this line
-      bgColor: "#E3F2FD",
-      iconColor: "#2196F3",
+      bgColor: "#2196F3",
+      iconColor: "#FFF",
     },
     {
       id: "gallery",
       icon: icons.gallery, // Make sure you have an image/gallery icon
       label: "Gallery",
       action: pickImage,
-      bgColor: "#E8F5E8",
-      iconColor: "#4CAF50",
+      bgColor: "#1CCF10",
+      iconColor: "#FFF",
     },
-    {
-      id: "location",
-      icon: icons.location,
-      label: "Location",
-      action: handleSendLocation,
-      bgColor: "#E0F2F1",
-      iconColor: "#009688",
-    },
+
     // Add conditional status progression actions based on current status and user role
     ...(chatData?.status === "accepted" && currentUserId === chatData?.ownerId
       ? [
@@ -2674,7 +2693,7 @@ const ChatScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 70}
         className="flex-1"
-        style={{ flex: 1 }} // Add this
+        style={{ flex: 1 }}
       >
         <FlatList
           ref={flatListRef}
@@ -2860,24 +2879,7 @@ const ChatScreen = () => {
         />
 
         {/* Message Input */}
-        <View className="flex-row p-2 bg-white border-t border-gray-100 gap-2">
-          {editingMessageId && (
-            <View className="items-center  justify-center">
-              <TouchableOpacity
-                onPress={() => {
-                  setEditingMessageId(null);
-                  setEditText("");
-                }}
-                className="w-12 h-12 bg-red-100 rounded-full items-center justify-center"
-              >
-                <Image
-                  source={icons.close}
-                  className="w-6 h-6"
-                  tintColor="#ef4444"
-                />
-              </TouchableOpacity>
-            </View>
-          )}
+        <View className="flex-row px-2 pb-2  gap-2 ">
           {!canSendMessage ? (
             // Show appropriate message based on status and user role
             (() => {
@@ -2893,7 +2895,7 @@ const ChatScreen = () => {
               const isOwner = currentUserId === chatData?.ownerId;
               if (!isOwner && chatData?.status === "pending") {
                 return (
-                  <View className="flex-1 bg-gray-100 rounded-full py-3 px-4">
+                  <View className="flex-1 bg-white rounded-full py-3 px-4">
                     <Text className="text-gray-500 text-center">
                       Waiting for owner to respond to your request...
                     </Text>
@@ -2904,15 +2906,32 @@ const ChatScreen = () => {
               return null;
             })()
           ) : (
-            <View className="flex-1 flex-row items-center gap-2">
+            <View className="flex-1 flex-row items-end gap-2 p-2 bg-white rounded-3xl ">
+              {editingMessageId && (
+                <View className="items-end  justify-end">
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditingMessageId(null);
+                      setEditText("");
+                    }}
+                    className="w-10 h-10 bg-red-500 rounded-full items-center justify-center"
+                  >
+                    <Image
+                      source={icons.close}
+                      className="w-6 h-6"
+                      tintColor="#ffffff"
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
               {!editingMessageId && (
                 <TouchableOpacity
                   onPress={() => setShowActionMenu(true)}
-                  className="w-12 h-12 bg-blue-500 rounded-full items-center justify-center"
+                  className="w-10 h-10 bg-blue-500 rounded-full items-center justify-center"
                 >
                   <Image
                     source={icons.bigPlus}
-                    className="w-6 h-6"
+                    className="w-4 h-4"
                     tintColor="#ffffff"
                   />
                 </TouchableOpacity>
@@ -2925,23 +2944,25 @@ const ChatScreen = () => {
                   editingMessageId ? "Edit message..." : "Type a message..."
                 }
                 multiline
-                className="flex-1 bg-gray-100 rounded-full px-5 py-4 max-h-24"
+                className="flex-1 min-h-8 max-h-24"
                 style={{ textAlignVertical: "top" }}
               />
 
-              <TouchableOpacity
-                onPress={editingMessageId ? handleEditSubmit : sendMessage}
-                className="w-12 h-12 bg-primary rounded-full items-center justify-center"
-                disabled={
-                  editingMessageId ? !editText.trim() : !newMessage.trim()
-                }
-              >
-                <Image
-                  source={editingMessageId ? icons.check : icons.plane}
-                  className="w-6 h-6"
-                  tintColor="white"
-                />
-              </TouchableOpacity>
+              {(newMessage.trim() || (editingMessageId && editText.trim())) && (
+                <TouchableOpacity
+                  onPress={editingMessageId ? handleEditSubmit : sendMessage}
+                  className="w-10 h-10 bg-primary rounded-full items-center justify-center"
+                  disabled={
+                    editingMessageId ? !editText.trim() : !newMessage.trim()
+                  }
+                >
+                  <Image
+                    source={editingMessageId ? icons.check : icons.plane}
+                    className="w-4 h-4"
+                    tintColor="white"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>

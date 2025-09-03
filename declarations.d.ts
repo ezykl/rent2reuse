@@ -13,9 +13,11 @@ declare module "@env" {
   export const PAYPAL_BASE_URL: string;
   export const PAYPAL_CLIENT_SECRET: string;
 
-  export const DEFAULT_EXCHANGE_RATE: string;
   export const OCR_SPACE_API_KEY: string;
   export const OPEN_CAGE_API_KEY: string;
-
   export const MAP_TILER_API_KEY: string;
+
+  export const FACE_PLUS_PLUS_API_KEY: string;
+  export const FACE_PLUS_PLUS_API_SECRET: string;
+  export const EXCHANGE_RATE_API_KEY: string;
 }

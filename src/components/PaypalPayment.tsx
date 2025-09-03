@@ -1,25 +1,77 @@
-// PayPal API service functions
-const PAYPAL_BASE_URL = "https://api-m.sandbox.paypal.com"; // Use sandbox URL
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  ActivityIndicator,
+  SafeAreaView,
+  Animated,
+  Image,
+  Dimensions,
+  ScrollView,
+  Alert,
+} from "react-native";
+import { WebView } from "react-native-webview";
+import { LinearGradient } from "expo-linear-gradient";
+import { icons, images } from "@/constant";
+import * as FileSystem from "expo-file-system";
+import { captureRef } from "react-native-view-shot";
+import { TransactionData } from "../types/api";
+import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
+import { useLoader } from "@/context/LoaderContext";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
-// Database helper functions (prepare for integration)
-const DatabaseHelper = {
-  // Save transaction to database
-  saveTransaction: async (transactionData: TransactionData) => {
-    try {
-      // Replace with your actual database API endpoint
-      const response = await fetch("YOUR_API_ENDPOINT/transactions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(transactionData),
-      });
-      return await response.json();
-    } catch (error) {
-      console.error("Database save error:", error);
-      throw error;
+import { db, auth as firebaseAuth } from "@/lib/firebaseConfig";
+const { width, height } = Dimensions.get("window");
+
+import { PAYPAL_BASE_URL } from "@env";
+
+let currentRate = 56.5;
+
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch(
+      "https://api.frankfurter.app/latest?amount=1&from=USD&to=PHP"
+    );
+    const data = await res.json();
+
+    if (data?.rates?.PHP) {
+      currentRate = data.rates.PHP;
+      console.log("Fetched exchange rate:", currentRate);
+    } else {
+      console.log("API response invalid, keeping fallback:", data);
     }
-  },
+  } catch (err) {
+    console.log("Error fetching rate, using fallback:", err);
+  }
+}
+
+function getExchangeRate() {
+  return currentRate;
+}
+
+// Refresh every 30 minutes
+setInterval(fetchExchangeRate, 30 * 60 * 1000);
+fetchExchangeRate();
+
+const DatabaseHelper = {
+  // saveTransaction: async (transactionData: TransactionData) => {
+  //   try {
+  //     const response = await fetch("YOUR_API_ENDPOINT/transactions", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify(transactionData),
+  //     });
+  //     return await response.json();
+  //   } catch (error) {
+  //     console.error("Database save error:", error);
+  //     throw error;
+  //   }
+  // },
 
   // Generate transaction ID
   generateTransactionId: () => {
@@ -29,23 +81,23 @@ const DatabaseHelper = {
   },
 
   // Convert USD to PHP (you can update exchange rate dynamically)
-  convertToPhp: (usdAmount: string | number, exchangeRate = 56.5) => {
-    return (parseFloat(usdAmount.toString()) * exchangeRate).toFixed(2);
+  convertToPhp: (usdAmount: string | number) => {
+    return (parseFloat(usdAmount.toString()) * getExchangeRate()).toFixed(2);
   },
 
   // Convert PHP to USD
-  convertToUsd: (phpAmount: number, exchangeRate = 56.5) => {
-    return (parseFloat(phpAmount.toString()) / exchangeRate).toFixed(2);
+  convertToUsd: (phpAmount: number) => {
+    return (parseFloat(phpAmount.toString()) / getExchangeRate()).toFixed(2);
   },
 };
 
 // Replace the getGradientColors function with getPlanColor
 const getPlanColor = (planType: string): string => {
   const colors = {
-    free: "#CD7F32", // Bronze
-    basic: "#737373", // Silver
-    premium: "#eda705", // Gold
-    platinum: "#21AEE6", // Platinum/Violet
+    free: "#CD7F32",
+    basic: "#737373",
+    premium: "#eda705",
+    platinum: "#21AEE6",
   };
 
   const normalizedType = planType?.toLowerCase() || "free";
@@ -104,7 +156,7 @@ export const createPayPalOrder = async (
       purchase_units: [
         {
           amount: {
-            currency_code: "USD", // Always USD for PayPal
+            currency_code: "USD",
             value: usdAmount,
           },
           description: orderDetails?.description || "Plan Subscription Payment",
@@ -170,41 +222,12 @@ export const capturePayPalOrder = async (
   }
 };
 
-// Enhanced PayPal Payment Component
-import React, { useState, useEffect, useRef } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Modal,
-  ActivityIndicator,
-  SafeAreaView,
-  Animated,
-  Image,
-  Dimensions,
-  ScrollView,
-  Alert, // Add this import
-} from "react-native";
-import { WebView } from "react-native-webview";
-import { LinearGradient } from "expo-linear-gradient";
-import { icons, images } from "@/constant";
-import * as FileSystem from "expo-file-system";
-import { captureRef } from "react-native-view-shot";
-import { TransactionData } from "../types/api";
-import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
-import { useLoader } from "@/context/LoaderContext";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-
-import { db, auth as firebaseAuth } from "@/lib/firebaseConfig";
-const { width, height } = Dimensions.get("window");
-
 interface PayPalPaymentProps {
   plan: {
     id: string;
-    planType: string; // Required
+    planType: string;
     price: number;
-    duration: string; // Required
+    duration: string;
     list: number;
     rent: number;
   };
@@ -223,7 +246,6 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   onPaymentError,
   onPaymentCancel,
 }) => {
-  // Validate required fields
   useEffect(() => {
     if (!plan?.planType || !plan?.duration) {
       console.error("Missing required plan fields:", plan);
@@ -233,12 +255,12 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   const [loading, setLoading] = useState(false);
   const [showWebView, setShowWebView] = useState(false);
   const [showResultModal, setShowResultModal] = useState(false);
-  const [resultType, setResultType] = useState(""); // 'success' or 'cancel' or 'error'
+  const [resultType, setResultType] = useState("");
   const [paymentUrl, setPaymentUrl] = useState("");
   const [orderId, setOrderId] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [transactionId, setTransactionId] = useState("");
-  const [isSaving, setIsSaving] = useState(false); // <-- Added state for saving
+  const [isSaving, setIsSaving] = useState(false);
   const { isLoading, setIsLoading } = useLoader();
 
   interface TransactionDetails {
@@ -526,12 +548,8 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
     return null;
   };
 
-  // Convert plan price from PHP to USD
   const usdAmount = DatabaseHelper.convertToUsd(plan.price);
 
-  // Update how you get gradient colors
-
-  // Update how you display plan type
   const getDisplayPlanType = (planType: string | undefined): string => {
     if (!planType) return "Plan";
     return planType.charAt(0).toUpperCase() + planType.slice(1).toLowerCase();

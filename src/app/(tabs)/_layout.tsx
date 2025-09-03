@@ -385,7 +385,7 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="chat"
           options={{
-            title: "Chats",
+            title: "s",
             headerShown: false,
             tabBarBadge: hasUnreadMessages ? " " : undefined,
             tabBarBadgeStyle: {

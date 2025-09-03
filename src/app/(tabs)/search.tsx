@@ -21,7 +21,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { icons, images } from "@/constant";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
-import { API__URL } from "@/constant/api";
+import { R2R_MODEL } from "@/constant/api";
 import { useItemSearch } from "@/hooks/useItemSearch";
 import { useItemViews } from "@/hooks/useItemViews";
 import { Item } from "@/types/item";
@@ -35,8 +35,6 @@ import { useSearchTransition } from "@/context/SearchTransitionContext";
 import { LocationUtils } from "@/utils/locationUtils";
 
 const { width } = Dimensions.get("window");
-
-const API_URL = API__URL;
 
 const Search = () => {
   const { openCamera, focusInput } = useLocalSearchParams();
@@ -180,7 +178,7 @@ const Search = () => {
         type: "image/jpeg",
       } as any);
 
-      const response = await fetch(API_URL, {
+      const response = await fetch(R2R_MODEL, {
         method: "POST",
         body: formData,
         headers: { "Content-Type": "multipart/form-data" },

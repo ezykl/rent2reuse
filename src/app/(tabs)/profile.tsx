@@ -881,38 +881,42 @@ const Profile: React.FC = () => {
     }
 
     return (
-      <View className="bg-orange-50 rounded-xl p-4 mb-6 border border-orange-200">
-        <View className="flex-row items-center justify-between mb-4">
-          <View className="flex-1">
-            <View className="flex-row items-center">
-              <Image
-                source={icons.bronzePlan}
-                className="w-[20] h-[20] mr-2"
-                resizeMode="contain"
-              />
-              <Text className="text-lg font-pbold text-orange-700">
-                Claim Your Free Plan!
-              </Text>
+      <>
+        {isLoading && (
+          <View className="bg-orange-50 rounded-xl p-4 mb-6 border border-orange-200">
+            <View className="flex-row items-center justify-between mb-4">
+              <View className="flex-1">
+                <View className="flex-row items-center">
+                  <Image
+                    source={icons.bronzePlan}
+                    className="w-[20] h-[20] mr-2"
+                    resizeMode="contain"
+                  />
+                  <Text className="text-lg font-pbold text-orange-700">
+                    Claim Your Free Plan!
+                  </Text>
+                </View>
+                <Text className="text-sm font-pregular text-orange-400 mt-1">
+                  You've completed your profile. Claim your free plan to start
+                  renting and listing items!
+                </Text>
+              </View>
             </View>
-            <Text className="text-sm font-pregular text-orange-400 mt-1">
-              You've completed your profile. Claim your free plan to start
-              renting and listing items!
-            </Text>
-          </View>
-        </View>
 
-        <TouchableOpacity
-          onPress={claimFreePlan}
-          disabled={isClaiming}
-          className={`w-full ${
-            isClaiming ? "bg-orange-300" : "bg-orange-400"
-          } py-4 rounded-xl`}
-        >
-          <Text className="text-white text-center font-pbold text-lg">
-            {isClaiming ? "Claiming..." : "Claim Free Plan"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              onPress={claimFreePlan}
+              disabled={isClaiming}
+              className={`w-full ${
+                isClaiming ? "bg-orange-300" : "bg-orange-400"
+              } py-4 rounded-xl`}
+            >
+              <Text className="text-white text-center font-pbold text-lg">
+                {isClaiming ? "Claiming..." : "Claim Free Plan"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </>
     );
   };
 
@@ -1150,7 +1154,7 @@ const Profile: React.FC = () => {
           }
         >
           {/* Add Profile Completion Alert here - above profile image */}
-          {!isProfileComplete && (
+          {!isProfileComplete && isLoading && (
             <View className=" mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
               {/* Progress Header with Toggle */}
               <TouchableOpacity

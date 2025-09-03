@@ -310,24 +310,6 @@ export const terminateCurrentSession = async () => {
   }
 };
 
-// async function sendRentalRequestNotification(
-//   ownerId: string,
-//   itemName: string,
-//   requesterId: string
-// ) {
-//   await addDoc(collection(db, "notifications"), {
-//     userId: ownerId,
-//     title: `Rental Request for ${itemName}`,
-//     description:
-//       "Someone wants to rent your item. Accept or decline the request.",
-//     type: "rental-request",
-//     status: "unread",
-//     createdAt: serverTimestamp(),
-//     actions: { accept: false, decline: false },
-//     requesterId,
-//   });
-// }
-
 interface Item {
   id: string;
   title: string;
