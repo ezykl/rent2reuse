@@ -16,7 +16,6 @@ import {
 } from "react-native";
 import { useLocation } from "@/hooks/useLocation";
 import * as ImagePicker from "expo-image-picker";
-import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import { router, useLocalSearchParams } from "expo-router";
 import { icons, images } from "@/constant";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,7 +25,6 @@ import { useItemSearch } from "@/hooks/useItemSearch";
 import { useItemViews } from "@/hooks/useItemViews";
 import { Item } from "@/types/item";
 import ItemCard from "@/components/ItemCard";
-
 import { useLoader } from "@/context/LoaderContext";
 import useProfileCompletion from "@/hooks/useProfileCompletion";
 import { SearchBar } from "@/components/SearchBar";
@@ -362,20 +360,28 @@ const Search = () => {
                   onPress={() => handleImageSelection("camera")}
                   className="items-center"
                 >
-                  <View className="w-16 h-16 bg-primary/10 rounded-full items-center justify-center mb-2">
-                    <Image source={icons.camera} className="w-8 h-8" />
+                  <View className="w-16 h-16 bg-primary rounded-full items-center justify-center mb-2">
+                    <Image
+                      source={icons.camera}
+                      className="w-8 h-8"
+                      tintColor={"#fff"}
+                    />
                   </View>
-                  <Text>Camera</Text>
+                  <Text className="text-sm font-pmedium">Camera</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   onPress={() => handleImageSelection("gallery")}
                   className="items-center"
                 >
-                  <View className="w-16 h-16 bg-primary/10 rounded-full items-center justify-center mb-2">
-                    <Image source={icons.gallery} className="w-8 h-8" />
+                  <View className="w-16 h-16 bg-blue-400 rounded-full items-center justify-center mb-2">
+                    <Image
+                      source={icons.gallery}
+                      className="w-8 h-8 "
+                      tintColor={"#fff"}
+                    />
                   </View>
-                  <Text>Gallery</Text>
+                  <Text className="text-sm font-pmedium">Gallery</Text>
                 </TouchableOpacity>
               </View>
             </View>
