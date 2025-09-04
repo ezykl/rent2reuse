@@ -60,7 +60,7 @@ const TabsLayout = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   // Message Detection
-  const [hasNewMessages, setHasNewMessages] = useState(true); // true = show badge
+  const [hasNewMessages, setHasNewMessages] = useState(true);
   const [isOptionsVisible, setIsOptionsVisible] = useState(false);
   const { user } = useAuth();
   const { completionPercentage } = useProfileCompletion();
@@ -285,7 +285,7 @@ const TabsLayout = () => {
                     className=" mt-2 w-12 h-12"
                   /> */}
                   <LottieView
-                    source={require("../../assets/logoBlink.json")}
+                    source={require("../../assets/lottie/logoBlink.json")}
                     autoPlay
                     loop
                     style={{ width: 45, height: 45, marginTop: 4 }}

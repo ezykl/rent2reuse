@@ -71,7 +71,7 @@ const Home = () => {
   const isProfileComplete = completionPercentage >= 100;
 
   const showProfileProtectionAlert = useCallback(() => {
-    setModalKey((prev) => prev + 1); // Force modal re-render
+    setModalKey((prev) => prev + 1); 
     setShowProfileAlert(true);
   }, []);
 
