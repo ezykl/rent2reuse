@@ -979,9 +979,9 @@ const Profile: React.FC = () => {
 
   const ProfileMenuList = () => {
     return (
-      <View className="bg-white rounded-2xl shadow-sm mb-6">
+      <View className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
         {/* Quick Actions */}
-        <View className="divide-y divide-gray-100">
+        <View className="divide-y divide-red-100">
           {isProfileComplete && (
             <>
               <TouchableOpacity
@@ -1236,7 +1236,7 @@ const Profile: React.FC = () => {
           )}
 
           {currentUserId && (
-            <View className="bg-white rounded-2xl shadow-sm mb-4">
+            <View className="bg-white rounded-2xl mb-4">
               {/* Profile Header Section */}
               <View className="p-2 items-center">
                 {/* Profile Image with Camera Icon */}
@@ -1359,7 +1359,7 @@ const Profile: React.FC = () => {
           <ClaimFreePlanSection />
 
           {/* Personal Information Section */}
-          <View className="bg-white rounded-2xl shadow-sm mb-6">
+          <View className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6">
             <View className="p-6 gap-y-4">
               <Text className=" font-pbold text-lg text-gray-800 ">
                 Personal Information
@@ -1400,7 +1400,7 @@ const Profile: React.FC = () => {
                 />
                 <View>
                   <Text className="text-gray-500 text-sm">Location</Text>
-                  <Text className="text-gray-800 font-pmedium ">
+                  <Text className="text-gray-800 font-pmedium pr-4">
                     {profileData?.location?.address || "Not set"}
                   </Text>
                 </View>
