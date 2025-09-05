@@ -1,4 +1,4 @@
-import { View, Image, Pressable, Platform } from "react-native";
+import { View, Image, Pressable, Platform, Text } from "react-native";
 import { router } from "expo-router";
 import { images, icons } from "@/constant";
 import { useNotifications } from "@/context/NotificationProvider";
@@ -36,12 +36,11 @@ interface HeaderProps {
 
 const Header = ({ variant = "default" }: HeaderProps) => {
   const { notifications } = useNotifications();
-  const hasUnreadNotifications = notifications.some((msg) => !msg.isRead);
+  const unreadCount = notifications.filter((msg) => !msg.isRead).length;
 
   return (
     <View className="flex-row justify-between bg-white items-center py-2">
       {/* Logo - Only show on default variant */}
-
       <Image
         source={images.logo}
         className="h-[28px] w-[160px]"
@@ -61,21 +60,22 @@ const Header = ({ variant = "default" }: HeaderProps) => {
           </RippleSpringButton>
         )}
 
-        {/* Notification Icon */}
+        {/* Notification Icon with Badge */}
         <RippleSpringButton onPress={() => router.push("/notification")}>
           <View className="relative">
             <Image
-              source={
-                hasUnreadNotifications
-                  ? icons.notificationOn
-                  : icons.notificationOff
-              }
+              source={icons.notificationOff} // or switch based on unreadCount > 0
               className="h-[24px] w-[24px]"
               resizeMode="contain"
             />
-            {/* {hasUnreadNotifications && (
-              <View className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white" />
-            )} */}
+
+            {unreadCount > 0 && (
+              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                <Text className="text-white text-[10px] font-bold">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </Text>
+              </View>
+            )}
           </View>
         </RippleSpringButton>
       </View>
