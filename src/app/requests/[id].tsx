@@ -1200,7 +1200,7 @@ const ViewRequests = () => {
         {isLoading ? (
           <View className="flex-1 justify-center items-center py-24">
             <LottieView
-              source={require("../../assets/searchingAnimation.json")}
+              source={require("../../assets/lottie/searchingAnimation.json")}
               autoPlay
               loop
               style={{ width: 200, height: 200 }}

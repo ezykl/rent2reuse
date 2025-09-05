@@ -24,6 +24,8 @@ import {
   ActivityIndicator,
   Dimensions,
 } from "react-native";
+import * as MediaLibrary from "expo-media-library";
+import * as FileSystem from "expo-file-system";
 import { useMemo } from "react";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
@@ -74,6 +76,7 @@ import {
   getStorage,
 } from "firebase/storage";
 import { ChatCamera } from "@/components/ChatCamera";
+import CustomImageViewer from "@/components/CustomImageViewer";
 
 // Helper function to check if a request has expired
 const isRequestExpired = (startDate: any): boolean => {
@@ -113,17 +116,22 @@ const MessageActionsModal = ({
   onEdit,
   onSave,
   onDelete,
-  message, // Add this prop
+  message,
+  currentUserId, // Add this prop
 }: {
   visible: boolean;
   onClose: () => void;
   onEdit: () => void;
   onSave?: () => void;
   onDelete: () => void;
-  message?: Message | null; // Add this type
+  message?: Message | null;
+  currentUserId?: string; // Add this type
 }) => {
   const isImageMessage = message?.type === "image";
   const isTextMessage = message?.type === "message" || !message?.type;
+  const isCurrentUserMessage = message?.senderId === currentUserId;
+  const isEditableMessage =
+    isTextMessage && !message?.isDeleted && isCurrentUserMessage;
 
   return (
     <Modal
@@ -138,29 +146,52 @@ const MessageActionsModal = ({
         className="flex-1 bg-black/10 justify-end"
       >
         <View className="bg-white rounded-t-3xl p-4">
-          <TouchableOpacity
-            onPress={onEdit}
-            className="flex-row items-center p-4"
-          >
-            <Image
-              source={icons.edit}
-              className="w-6 h-6 mr-3"
-              tintColor="#3b82f6"
-            />
-            <Text className="text-blue-500 text-base">Edit Message</Text>
-          </TouchableOpacity>
+          {/* Show Edit option only for text messages sent by current user that aren't deleted */}
+          {isEditableMessage && (
+            <TouchableOpacity
+              onPress={onEdit}
+              className="flex-row items-center p-4"
+            >
+              <Image
+                source={icons.edit}
+                className="w-6 h-6 mr-3"
+                tintColor="#3b82f6"
+              />
+              <Text className="text-blue-500 text-base">Edit Message</Text>
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity
-            onPress={onDelete}
-            className="flex-row items-center p-4"
-          >
-            <Image
-              source={icons.trash}
-              className="w-6 h-6 mr-3"
-              tintColor="#EF4444"
-            />
-            <Text className="text-red-500 text-base">Delete Message</Text>
-          </TouchableOpacity>
+          {/* Show Save option for all image messages that aren't deleted */}
+          {isImageMessage && onSave && !message?.isDeleted && (
+            <TouchableOpacity
+              onPress={onSave}
+              className="flex-row items-center p-4"
+            >
+              <Image
+                source={icons.download}
+                className="w-6 h-6 mr-3"
+                tintColor="#10B981"
+              />
+              <Text className="text-green-500 text-base">Save Image</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Delete option - show only for messages sent by current user */}
+          {isCurrentUserMessage && (
+            <TouchableOpacity
+              onPress={onDelete}
+              className="flex-row items-center p-4"
+            >
+              <Image
+                source={icons.trash}
+                className="w-6 h-6 mr-3"
+                tintColor="#EF4444"
+              />
+              <Text className="text-red-500 text-base">
+                Delete {isImageMessage ? "Image" : "Message"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     </Modal>
@@ -907,10 +938,12 @@ const ImageMessage = ({
   item,
   isCurrentUser,
   onLongPress,
+  onImagePress,
 }: {
   item: Message;
   isCurrentUser: boolean;
   onLongPress: () => void;
+  onImagePress: () => void;
 }) => {
   const [imageError, setImageError] = useState(false);
   const maxWidth = Dimensions.get("window").width * 0.65;
@@ -1008,6 +1041,7 @@ const ImageMessage = ({
   return (
     <View className="flex-col">
       <TouchableOpacity
+        onPress={onImagePress}
         onLongPress={onLongPress}
         delayLongPress={300}
         activeOpacity={0.9}
@@ -1102,7 +1136,9 @@ const ChatScreen = () => {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [uploadingImages, setUploadingImages] = useState<string[]>([]);
-
+  const [fullscreenImageVisible, setFullscreenImageVisible] = useState(false);
+  const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
+  const [fullscreenImages, setFullscreenImages] = useState<string[]>([]);
   const [messageSelection, setMessageSelection] = useState<{
     isSelecting: boolean;
     selectedMessages: string[];
@@ -1135,19 +1171,41 @@ const ChatScreen = () => {
       </View>
     );
   }
+  const handleImagePress = (selectedImageUrl: string) => {
+    // Get all image messages from the chat
+    const imageMessages = messages.filter(
+      (msg) => msg.type === "image" && msg.imageUrl && !msg.isDeleted
+    );
 
+    // Extract image URLs
+    const imageUrls = imageMessages.map((msg) => msg.imageUrl!);
+
+    // Find the index of the selected image
+    const selectedIndex = imageUrls.findIndex(
+      (url) => url === selectedImageUrl
+    );
+
+    // Set up the image viewer
+    setFullscreenImages(imageUrls);
+    setFullscreenImageIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setFullscreenImageVisible(true);
+  };
   const handleMessageLongPress = (
     messageId: string,
     senderId: string,
     message: Message
   ) => {
-    if (senderId !== currentUserId) return;
-
+    // Don't allow long press on deleted messages
     if (message.isDeleted) return;
 
+    // Don't allow long press on system messages
     if (message.type === "statusUpdate" || message.type === "rentRequest")
       return;
 
+    // For text messages: only allow if current user sent it
+    if (message.type === "message" || !message.type) {
+      if (senderId !== currentUserId) return;
+    }
     setSelectedMessage(message);
     setShowMessageActions(true);
   };
@@ -1274,40 +1332,114 @@ const ChatScreen = () => {
     if (!selectedMessage?.imageUrl) return;
 
     try {
-      // Request permissions
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
+      // Check if we're on Android
+      if (Platform.OS !== "android") {
         Alert.alert(
-          "Permission needed",
-          "Please grant photo library permissions to save images."
+          "Not Supported",
+          "This feature is currently only available on Android devices."
         );
         return;
       }
 
-      // For Expo, you can use MediaLibrary
-      // import * as MediaLibrary from 'expo-media-library';
+      // Request storage permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission needed",
+          "Please grant storage permissions to save images."
+        );
+        return;
+      }
 
-      // Download and save logic would go here
-      // This is a placeholder - you'll need to implement the actual save functionality
+      // Show loading state
+      setShowMessageActions(false);
+      setSelectedMessage(null);
+
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Saving Image",
+        textBody: "Downloading image...",
+      });
+
+      // Create filename with timestamp
+      const timestamp = Date.now();
+      const filename = `rent2reuse_chat_${timestamp}.jpg`;
+
+      // Download image to temporary location first
+      const tempUri = FileSystem.documentDirectory + filename;
+      const downloadResult = await FileSystem.downloadAsync(
+        selectedMessage.imageUrl,
+        tempUri
+      );
+
+      if (downloadResult.status !== 200) {
+        throw new Error("Failed to download image");
+      }
+
+      // Create the asset in media library
+      const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
+
+      // Try to create/get the rent2reuse album in Pictures
+      let album;
+      try {
+        // First, try to get existing album
+        album = await MediaLibrary.getAlbumAsync("rent2reuse");
+
+        if (!album) {
+          // Create new album in Pictures directory
+          album = await MediaLibrary.createAlbumAsync(
+            "rent2reuse",
+            asset,
+            false
+          );
+        } else {
+          // Add to existing album
+          await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+        }
+      } catch (albumError) {
+        console.log("Album creation/access failed:", albumError);
+        // Image is still saved to gallery, just not in custom folder
+      }
+
+      // Clean up temporary file
+      try {
+        await FileSystem.deleteAsync(downloadResult.uri);
+      } catch (cleanupError) {
+        console.log("Could not clean up temporary file");
+      }
+
+      // Force media scanner to update (Android specific)
+      try {
+        // This helps ensure the image appears in gallery apps immediately
+        await MediaLibrary.getAssetsAsync({
+          first: 1,
+          mediaType: "photo",
+          sortBy: "creationTime",
+        });
+      } catch (scanError) {
+        console.log(
+          "Media scan trigger failed, but image should still be saved"
+        );
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
-        title: "Success",
-        textBody: "Image saved to gallery",
+        title: "Image Saved",
+        textBody: album
+          ? "Image saved to Pictures/rent2reuse folder"
+          : "Image saved to gallery",
       });
-
-      setShowMessageActions(false);
-      setSelectedMessage(null);
     } catch (error) {
       console.error("Error saving image:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to save image",
+        textBody:
+          "Failed to save image. Please check your storage permissions.",
       });
     }
   };
+
   // Add image handling functions
   const pickImage = async () => {
     try {
@@ -2672,6 +2804,19 @@ const ChatScreen = () => {
       className="flex-1 bg-gray-200"
       style={{ paddingBottom: insets.bottom, paddingTop: insets.top }}
     >
+      <CustomImageViewer
+        images={fullscreenImages}
+        visible={fullscreenImageVisible}
+        imageIndex={fullscreenImageIndex}
+        onRequestClose={() => {
+          setFullscreenImageVisible(false);
+          setFullscreenImageIndex(0);
+          setFullscreenImages([]);
+        }}
+        onImageIndexChange={(index) => {
+          setFullscreenImageIndex(index);
+        }}
+      />
       <ChatHeader
         recipientName={recipientName}
         recipientImage={recipientImage}
@@ -2763,6 +2908,7 @@ const ChatScreen = () => {
                       onLongPress={() =>
                         handleMessageLongPress(item.id, item.senderId, item)
                       }
+                      onImagePress={() => handleImagePress(item.imageUrl || "")}
                     />
                   </View>
                 ) : (
@@ -2948,7 +3094,7 @@ const ChatScreen = () => {
                 style={{ textAlignVertical: "top" }}
               />
 
-              {(newMessage.trim() || (editingMessageId && editText.trim())) && (
+              {newMessage.trim() || (editingMessageId && editText.trim()) ? (
                 <TouchableOpacity
                   onPress={editingMessageId ? handleEditSubmit : sendMessage}
                   className="w-10 h-10 bg-primary rounded-full items-center justify-center"
@@ -2962,6 +3108,29 @@ const ChatScreen = () => {
                     tintColor="white"
                   />
                 </TouchableOpacity>
+              ) : (
+                <View className="flex-row gap-2">
+                  <TouchableOpacity
+                    onPress={() => setShowCamera(true)}
+                    className="w-10 h-10  items-center justify-center"
+                  >
+                    <Image
+                      source={icons.camera}
+                      className="w-5 h-5"
+                      tintColor="#9CA3AF"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={pickImage}
+                    className="w-10 h-10  items-center justify-center"
+                  >
+                    <Image
+                      source={icons.gallery}
+                      className="w-5 h-5"
+                      tintColor="#9CA3AF"
+                    />
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           )}
@@ -2969,7 +3138,8 @@ const ChatScreen = () => {
 
         <MessageActionsModal
           visible={showMessageActions}
-          message={selectedMessage} // Add this line
+          message={selectedMessage}
+          currentUserId={currentUserId} // Add this line
           onClose={() => {
             setShowMessageActions(false);
             setSelectedMessage(null);
@@ -2979,6 +3149,7 @@ const ChatScreen = () => {
               handleMessageEdit(selectedMessage.id, selectedMessage.text);
             }
           }}
+          onSave={handleSaveImage}
           onDelete={() => {
             if (selectedMessage) {
               handleMessageDelete(selectedMessage.id);

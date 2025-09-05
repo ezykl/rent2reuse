@@ -60,12 +60,13 @@ const TabsLayout = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   // Message Detection
-  const [hasNewMessages, setHasNewMessages] = useState(true); // true = show badge
+  const [hasNewMessages, setHasNewMessages] = useState(true);
   const [isOptionsVisible, setIsOptionsVisible] = useState(false);
   const { user } = useAuth();
   const { completionPercentage } = useProfileCompletion();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
   // Create a new function to check camera permissions
   const checkCameraPermission = async () => {
@@ -174,21 +175,24 @@ const TabsLayout = () => {
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const hasUnread = snapshot.docs.some((doc) => {
+      // Calculate total unread messages count
+      const totalUnreadCount = snapshot.docs.reduce((total, doc) => {
         const chatData = doc.data();
-        // Check if the last message is not from current user and has unread count
-        const isNotCurrentUserLastSender = chatData.lastSender !== user.uid;
         const userUnreadCount = chatData.unreadCounts?.[user.uid] ?? 0;
+        return total + userUnreadCount;
+      }, 0);
 
-        return isNotCurrentUserLastSender && userUnreadCount > 0;
-      });
+      // Check if there are any unread messages
+      const hasUnread = totalUnreadCount > 0;
 
+      // You can now use both values
       setHasUnreadMessages(hasUnread);
+      setTotalUnreadCount(totalUnreadCount);
+      console.log("Total Unread Messages:", totalUnreadCount);
     });
 
     return () => unsubscribe();
   }, []);
-
   return (
     <>
       <Tabs
@@ -285,7 +289,7 @@ const TabsLayout = () => {
                     className=" mt-2 w-12 h-12"
                   /> */}
                   <LottieView
-                    source={require("../../assets/logoBlink.json")}
+                    source={require("../../assets/lottie/logoBlink.json")}
                     autoPlay
                     loop
                     style={{ width: 45, height: 45, marginTop: 4 }}
@@ -385,17 +389,20 @@ const TabsLayout = () => {
         <Tabs.Screen
           name="chat"
           options={{
-            title: "s",
+            title: "Chats",
             headerShown: false,
-            tabBarBadge: hasUnreadMessages ? " " : undefined,
+            tabBarBadge: hasUnreadMessages
+              ? totalUnreadCount.toString()
+              : undefined,
             tabBarBadgeStyle: {
               backgroundColor: "#ef4444",
-              minWidth: 10,
-              minHeight: 10,
-              width: 10,
-              height: 10,
-              borderRadius: 10,
-              right: 10,
+              borderRadius: 20,
+              textAlign: "center",
+              textAlignVertical: "center",
+              fontSize: 10,
+              fontWeight: "bold",
+              fontFamily: "Poppins_600SemiBold",
+              color: "#fff",
             },
             tabBarButton: (props) => (
               <TouchableOpacity

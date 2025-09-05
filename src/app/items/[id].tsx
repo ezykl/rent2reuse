@@ -566,7 +566,10 @@ export default function ItemDetails() {
         lastMessageTime: serverTimestamp(),
         lastSender: user.uid,
         status: "pending",
-        unreadCount: 1,
+        unreadCounts: {
+          [user.uid]: 0,
+          [item?.owner?.id || ""]: 1,
+        },
       });
 
       // Create rent request with chat reference
