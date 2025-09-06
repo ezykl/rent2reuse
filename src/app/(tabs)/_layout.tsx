@@ -23,7 +23,6 @@ import { db, auth } from "@/lib/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useCameraPermissions } from "expo-image-picker";
-
 import { icons, images } from "../../constant";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
 import useProfileCompletion from "@/hooks/useProfileCompletion";

@@ -163,8 +163,8 @@ const AddListing = () => {
       "Brand New": 1,
       "Like New": 0.9,
       "Very Good": 0.8,
-      "Good": 0.7,
-      "Fair": 0.6,
+      Good: 0.7,
+      Fair: 0.6,
       "Worn but Usable": 0.5,
     };
     return weights[condition as ConditionType] || 0.7;
@@ -597,18 +597,14 @@ const AddListing = () => {
       // Check product title
       const titleCheck = isProhibited(formData.title);
       if (titleCheck.prohibited) {
-        newErrors.title = `Product title contains prohibited item: ${
-          titleCheck.category
-        }(matched: ${titleCheck.matchedKeywords?.join(", ")})`;
+        newErrors.title = `Product title contains prohibited item about ${titleCheck.category}`; // (matched: ${titleCheck.matchedKeywords?.join(", ")})
         isValid = false;
       }
 
       // Check description
       const descCheck = isProhibited(formData.description);
       if (descCheck.prohibited) {
-        newErrors.description = `Description contains prohibited content: ${
-          descCheck.category
-        } (matched: ${descCheck.matchedKeywords?.join(", ")})`;
+        newErrors.description = `Description contains prohibited content about ${descCheck.category}`; // (matched: ${descCheck.matchedKeywords?.join(", ")})
         isValid = false;
       }
 
@@ -803,7 +799,7 @@ const AddListing = () => {
         // Calculate suggested prices with condition adjustment
         const suggestedPrices = {
           low: Math.round(basePrice * conditionWeight * 0.8), // 20% below adjusted base
-          mid: Math.round(basePrice * conditionWeight), 
+          mid: Math.round(basePrice * conditionWeight),
           high: Math.round(basePrice * conditionWeight * 1.2), // 20% above adjusted base
         };
 

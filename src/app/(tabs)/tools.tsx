@@ -180,7 +180,6 @@ const Tools = () => {
 
     setIsLoading(true);
     try {
-
       const itemsRef = collection(db, "items");
       const q = query(itemsRef, where("owner.id", "==", auth.currentUser.uid));
       const querySnapshot = await getDocs(q);
@@ -215,7 +214,6 @@ const Tools = () => {
           );
           const unreadSnap = await getDocs(unreadQuery);
           const newRequestCount = unreadSnap.size;
-
 
           const listingData = {
             id: doc.id,
@@ -1244,9 +1242,7 @@ const Tools = () => {
                     )}
                   </View>
 
-                  {isLoading ? (
-                    <ActivityIndicator size="large" color="#5C6EF6" />
-                  ) : myListings.length === 0 ? (
+                  {isLoading ? null : myListings.length === 0 ? (
                     <View className="py-10 items-center">
                       <View className=" items-center">
                         <Image

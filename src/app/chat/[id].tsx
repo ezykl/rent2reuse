@@ -2119,21 +2119,39 @@ const ChatScreen = () => {
     return () => unsubscribe();
   }, [chatId, currentUserId, loading]);
 
-  const memoizedHandleAccept = useCallback(
-    (requestId: string) => handleAcceptRequest(requestId),
-    []
+  const memoizedHandleDecline = useCallback(
+    async (requestId: string) => {
+      if (!requestId) {
+        console.error("No requestId provided for decline");
+        return;
+      }
+      await handleDeclineRequest(requestId);
+    },
+    [chatId, currentUserId] // Add dependencies
   );
 
-  const memoizedHandleDecline = useCallback((requestId: string | string[]) => {
-    // If single ID, convert to array
-    const requestIds = Array.isArray(requestId) ? requestId : [requestId];
-    // Process each request ID
-    requestIds.forEach((id) => handleDeclineRequest(id));
-  }, []);
+  // 2. Fix memoizedHandleAccept with dependencies
+  const memoizedHandleAccept = useCallback(
+    async (requestId: string) => {
+      if (!requestId) {
+        console.error("No requestId provided for accept");
+        return;
+      }
+      await handleAcceptRequest(requestId);
+    },
+    [chatId, currentUserId] // Add dependencies
+  );
 
+  // 3. Fix memoizedHandleCancel with dependencies
   const memoizedHandleCancel = useCallback(
-    (requestId: string) => handleCancelRequest(requestId),
-    []
+    async (requestId: string) => {
+      if (!requestId) {
+        console.error("No requestId provided for cancel");
+        return;
+      }
+      await handleCancelRequest(requestId);
+    },
+    [chatId, currentUserId] // Add dependencies
   );
 
   const handleSendLocation = async () => {
@@ -2281,12 +2299,15 @@ const ChatScreen = () => {
   ];
 
   const handleAcceptRequest = async (requestId?: string) => {
-    if (!requestId) return;
+    if (!requestId) {
+      console.error("No requestId provided");
+      return;
+    }
 
     try {
       setIsLoading(true);
 
-      // 1. Get the accepted request details
+      // 1. Get the accepted request details first
       const acceptedRequestRef = doc(db, "rentRequests", requestId);
       const acceptedRequestSnap = await getDoc(acceptedRequestRef);
 
@@ -2298,34 +2319,35 @@ const ChatScreen = () => {
       const itemId = acceptedRequestData.itemId;
       const acceptedRequesterId = acceptedRequestData.requesterId;
 
-      // 2. Create batch for atomic operations
-      const batch = writeBatch(db);
+      // 2. Create the first batch for the accepted request
+      const acceptedBatch = writeBatch(db);
 
-      // 3. Update the rent request status to accepted
-      batch.update(acceptedRequestRef, {
+      // Update the accepted rent request
+      acceptedBatch.update(acceptedRequestRef, {
         status: "accepted",
         acceptedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // 4. Update item status to "rented" (not "pickup")
+      // Update item status
       const itemRef = doc(db, "items", itemId);
-      batch.update(itemRef, {
+      acceptedBatch.update(itemRef, {
         itemStatus: "rented",
         rentedTo: acceptedRequesterId,
         rentedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
 
-      // 5. Update current chat status to accepted
+      // Update current chat status
       const currentChatRef = doc(db, "chat", String(chatId));
-      batch.update(currentChatRef, {
+      acceptedBatch.update(currentChatRef, {
         status: "accepted",
         lastMessage: "Request accepted by owner",
         lastMessageTime: serverTimestamp(),
         hasOwnerResponded: true,
       });
 
+      // Update rent request messages in current chat
       const currentChatMessagesRef = collection(
         db,
         "chat",
@@ -2340,68 +2362,76 @@ const ChatScreen = () => {
       const currentChatRentRequestMessages = await getDocs(
         currentChatRentRequestQuery
       );
-      currentChatRentRequestMessages.forEach((doc) => {
-        batch.update(doc.ref, {
+      currentChatRentRequestMessages.forEach((messageDoc) => {
+        acceptedBatch.update(messageDoc.ref, {
           status: "accepted",
           updatedAt: serverTimestamp(),
         });
       });
 
-      // 7. Commit initial updates first
-      await batch.commit();
+      // Commit the accepted request batch first
+      await acceptedBatch.commit();
 
-      // 8. Handle OTHER pending requests for the same item (decline them)
+      // 3. Add status update message to current chat
+      await addDoc(currentChatMessagesRef, {
+        type: "statusUpdate",
+        text: "Request accepted by owner",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+        status: "accepted",
+      });
+
+      // 4. Handle other pending requests (decline them)
       const otherPendingRequestsQuery = query(
         collection(db, "rentRequests"),
         where("itemId", "==", itemId),
-        where("status", "==", "pending")
+        where("status", "==", "pending"),
+        where("chatId", "!=", String(chatId)) // Make sure to convert chatId to string
       );
 
       const otherPendingRequestsSnap = await getDocs(otherPendingRequestsQuery);
-      const declinePromises: Promise<void>[] = [];
 
-      otherPendingRequestsSnap.docs.forEach((requestDoc) => {
-        if (requestDoc.id === requestId) return;
+      // Process other requests in parallel with proper error handling
+      const declinePromises = otherPendingRequestsSnap.docs.map(
+        async (requestDoc) => {
+          try {
+            const requestData = requestDoc.data();
+            const otherChatId = requestData.chatId;
+            const otherRequesterId = requestData.requesterId;
 
-        const otherRequestData = requestDoc.data();
-        const otherRequesterId = otherRequestData.requesterId;
+            // Create a separate batch for each other request
+            const declineBatch = writeBatch(db);
 
-        const declinePromise = (async () => {
-          await updateDoc(requestDoc.ref, {
-            status: "declined",
-            declinedReason: `${acceptedRequestData.itemName} has been rented to another user`,
-            declinedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
+            // 1. Decline the rent request
+            declineBatch.update(requestDoc.ref, {
+              status: "declined",
+              declinedReason: `${acceptedRequestData.itemName} has been rented to another user`,
+              declinedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
 
-          const otherChatQuery = query(
-            collection(db, "chat"),
-            where("requesterId", "==", requestDoc.ref),
-            where("ownerId", "==", currentUserId),
-            where("itemDetails.itemId", "==", itemId)
-          );
-
-          const otherChatSnap = await getDocs(otherChatQuery);
-
-          if (!otherChatSnap.empty) {
-            const otherChatDoc = otherChatSnap.docs[0];
-            const otherChatId = otherChatDoc.id;
-
-            // Update other chat status
-            await updateDoc(otherChatDoc.ref, {
+            // 2. Update the other chat status
+            const otherChatRef = doc(db, "chat", otherChatId);
+            declineBatch.update(otherChatRef, {
               status: "declined",
               lastMessage: "This item has been rented to another user",
               lastMessageTime: serverTimestamp(),
               hasOwnerResponded: true,
             });
 
-            // Update rentRequest messages in that chat
+            // Commit the decline batch
+            await declineBatch.commit();
+
+            // 3. Handle messages in the other chat separately
             const otherChatMessagesRef = collection(
               db,
               "chat",
               otherChatId,
               "messages"
             );
+
+            // Update rent request messages
             const otherRentRequestQuery = query(
               otherChatMessagesRef,
               where("type", "==", "rentRequest")
@@ -2410,29 +2440,32 @@ const ChatScreen = () => {
             const otherRentRequestMessages = await getDocs(
               otherRentRequestQuery
             );
-            const otherBatch = writeBatch(db);
 
-            otherRentRequestMessages.docs.forEach((msgDoc) => {
-              otherBatch.update(msgDoc.ref, {
-                status: "declined",
-                updatedAt: serverTimestamp(),
+            if (!otherRentRequestMessages.empty) {
+              const messageBatch = writeBatch(db);
+
+              otherRentRequestMessages.docs.forEach((msgDoc) => {
+                messageBatch.update(msgDoc.ref, {
+                  status: "declined",
+                  updatedAt: serverTimestamp(),
+                });
               });
-            });
 
-            // Add status update message
-            const statusMessageRef = doc(otherChatMessagesRef);
-            otherBatch.set(statusMessageRef, {
-              type: "statusUpdate",
-              text: "This item has been rented to another user",
-              senderId: currentUserId,
-              createdAt: serverTimestamp(),
-              read: false,
-              status: "declined",
-            });
+              // Add status update message
+              const statusMessageRef = doc(otherChatMessagesRef);
+              messageBatch.set(statusMessageRef, {
+                type: "statusUpdate",
+                text: "This item has been rented to another user",
+                senderId: currentUserId,
+                createdAt: serverTimestamp(),
+                read: false,
+                status: "declined",
+              });
 
-            await otherBatch.commit();
+              await messageBatch.commit();
+            }
 
-            // Send notifications to declined user
+            // 4. Create notification for declined user
             await createInAppNotification(otherRequesterId, {
               type: "RENT_REQUEST_DECLINED",
               title: "Item No Longer Available",
@@ -2443,40 +2476,30 @@ const ChatScreen = () => {
               },
             });
 
-            // Send push notification if available
-            try {
-              const otherUserRef = doc(db, "users", otherRequesterId);
-              const otherUserSnap = await getDoc(otherUserRef);
-              if (otherUserSnap.exists()) {
-                const otherUserData = otherUserSnap.data();
-                if (otherUserData.pushToken) {
-                  await sendPushNotification({
-                    to: otherUserData.pushToken,
-                    title: "Item No Longer Available",
-                    body: `${acceptedRequestData.itemName} has been rented to another user`,
-                    data: {
-                      type: "RENT_REQUEST_DECLINED",
-                      chatId: otherChatId,
-                      itemId: itemId,
-                    },
-                  });
-                }
-              }
-            } catch (pushError) {
-              console.log(
-                "Push notification failed for user:",
-                otherRequesterId
-              );
-            }
+            console.log(
+              `Successfully declined request for chat: ${otherChatId}`
+            );
+          } catch (error) {
+            console.error(
+              `Error declining request for chat ${requestDoc.data().chatId}:`,
+              error
+            );
+            // Don't throw here, just log the error so other declines can continue
           }
-        })();
+        }
+      );
 
-        declinePromises.push(declinePromise);
+      // Wait for all decline operations to complete
+      const declineResults = await Promise.allSettled(declinePromises);
+
+      // Log any failures but don't stop the process
+      declineResults.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`Failed to decline request ${index}:`, result.reason);
+        }
       });
 
-      await Promise.allSettled(declinePromises);
-
-      //Create simple rental document with only needed data
+      // 5. Create rental document
       const rentalData = {
         rentalId: `rental_${Date.now()}_${Math.random()
           .toString(36)
@@ -2498,37 +2521,24 @@ const ChatScreen = () => {
       const rentalRef = doc(collection(db, "rentals"));
       await setDoc(rentalRef, rentalData);
 
-      await addDoc(currentChatMessagesRef, {
-        type: "statusUpdate",
-        text: "Request accepted by owner",
-        senderId: currentUserId,
-        createdAt: serverTimestamp(),
-        read: false,
-        status: "accepted",
-      });
-
+      // 6. Create notification for accepted user
       await createInAppNotification(acceptedRequesterId, {
         type: "RENT_REQUEST_ACCEPTED",
         title: "Request Accepted!",
         message: `Your rental request for ${acceptedRequestData.itemName} has been accepted`,
         data: {
           route: "/chat",
-          params: { id: chatId },
+          params: { id: String(chatId) },
         },
       });
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success!",
-        textBody: `Request accepted successfully!`,
+        textBody: "Request accepted successfully!",
       });
     } catch (error) {
-      console.error("Error accepting request:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Failed to accept request. Please try again.",
-      });
+      console.log("Error accepting request:", error);
     } finally {
       setIsLoading(false);
     }
@@ -2573,18 +2583,46 @@ const ChatScreen = () => {
   }, [messages]);
 
   const handleDeclineRequest = async (requestId?: string) => {
-    if (!requestId) return;
+    if (!requestId) {
+      console.error("No requestId provided for decline");
+      return;
+    }
 
     try {
-      // Update chat metadata
-      await updateDoc(doc(db, "chat", String(chatId)), {
+      setIsLoading(true);
+
+      // 1. Create batch for declining operations
+      const declineBatch = writeBatch(db);
+
+      // 2. Update chat metadata
+      const chatRef = doc(db, "chat", String(chatId));
+      declineBatch.update(chatRef, {
         status: "declined",
         lastMessage: "Request declined by owner",
         lastMessageTime: serverTimestamp(),
         hasOwnerResponded: true,
       });
 
-      // ADD THIS: Update ALL rent request messages in this chat to declined status
+      // 3. Update the rent request in the rentRequests collection (if it exists)
+      try {
+        const rentRequestRef = doc(db, "rentRequests", requestId);
+        const rentRequestSnap = await getDoc(rentRequestRef);
+
+        if (rentRequestSnap.exists()) {
+          declineBatch.update(rentRequestRef, {
+            status: "declined",
+            declinedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (error) {
+        console.log(
+          "Rent request document may not exist in rentRequests collection:",
+          error
+        );
+      }
+
+      // 4. Update ALL rent request messages in this chat to declined status
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       const rentRequestQuery = query(
         messagesRef,
@@ -2592,68 +2630,87 @@ const ChatScreen = () => {
       );
 
       const rentRequestMessages = await getDocs(rentRequestQuery);
-      const batch = writeBatch(db);
 
-      // Update all rent request messages to declined status
-      rentRequestMessages.docs.forEach((doc) => {
-        batch.update(doc.ref, {
+      rentRequestMessages.docs.forEach((messageDoc) => {
+        declineBatch.update(messageDoc.ref, {
           status: "declined",
           updatedAt: serverTimestamp(),
         });
       });
 
-      await batch.commit();
+      // 5. Commit the batch
+      await declineBatch.commit();
 
-      // Update the rent request in the rentRequests collection (if it exists)
-      if (requestId) {
-        const rentRequestRef = doc(db, "rentRequests", requestId);
-        await updateDoc(rentRequestRef, {
-          status: "declined",
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      // Add status update message
+      // 6. Add status update message (separate operation to avoid batch size limits)
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
         type: "statusUpdate",
         text: "Request declined by owner",
         senderId: currentUserId,
         createdAt: serverTimestamp(),
         read: false,
+        status: "declined",
       });
 
-      // Get requester's data for notification
-      const requestDoc = await getDoc(doc(db, "rentRequests", requestId));
-      const requestData = requestDoc.data();
-      const requesterId = requestData?.requesterId;
+      // 7. Get requester's data for notification
+      let requestData = null;
+      let requesterId = null;
 
+      try {
+        const requestDoc = await getDoc(doc(db, "rentRequests", requestId));
+        if (requestDoc.exists()) {
+          requestData = requestDoc.data();
+          requesterId = requestData?.requesterId;
+        } else {
+          // Fallback: get requester from chat data
+          const chatDoc = await getDoc(chatRef);
+          if (chatDoc.exists()) {
+            const chatData = chatDoc.data();
+            requesterId = chatData.requesterId;
+          }
+        }
+      } catch (error) {
+        console.log("Could not get request data for notification:", error);
+      }
+
+      // 8. Create in-app notification for requester if we have the requesterId
       if (requesterId) {
-        // Create in-app notification for requester
-        await createInAppNotification(requesterId, {
-          type: "RENT_REQUEST_DECLINED",
-          title: "Request Declined",
-          message: `Your rental request for ${chatData?.itemDetails?.name} has been declined`,
-          data: {
-            route: "/chat",
-            params: {
-              id: chatId,
-              requestId: requestId,
-            },
-          },
-        });
-
-        // Send push notification if available
-        if (requestData?.pushTokens?.token) {
-          await sendPushNotification({
-            to: requestData.pushTokens.token,
+        try {
+          await createInAppNotification(requesterId, {
+            type: "RENT_REQUEST_DECLINED",
             title: "Request Declined",
-            body: `Your rental request for ${chatData?.itemDetails?.name} has been declined`,
+            message: `Your rental request for ${
+              chatData?.itemDetails?.name || "the item"
+            } has been declined`,
             data: {
-              type: "RENT_REQUEST_DECLINED",
-              chatId: String(chatId),
-              requestId,
+              route: "/chat",
+              params: {
+                id: String(chatId),
+                requestId: requestId,
+              },
             },
           });
+
+          // Send push notification if available
+          if (requestData?.pushTokens?.token) {
+            await sendPushNotification({
+              to: requestData.pushTokens.token,
+              title: "Request Declined",
+              body: `Your rental request for ${
+                chatData?.itemDetails?.name || "the item"
+              } has been declined`,
+              data: {
+                type: "RENT_REQUEST_DECLINED",
+                chatId: String(chatId),
+                requestId,
+              },
+            });
+          }
+        } catch (notificationError) {
+          console.error(
+            "Error sending decline notification:",
+            notificationError
+          );
+          // Don't fail the whole operation for notification errors
         }
       }
 
@@ -2663,18 +2720,22 @@ const ChatScreen = () => {
         textBody: "Request declined successfully",
       });
     } catch (error) {
-      console.error("Error declining request:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Failed to decline request",
-      });
+      console.log("Error declining request:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
+
   const handleCancelRequest = async (requestId?: string) => {
-    if (!requestId) return;
+    if (!requestId) {
+      console.error("No requestId provided for cancel");
+      return;
+    }
 
     try {
+      setIsLoading(true);
+
+      // 1. Get current chat data first
       const chatRef = doc(db, "chat", String(chatId));
       const chatSnap = await getDoc(chatRef);
 
@@ -2682,25 +2743,29 @@ const ChatScreen = () => {
         throw new Error("Chat not found");
       }
 
-      const chatData = chatSnap.data();
+      const currentChatData = chatSnap.data();
 
       // Store current item details before cancellation
       const itemDetails = {
-        name: chatData.itemDetails?.name,
-        price: chatData.itemDetails?.price,
-        image: chatData.itemDetails?.image,
-        itemId: chatData.itemId,
+        name: currentChatData.itemDetails?.name,
+        price: currentChatData.itemDetails?.price,
+        image: currentChatData.itemDetails?.image,
+        itemId: currentChatData.itemId,
       };
 
+      // 2. Create batch for cancel operations
+      const cancelBatch = writeBatch(db);
+
       // Update chat status but preserve item details
-      await updateDoc(chatRef, {
+      cancelBatch.update(chatRef, {
         status: "cancelled",
         lastMessage: "Request cancelled by requester",
         lastMessageTime: serverTimestamp(),
         itemDetails: itemDetails, // Preserve item details
+        updatedAt: serverTimestamp(),
       });
 
-      // IMPORTANT: Update ALL rent request messages in this chat
+      // 3. Update ALL rent request messages in this chat
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       const rentRequestQuery = query(
         messagesRef,
@@ -2708,19 +2773,18 @@ const ChatScreen = () => {
       );
 
       const rentRequestMessages = await getDocs(rentRequestQuery);
-      const batch = writeBatch(db);
 
-      // Update all rent request messages to cancelled status
-      rentRequestMessages.docs.forEach((doc) => {
-        batch.update(doc.ref, {
+      rentRequestMessages.docs.forEach((messageDoc) => {
+        cancelBatch.update(messageDoc.ref, {
           status: "cancelled",
           updatedAt: serverTimestamp(),
         });
       });
 
-      await batch.commit();
+      // 4. Commit the batch
+      await cancelBatch.commit();
 
-      // Add status update message
+      // 5. Add status update message (separate operation)
       await addDoc(collection(db, "chat", String(chatId), "messages"), {
         type: "statusUpdate",
         text: "Request cancelled by requester",
@@ -2730,60 +2794,88 @@ const ChatScreen = () => {
         status: "cancelled",
       });
 
-      // Delete from rentRequests collection if it exists
+      // 6. Delete from rentRequests collection if it exists (separate operation)
       try {
         const requestRef = doc(db, "rentRequests", requestId);
-        await deleteDoc(requestRef);
-      } catch (deleteError) {
-        console.log(
-          "Request document may not exist in rentRequests collection"
-        );
-      }
+        const requestSnap = await getDoc(requestRef);
 
-      // Only create in-app notification for the current user
-      await createInAppNotification(currentUserId, {
-        type: "RENT_REQUEST_CANCELLED",
-        title: "Request Cancelled",
-        message: `You cancelled your rental request for ${chatData?.itemDetails?.name}`,
-        data: {
-          route: "/chat",
-          params: {
-            id: chatId,
-            requestId: requestId,
-          },
-        },
-      });
-
-      //Update Plan
-      if (auth.currentUser) {
-        const userRef = doc(db, "users", auth.currentUser.uid);
-        const userDoc = await getDoc(userRef);
-
-        if (userDoc.exists()) {
-          const currentPlan = userDoc.data().currentPlan;
-          const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
-
-          await updateDoc(userRef, {
-            "currentPlan.rentUsed": newRentUsed,
-            "currentPlan.updatedAt": new Date(),
-          });
+        if (requestSnap.exists()) {
+          await deleteDoc(requestRef);
+          console.log("Successfully deleted from rentRequests collection");
+        } else {
+          console.log(
+            "Request document doesn't exist in rentRequests collection"
+          );
         }
+      } catch (deleteError) {
+        console.error("Error deleting from rentRequests:", deleteError);
+        // Don't fail the whole operation for this error
       }
 
-      // No push notification for cancel since it's user's own action
+      // 7. Update user's plan (rent usage)
+      try {
+        if (auth.currentUser) {
+          const userRef = doc(db, "users", auth.currentUser.uid);
+          const userDoc = await getDoc(userRef);
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const currentPlan = userData.currentPlan;
+
+            if (currentPlan && typeof currentPlan.rentUsed === "number") {
+              const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+
+              await updateDoc(userRef, {
+                "currentPlan.rentUsed": newRentUsed,
+                "currentPlan.updatedAt": new Date(),
+              });
+
+              console.log(
+                `Updated user plan: rentUsed decreased to ${newRentUsed}`
+              );
+            }
+          }
+        }
+      } catch (planError) {
+        console.error("Error updating user plan:", planError);
+        // Don't fail the whole operation for plan update errors
+      }
+
+      // 8. Create in-app notification for the current user
+      try {
+        await createInAppNotification(currentUserId, {
+          type: "RENT_REQUEST_CANCELLED",
+          title: "Request Cancelled",
+          message: `You cancelled your rental request for ${
+            currentChatData?.itemDetails?.name || "the item"
+          }`,
+          data: {
+            route: "/chat",
+            params: {
+              id: String(chatId),
+              requestId: requestId,
+            },
+          },
+        });
+      } catch (notificationError) {
+        console.error("Error creating cancel notification:", notificationError);
+        // Don't fail the whole operation for notification errors
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
         textBody: "Request cancelled successfully",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error cancelling request:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to cancel request",
+        textBody: error.message || "Failed to cancel request",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2879,7 +2971,7 @@ const ChatScreen = () => {
                     item={item}
                     isOwner={currentUserId === chatData?.ownerId}
                     onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
-                    onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
+                    // onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
                     onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
                     chatData={chatData}
                     chatId={String(chatId)}
