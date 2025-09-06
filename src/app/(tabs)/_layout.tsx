@@ -23,7 +23,6 @@ import { db, auth } from "@/lib/firebaseConfig";
 import { useAuth } from "@/context/AuthContext";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useCameraPermissions } from "expo-image-picker";
-
 import { icons, images } from "../../constant";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
 import useProfileCompletion from "@/hooks/useProfileCompletion";
@@ -188,7 +187,6 @@ const TabsLayout = () => {
       // You can now use both values
       setHasUnreadMessages(hasUnread);
       setTotalUnreadCount(totalUnreadCount);
-      console.log("Total Unread Messages:", totalUnreadCount);
     });
 
     return () => unsubscribe();
@@ -392,7 +390,9 @@ const TabsLayout = () => {
             title: "Chats",
             headerShown: false,
             tabBarBadge: hasUnreadMessages
-              ? totalUnreadCount.toString()
+              ? totalUnreadCount > 9
+                ? "9+"
+                : totalUnreadCount.toString()
               : undefined,
             tabBarBadgeStyle: {
               backgroundColor: "#ef4444",

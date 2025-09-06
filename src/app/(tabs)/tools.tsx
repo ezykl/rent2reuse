@@ -180,17 +180,15 @@ const Tools = () => {
 
     setIsLoading(true);
     try {
-      console.log("📱 Debug: Starting to fetch user listings...");
       const itemsRef = collection(db, "items");
       const q = query(itemsRef, where("owner.id", "==", auth.currentUser.uid));
-
       const querySnapshot = await getDocs(q);
+
       let totalIncomingRequests = 0;
 
       const listings = await Promise.all(
         querySnapshot.docs.map(async (doc) => {
           const data = doc.data();
-          console.log(`\n🔎 Debug: Processing listing ${doc.id}:`);
 
           // Get total pending requests
           const requestsRef = collection(db, "rentRequests");
@@ -216,10 +214,6 @@ const Tools = () => {
           );
           const unreadSnap = await getDocs(unreadQuery);
           const newRequestCount = unreadSnap.size;
-
-          console.log(
-            `📊 Debug: Item ${doc.id} has ${newRequestCount} unread requests`
-          );
 
           const listingData = {
             id: doc.id,
@@ -1248,9 +1242,7 @@ const Tools = () => {
                     )}
                   </View>
 
-                  {isLoading ? (
-                    <ActivityIndicator size="large" color="#5C6EF6" />
-                  ) : myListings.length === 0 ? (
+                  {isLoading ? null : myListings.length === 0 ? (
                     <View className="py-10 items-center">
                       <View className=" items-center">
                         <Image

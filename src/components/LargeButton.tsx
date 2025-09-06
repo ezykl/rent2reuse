@@ -23,8 +23,8 @@ const LargeButton = ({
       onPress={handlePress}
       activeOpacity={0.7}
       className={`relative  rounded-xl min-h-[56px] justify-center items-center
-       ${containerStyles}
-       ${isLoading ? "bg-primary/70" : "bg-primary"}`}
+       ${isLoading ? "bg-primary/70" : "bg-primary"}
+       ${containerStyles}`}
       disabled={isLoading || disabled} // Ensure 'disabled' works correctly here
     >
       {!isLoading && (

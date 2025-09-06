@@ -590,6 +590,7 @@ export default function ItemDetails() {
         rentalDays: daysDifference,
         createdAt: serverTimestamp(),
         chatId: chatRef.id,
+        unread: true,
       });
 
       await updateDoc(chatRef, {
@@ -635,7 +636,6 @@ export default function ItemDetails() {
         } catch (error) {
           console.error("Error creating welcome notification:", error);
         }
-
         // await createNotification(auth.currentUser.uid, "REPORT_ISSUE", {
         //   reportReason: reportData.reason,
         // });

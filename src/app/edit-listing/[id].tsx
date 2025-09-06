@@ -10,15 +10,17 @@ import {
   Alert,
   Modal,
   Switch,
+  StyleSheet,
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { icons } from "@/constant";
+import { icons, images } from "@/constant";
 import LargeButton from "@/components/LargeButton";
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db, storage } from "@/lib/firebaseConfig";
 import { TOOL_CATEGORIES } from "@/constant/tool-categories";
-import { CameraView } from "expo-camera";
+import { Image as ExpoImage } from "expo-image";
+import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
@@ -28,6 +30,8 @@ import { generateDescriptionTemplate } from "@/constant/item-specifications";
 import { getToolCategory } from "@/constant/tool-categories";
 import { Item as ListingData } from "@/types/item";
 import stringSimilarity from "string-similarity";
+import { useProhibitedChecker } from "../../utils/useProhibitedChecker";
+import LottieView from "lottie-react-native";
 import {
   MapView,
   Camera,
@@ -37,28 +41,6 @@ import {
 } from "@maplibre/maplibre-react-native";
 import { MAP_TILER_API_KEY } from "@env";
 
-// Update the interface to include all fields
-// interface ListingData extends Item {
-//   itemName: string;
-//   itemCategory: string;
-//   itemDesc: string;
-//   itemPrice: number;
-//   itemMinRentDuration: number;
-//   itemCondition: string;
-//   itemLocation: string;
-//   images: string[];
-//   paymentSettings?: {
-//     downpayment?: {
-//       percentage: number;
-//       timing: "reservation" | "pickup";
-//     };
-//   };
-//   owner: {
-//     id: string;
-//     fullname: string;
-//   };
-// }
-
 const EditListing = () => {
   const { id } = useLocalSearchParams();
   const { setIsLoading: setGlobalLoading } = useLoader();
@@ -67,7 +49,23 @@ const EditListing = () => {
   const [showCamera, setShowCamera] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+  const [facing, setFacing] = useState<CameraType>("back");
+  const [permission, requestPermission] = useCameraPermissions();
+  const [imageStates, setImageStates] = useState<
+    Map<
+      string,
+      {
+        status: "local" | "uploading" | "uploaded" | "failed";
+        uri: string;
+        uploadProgress?: number;
+      }
+    >
+  >(new Map());
 
+  const [hasChanges, setHasChanges] = useState(false);
+  const [initialFormData, setInitialFormData] = useState<
+    typeof formData | null
+  >(null);
   const [showConditionDropdown, setShowConditionDropdown] = useState(false);
   const insets = useSafeAreaInsets();
 
@@ -79,6 +77,13 @@ const EditListing = () => {
     { value: "Fair", details: "Visible wear but functions well" },
     { value: "Worn but Usable", details: "Heavy use but still functional" },
   ];
+
+  // Add title validation state
+  const [titleValidation, setTitleValidation] = useState({
+    isValid: true,
+    message: "",
+    similarity: 1,
+  });
 
   // Update the form state
   const [formData, setFormData] = useState({
@@ -121,6 +126,57 @@ const EditListing = () => {
     fetchListingDetails();
   }, [id]);
 
+  // Add useEffect for similarity check initialization
+  useEffect(() => {
+    // Initialize similarity check when original data is set
+    if (originalData.title && formData.title && formData.enableAI) {
+      checkTitleSimilarityRealTime(formData.title);
+    }
+  }, [originalData.title, formData.enableAI]);
+
+  useEffect(() => {
+    if (initialFormData) {
+      const hasFormChanges = checkForChanges(formData, initialFormData);
+      setHasChanges(hasFormChanges);
+    }
+  }, [formData, initialFormData]);
+
+  const checkForChanges = (currentData: any, initialData: any) => {
+    if (!initialData) return false;
+
+    // Check basic form fields
+    const basicFieldsChanged =
+      currentData.title !== initialData.title ||
+      currentData.category !== initialData.category ||
+      currentData.description !== initialData.description ||
+      currentData.price !== initialData.price ||
+      currentData.minimumDays !== initialData.minimumDays ||
+      currentData.condition !== initialData.condition ||
+      currentData.enableDownpayment !== initialData.enableDownpayment ||
+      currentData.downpaymentPercentage !== initialData.downpaymentPercentage;
+
+    if (basicFieldsChanged) return true;
+
+    // Check for image changes (including pending uploads)
+    const hasLocalImages = currentData.images.some((uri: string) =>
+      isLocalImage(uri)
+    );
+    const hasFailedUploads = Array.from(imageStates.values()).some(
+      (state) => state.status === "failed"
+    );
+    const imageCountChanged =
+      currentData.images.length !== initialData.images.length;
+    const imageUrlsChanged =
+      JSON.stringify(currentData.images) !== JSON.stringify(initialData.images);
+
+    return (
+      hasLocalImages ||
+      hasFailedUploads ||
+      imageCountChanged ||
+      imageUrlsChanged
+    );
+  };
+
   const fetchListingDetails = async () => {
     setGlobalLoading(true);
     try {
@@ -130,16 +186,7 @@ const EditListing = () => {
       if (docSnap.exists()) {
         const data = docSnap.data();
 
-        // Store original data if AI is enabled
-        if (data.enableAI) {
-          setOriginalData({
-            title: data.itemName,
-            category: data.itemCategory,
-            firstImage: data.images[0],
-          });
-        }
-
-        setFormData({
+        const initialData = {
           title: data.itemName || "",
           category: data.itemCategory || "",
           description: data.itemDesc || "",
@@ -151,7 +198,19 @@ const EditListing = () => {
           enableDownpayment: data.downpaymentPercentage ? true : false,
           downpaymentPercentage: data.downpaymentPercentage?.toString() || "",
           enableAI: data.enableAI || false,
-        });
+        };
+
+        // Store original data if AI is enabled
+        if (data.enableAI) {
+          setOriginalData({
+            title: data.itemName,
+            category: data.itemCategory,
+            firstImage: data.images[0],
+          });
+        }
+
+        setFormData(initialData);
+        setInitialFormData(initialData);
       }
     } catch (error) {
       console.error("Error fetching listing:", error);
@@ -164,6 +223,86 @@ const EditListing = () => {
       setGlobalLoading(false);
       setIsLoading(false);
     }
+  };
+
+  // Real-time similarity check function
+  const checkTitleSimilarityRealTime = (newTitle: string) => {
+    if (!formData.enableAI || !originalData.title) {
+      setTitleValidation({ isValid: true, message: "", similarity: 1 });
+      return;
+    }
+
+    // Don't validate if title is too short
+    if (newTitle.length <= 3) {
+      setTitleValidation({ isValid: true, message: "", similarity: 1 });
+      return;
+    }
+
+    // Calculate similarity
+    const similarity = stringSimilarity.compareTwoStrings(
+      newTitle.toLowerCase().trim(),
+      originalData.title.toLowerCase().trim()
+    );
+
+    // Set validation state based on similarity
+    if (similarity < 0.3) {
+      setTitleValidation({
+        isValid: false,
+        message:
+          "Title is very different from AI-identified name. This may affect searchability.",
+        similarity: similarity,
+      });
+    } else if (similarity < 0.5) {
+      setTitleValidation({
+        isValid: false,
+        message: "Title differs significantly from AI-identified name.",
+        similarity: similarity,
+      });
+    } else {
+      setTitleValidation({
+        isValid: true,
+        message: "",
+        similarity: similarity,
+      });
+    }
+  };
+
+  // Similarity meter component
+  const SimilarityMeter = ({
+    similarity,
+    isVisible,
+  }: {
+    similarity: number;
+    isVisible: boolean;
+  }) => {
+    if (!isVisible) return null;
+
+    const percentage = Math.round(similarity * 100);
+    const getColorClass = (sim: number) => {
+      if (sim >= 0.7) return "bg-green-500";
+      if (sim >= 0.5) return "bg-yellow-500";
+      if (sim >= 0.3) return "bg-orange-500";
+      return "bg-red-500";
+    };
+
+    return (
+      <View className="mt-2">
+        {similarity === 1 ? null : similarity >= 0.5 ? (
+          <Text className="text-sm text-primary">Title accepted.</Text>
+        ) : null}
+
+        {/* <View className="flex-row justify-between items-center mb-1">
+          <Text className="text-xs text-gray-600">Similarity to original</Text>
+          <Text className="text-xs text-gray-600">{percentage}%</Text>
+        </View>
+        <View className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <View
+            className={`h-full ${getColorClass(similarity)}`}
+            style={{ width: `${percentage}%` }}
+          />
+        </View> */}
+      </View>
+    );
   };
 
   // Helper function to create circle polygon for radius display
@@ -309,8 +448,8 @@ const EditListing = () => {
     }
   };
 
-  // Image handling functions
   const openCamera = async () => {
+    // Check image limit first
     if (formData.images.length >= 5) {
       Toast.show({
         type: ALERT_TYPE.WARNING,
@@ -319,35 +458,160 @@ const EditListing = () => {
       });
       return;
     }
+
+    // Check and request camera permissions
+    if (!permission) {
+      // Still loading permissions
+      return;
+    }
+
+    if (!permission.granted) {
+      const { granted } = await requestPermission();
+      if (!granted) {
+        Toast.show({
+          type: ALERT_TYPE.WARNING,
+          title: "Permission Required",
+          textBody: "Camera permission is required to take photos",
+        });
+        return;
+      }
+    }
+
     setShowCamera(true);
   };
 
   const captureImage = async () => {
-    if (!cameraRef.current) return;
+    if (!cameraRef.current) {
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Camera Error",
+        textBody: "Camera not ready. Please try again.",
+      });
+      return;
+    }
+
     try {
-      const photo = await cameraRef.current.takePictureAsync();
-      if (photo) {
-        const imageUrl = await uploadImage(photo.uri);
+      setIsSubmitting(true);
+
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        base64: false,
+        skipProcessing: false,
+      });
+
+      if (photo && photo.uri) {
+        const newIndex = formData.images.length;
+        const imageKey = `${newIndex}-${photo.uri}`;
+
+        // 1. Add local image to form data immediately (will be replaced after upload)
         setFormData((prev) => ({
           ...prev,
-          images: [...prev.images, imageUrl],
+          images: [...prev.images, photo.uri], // Local URI initially
         }));
+
+        // 2. Set initial state as local
+        setImageStates((prev) =>
+          new Map(prev).set(imageKey, {
+            status: "local",
+            uri: photo.uri,
+          })
+        );
+
+        // 3. Close camera immediately
+        setShowCamera(false);
+        setIsSubmitting(false);
+
+        // 4. Start upload process in background (this will replace the local URI)
+        setTimeout(() => uploadImageInBackground(photo.uri, newIndex), 100);
       }
-      setShowCamera(false);
     } catch (error) {
-      console.error("Camera Error:", error);
+      console.error("Camera capture error:", error);
+      setIsSubmitting(false);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Camera Error",
+        textBody: "Failed to capture image. Please try again.",
+      });
+    }
+  };
+  const uploadImageInBackground = async (
+    localUri: string,
+    imageIndex: number
+  ) => {
+    const imageKey = `${imageIndex}-${localUri}`;
+
+    try {
+      // 1. Update status to uploading
+      setImageStates((prev) =>
+        new Map(prev).set(imageKey, {
+          status: "uploading",
+          uri: localUri,
+        })
+      );
+
+      // 2. Perform upload to Firebase
+      const uploadedUrl = await uploadImage(localUri);
+
+      // 3. CRITICAL: Update form data with Firebase URL
+      setFormData((prev) => ({
+        ...prev,
+        images: prev.images.map(
+          (img, idx) => (idx === imageIndex ? uploadedUrl : img) // Replace local URI with Firebase URL
+        ),
+      }));
+
+      // 4. Update image states - use Firebase URL as new key
+      setImageStates((prev) => {
+        const newMap = new Map(prev);
+        // Remove the old local URI key
+        newMap.delete(imageKey);
+        // Add new Firebase URL key
+        newMap.set(`${imageIndex}-${uploadedUrl}`, {
+          status: "uploaded",
+          uri: uploadedUrl,
+        });
+        return newMap;
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Success",
+        textBody: "Image uploaded successfully",
+      });
+    } catch (error) {
+      console.error("Background upload error:", error);
+
+      // Keep local URI but mark as failed
+      setImageStates((prev) =>
+        new Map(prev).set(imageKey, {
+          status: "failed",
+          uri: localUri,
+        })
+      );
+
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Upload Failed",
+        textBody: "Image upload failed. Tap to retry or remove the image.",
+      });
     }
   };
 
-  const uploadImage = async (uri: string) => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const imageRef = ref(storage, `items/${id}/image${Date.now()}.jpg`);
-    await uploadBytes(imageRef, blob);
-    return await getDownloadURL(imageRef);
-  };
-
   const removeImage = (index: number) => {
+    const uri = formData.images[index];
+    const imageStatus = getImageStatus(uri, index);
+
+    // Don't allow removal while uploading
+    if (imageStatus.status === "uploading") {
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Please Wait",
+        textBody: "Image is still uploading. Please wait before removing.",
+      });
+      return;
+    }
+
+    // Prevent removal of first image if AI is enabled
     if (formData.enableAI && index === 0) {
       Toast.show({
         type: ALERT_TYPE.WARNING,
@@ -357,40 +621,69 @@ const EditListing = () => {
       return;
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, i) => i !== index),
-    }));
+    Alert.alert("Remove Image", "Are you sure you want to remove this image?", [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          // Remove from form data
+          setFormData((prev) => ({
+            ...prev,
+            images: prev.images.filter((_, i) => i !== index),
+          }));
+
+          // Clean up image states
+          setImageStates((prev) => {
+            const newMap = new Map();
+            prev.forEach((state, key) => {
+              const [keyIndex] = key.split("-");
+              const idx = parseInt(keyIndex);
+              if (idx < index) {
+                // Keep indices below removed index
+                newMap.set(key, state);
+              } else if (idx > index) {
+                // Adjust indices above removed index
+                const newKey = `${idx - 1}-${state.uri}`;
+                newMap.set(newKey, state);
+              }
+              // Skip the removed index
+            });
+            return newMap;
+          });
+
+          // Toast.show({
+          //   type: ALERT_TYPE.SUCCESS,
+          //   title: "Success",
+          //   textBody: "Image removed successfully",
+          // });
+        },
+      },
+    ]);
   };
 
-  // Add title similarity check
-  const checkTitleSimilarity = (newTitle: string) => {
-    if (!formData.enableAI) return true;
+  const uploadImage = async (uri: string) => {
+    try {
+      const response = await fetch(uri);
+      if (!response.ok) {
+        throw new Error("Failed to fetch image");
+      }
 
-    // Only check similarity if newTitle has more than 5 characters
-    if (newTitle.length <= 5) return true;
+      const blob = await response.blob();
+      const timestamp = Date.now();
+      const imageRef = ref(storage, `items/${id}/image_${timestamp}.jpg`);
 
-    const similarity = stringSimilarity.compareTwoStrings(
-      newTitle.toLowerCase(),
-      originalData.title.toLowerCase()
-    );
+      const uploadResult = await uploadBytes(imageRef, blob);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
 
-    if (similarity < 0.5) {
-      Alert.alert(
-        "Warning",
-        "The new title is significantly different from the AI-identified title. This might affect item searchability.",
-        [
-          {
-            text: "Keep Original",
-            onPress: () => {
-              setFormData((prev) => ({ ...prev, title: originalData.title }));
-            },
-          },
-          { text: "Use New", style: "destructive" },
-        ]
-      );
+      return downloadURL;
+    } catch (error) {
+      console.error("Upload error:", error);
+      throw new Error("Failed to upload image");
     }
-    return true;
   };
 
   if (isLoading) {
@@ -401,563 +694,886 @@ const EditListing = () => {
     );
   }
 
+  const isLocalImage = (uri: string) => {
+    if (!uri) return false;
+
+    const localPatterns = [
+      "file://",
+      "ph://", // iOS Photos
+      "content://", // Android
+      "data:image/", // Base64
+      "/data/user/", // Android local
+      "/storage/", // Android storage
+    ];
+
+    const isLocal =
+      localPatterns.some((pattern) => uri.startsWith(pattern)) ||
+      (!uri.startsWith("https://") && !uri.startsWith("http://"));
+
+    return isLocal;
+  };
+
+  const getImageStatus = (uri: string, index: number) => {
+    // Try to find status with current URI
+    const currentKey = `${index}-${uri}`;
+    const currentStatus = imageStates.get(currentKey);
+
+    if (currentStatus) {
+      return currentStatus;
+    }
+
+    // If not found, check if this is a Firebase URL (uploaded)
+    if (uri.startsWith("https://firebasestorage.googleapis.com")) {
+      return {
+        status: "uploaded" as const,
+        uri,
+      };
+    }
+
+    // If it's a local image without status, mark as local
+    if (isLocalImage(uri)) {
+      return {
+        status: "local" as const,
+        uri,
+      };
+    }
+
+    // Default to uploaded for any other case
+    return {
+      status: "uploaded" as const,
+      uri,
+    };
+  };
+
   return (
-    <SafeAreaView
-      className="flex-1 bg-white"
-      style={{ paddingTop: insets.top }}
-    >
-      {/* Header */}
-      <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
-        <TouchableOpacity
-          onPress={() => router.back()}
-          className="items-center justify-center"
-        >
-          <Image
-            source={icons.leftArrow}
-            className="w-8 h-8"
-            tintColor="#6B7280"
-          />
-        </TouchableOpacity>
-        <View className="flex-1 items-center">
-          <Text className="text-xl font-pbold text-gray-800">Edit Item</Text>
+    <>
+      <SafeAreaView
+        className="flex-1 bg-white"
+        style={{ paddingTop: insets.top }}
+      >
+        {/* Header */}
+        <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="items-center justify-center"
+          >
+            <Image
+              source={icons.leftArrow}
+              className="w-8 h-8"
+              tintColor="#6B7280"
+            />
+          </TouchableOpacity>
+          <View className="flex-1 items-center">
+            <Text className="text-xl font-pbold text-gray-800">Edit Item</Text>
+          </View>
+          <View className="w-8" />
         </View>
-        <View className="w-8" />
-      </View>
 
-      <ScrollView className="p-5 gap-5 ">
-        {/* Form Content */}
-        <View
-          className="space-y-4"
-          style={{ paddingBottom: insets.bottom + 40 }}
-        >
-          {/* Images Section */}
-          <View>
-            <Text className="text-secondary-400 font-pmedium">
-              Images ({formData.images.length}/5)
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {formData.images.map((uri, index) => (
-                <View key={index} className="relative w-24 h-24 mr-2">
-                  <Image
-                    source={{ uri }}
-                    className="w-full h-full rounded-xl"
-                  />
-                  <TouchableOpacity
-                    onPress={() => removeImage(index)}
-                    className="absolute top-1 right-1 bg-red-500 rounded-full p-1"
-                  >
-                    <Image
-                      source={icons.close}
-                      className="w-4 h-4"
-                      tintColor="white"
-                    />
-                  </TouchableOpacity>
+        <ScrollView className="p-5 gap-5 ">
+          {/* Form Content */}
+          <View
+            className="space-y-4"
+            style={{ paddingBottom: insets.bottom + 40 }}
+          >
+            {/* Images Section */}
+            <View>
+              <View className="flex-row justify-between items-center mb-2">
+                <Text className="text-secondary-400 font-pmedium">
+                  Images ({formData.images.length}/5)
+                </Text>
+                <View className="flex-row items-center">
+                  {/* {formData.images.some(isLocalImage) && (
+                    <Text className="text-xs text-blue-600 mr-2">
+                      • Unsaved changes
+                    </Text>
+                  )} */}
                 </View>
-              ))}
-              {formData.images.length < 5 && (
-                <TouchableOpacity
-                  onPress={openCamera}
-                  className="w-24 h-24 bg-gray-100 rounded-xl items-center justify-center"
-                >
-                  <Image
-                    source={icons.camera}
-                    className="w-6 h-6"
-                    tintColor="#666"
-                  />
-                  <Text className="text-xs mt-1">Add Photo</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-          </View>
+              </View>
 
-          {/* Title Input */}
-          <View className="mt-2">
-            <Text className="text-secondary-400 text-lg font-pmedium mb-2">
-              Item Name
-            </Text>
-            <TextInput
-              value={formData.title}
-              onChangeText={(text) => {
-                checkTitleSimilarity(text);
-                setFormData((prev) => ({ ...prev, title: text }));
-              }}
-              // editable={!formData.enableAI}
-              placeholder="Enter item name"
-              className="border font-pregular text-base border-gray-200 rounded-xl p-3"
-            />
-
-            {errors.title ? (
-              <Text className="text-red-500 text-xs mt-1">{errors.title}</Text>
-            ) : null}
-          </View>
-
-          {/* Category Selection */}
-          <View className="mt-2">
-            <Text className="text-secondary-400 text-lg font-pmedium mb-2 ">
-              Category
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                if (formData.enableAI) {
-                  Toast.show({
-                    type: ALERT_TYPE.INFO,
-                    title: "Category Locked",
-                    textBody:
-                      "Category cannot be changed for AI-identified items",
-                  });
-                  return;
-                }
-                setShowCategoryDropdown(true);
-              }}
-              className={`border border-gray-200 rounded-xl p-3 ${
-                formData.enableAI ? "bg-gray-100" : ""
-              }`}
-            >
-              <Text
-                className={`font-pregular text-base ${
-                  formData.enableAI ? "text-gray-400" : ""
-                }`}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingRight: 16 }}
               >
-                {formData.category || "Select category"}
-              </Text>
-            </TouchableOpacity>
+                {formData.images.map((uri, index) => {
+                  const imageStatus = getImageStatus(uri, index);
+                  const isUploading = imageStatus.status === "uploading";
+                  const isFailed = imageStatus.status === "failed";
+                  const isLocal = imageStatus.status === "local";
 
-            {errors.category ? (
-              <Text className="text-red-500 text-xs mt-1">
-                {errors.category}
-              </Text>
-            ) : null}
-          </View>
-
-          <View className="flex-row justify-between gap-4 mt-2">
-            <View className="flex-1">
-              <Text className="text-secondary-400 text-lg font-pmedium  mb-2">
-                Price per Day
-              </Text>
-              <View className="flex-row items-center border border-gray-200 rounded-xl">
-                <Text className="rounded-xl p-3 pr-0 font-pregular text-base">
-                  ₱
-                </Text>
-                <TextInput
-                  value={formData.price}
-                  onChangeText={(text) => {
-                    const numValue = parseFloat(text);
-                    if (text === "" || (numValue > 0 && !isNaN(numValue))) {
-                      setFormData((prev) => ({ ...prev, price: text }));
-                    }
-                  }}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                  className="flex-1 p-3 font-pregular text-base"
-                />
-              </View>
-              {errors.price ? (
-                <Text className="text-red-500 text-xs mt-1">
-                  {errors.price}
-                </Text>
-              ) : null}
-            </View>
-
-            <View className="flex-1">
-              <Text className="text-secondary-400 text-lg font-pmedium  mb-2">
-                Min. Rental Days
-              </Text>
-              <TextInput
-                value={formData.minimumDays}
-                onChangeText={(text) => {
-                  const numValue = parseInt(text);
-                  if (text === "" || (numValue > 0 && !isNaN(numValue))) {
-                    setFormData((prev) => ({ ...prev, minimumDays: text }));
-                  }
-                }}
-                placeholder="Enter days"
-                keyboardType="number-pad"
-                className="border border-gray-200 rounded-xl p-3"
-              />
-              {errors.minimumDays ? (
-                <Text className="text-red-500 text-xs mt-1">
-                  {errors.minimumDays}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-
-          {/* Condition Selection */}
-          <View className="my-2">
-            <Text className="text-secondary-400 font-pmedium text-lg">
-              Item Condition
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowConditionDropdown(true)}
-              className="border border-gray-200 rounded-xl p-3"
-            >
-              <Text>{formData.condition || "Select condition"}</Text>
-            </TouchableOpacity>
-            {errors.condition ? (
-              <Text className="text-red-500 text-xs mt-1">
-                {errors.condition}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Description Input */}
-          <View className="my-2">
-            <Text className="text-secondary-400 text-lg font-pmedium ">
-              Description
-            </Text>
-            <TextInput
-              value={formData.description}
-              onChangeText={(text) =>
-                setFormData((prev) => ({ ...prev, description: text }))
-              }
-              placeholder="Describe your item (min. 20 characters)"
-              multiline
-              numberOfLines={4}
-              className="border border-gray-200 rounded-xl p-3 h-32 text-base"
-              textAlignVertical="top"
-            />
-            {errors.description ? (
-              <Text className="text-red-500 text-xs mt-1">
-                {errors.description}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Add Payment Settings Section */}
-          <View className="my-2">
-            <Text className="text-secondary-400 text-lg font-pmedium ">
-              Payment Options
-            </Text>
-
-            <View className="bg-gray-50 rounded-xl p-4 ">
-              <View className="flex-row items-center justify-between mb-2">
-                <View className="flex-1">
-                  <Text className="text-secondary-400 font-pmedium">
-                    Downpayment Requirement
-                  </Text>
-                  <Text className="text-secondary-300 font-pregular text-xs">
-                    Secures rental and must be paid at pickup
-                  </Text>
-                </View>
-                <Switch
-                  value={formData.enableDownpayment}
-                  onValueChange={(value) => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      enableDownpayment: value,
-                      downpaymentPercentage: value
-                        ? prev.downpaymentPercentage || "30"
-                        : "",
-                    }));
-                  }}
-                  trackColor={{ false: "#767577", true: "#5C6EF6" }}
-                  thumbColor={
-                    formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
-                  }
-                />
-              </View>
-
-              {formData.enableDownpayment && (
-                <View>
-                  {/* Percentage Input */}
-
-                  {/* Quick Select Buttons */}
-                  <View className="flex-row gap-2">
-                    {["10", "20", "30", "40", "50"].map((percentage) => (
-                      <TouchableOpacity
-                        key={percentage}
-                        onPress={() => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            downpaymentPercentage: percentage,
-                          }));
-                        }}
-                        className={`px-3 py-2 rounded-lg border ${
-                          formData.downpaymentPercentage === percentage
-                            ? "bg-primary border-primary"
-                            : "bg-white border-gray-300"
-                        }`}
-                      >
-                        <Text
-                          className={`font-pmedium ${
-                            formData.downpaymentPercentage === percentage
-                              ? "text-white"
-                              : "text-secondary-400"
-                          }`}
-                        >
-                          {percentage}%
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Custom Percentage Input */}
-                  {/* <TextInput
-                      value={formData.downpaymentPercentage}
-                      onChangeText={(text) => {
-                        const numValue = parseInt(text);
-                        if (text === "" || (numValue > 0 && numValue <= 100)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            downpaymentPercentage: text,
-                          }));
-                        }
-                      }}
-                      className="font-pregular bg-white border rounded-xl p-3 border-gray-200"
-                      keyboardType="numeric"
-                      placeholder="Enter percentage (10-100)"
-                    />
-                    <Text className="text-secondary-300 font-pregular text-xs mt-1">
-                      Minimum 10%, Maximum 100%
-                    </Text> */}
-                </View>
-              )}
-            </View>
-          </View>
-
-          {/* Location Display - Static Map */}
-          {formData.location &&
-            formData.location.latitude &&
-            formData.location.longitude && (
-              <View className="my-2">
-                <View className="flex-row items-center ">
-                  <Text className="text-secondary-400 font-pmedium">
-                    Location
-                  </Text>
-                  <Text className="text-secondary-300 font-pregular text-xs ml-2">
-                    (Pickup location cannot be changed)
-                  </Text>
-                </View>
-
-                {/* Static Map Container */}
-                <View className="relative">
-                  <View className="h-48 rounded-s-xloverflow-hidden border border-gray-200">
-                    <MapView
-                      style={{ flex: 1 }}
-                      rotateEnabled={false}
-                      scrollEnabled={false}
-                      zoomEnabled={false}
-                      pitchEnabled={false}
-                      attributionEnabled={false}
-                      compassViewPosition={3}
-                      mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
+                  return (
+                    <View
+                      key={`${index}-${uri}`}
+                      className="relative w-24 h-24 mr-2"
                     >
-                      <Camera
-                        defaultSettings={{
-                          centerCoordinate: [
-                            formData.location.longitude,
-                            formData.location.latitude,
-                          ],
-                          zoomLevel: 15,
+                      {/* Main Image - Using Expo Image with built-in loading states */}
+                      <ExpoImage
+                        source={{ uri }}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: 12,
+                          backgroundColor: "#f3f4f6", // gray-200 equivalent
                         }}
+                        contentFit="cover"
+                        transition={200} // Smooth transition
+                        placeholder="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23e5e7eb'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%239ca3af' font-size='14' font-family='system-ui'%3ELoading...%3C/text%3E%3C/svg%3E"
+                        cachePolicy="memory-disk" // Better caching
                       />
 
-                      {/* Radius circle if available */}
-                      {formData.location.radius && (
-                        <ShapeSource
-                          id="pickup-radius"
-                          shape={createCirclePolygon(
-                            [
+                      {/* Upload Status Overlays */}
+                      {isUploading && (
+                        <View className="absolute inset-0 bg-black/50 rounded-xl items-center justify-center">
+                          <ActivityIndicator size="small" color="white" />
+                          <Text className="text-white text-xs font-pmedium mt-1">
+                            Uploading...
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Processing Status for Local Images */}
+                      {isLocal && !isUploading && (
+                        <View className="absolute inset-0 bg-blue-500/80 rounded-xl items-center justify-center">
+                          <ActivityIndicator size="small" color="white" />
+                          <Text className="text-white text-xs font-pmedium mt-1">
+                            Processing...
+                          </Text>
+                        </View>
+                      )}
+
+                      {/* Failed Upload Overlay */}
+                      {isFailed && (
+                        <TouchableOpacity
+                          onPress={() => uploadImageInBackground(uri, index)}
+                          className="absolute inset-0 bg-red-500/80 rounded-xl items-center justify-center"
+                        >
+                          <Image
+                            source={icons.refresh}
+                            className="w-4 h-4 mb-1"
+                            tintColor="white"
+                          />
+                          <Text className="text-white text-xs font-pmedium">
+                            Retry
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* Status Badges - Keep existing commented code as requested */}
+                      {/* {isLocal && !isUploading && (
+        <View className="absolute top-1 left-1 bg-blue-500 rounded px-1 py-0.5">
+          <Text className="text-white text-xs font-pmedium">
+            NEW
+          </Text>
+        </View>
+      )} */}
+
+                      {/* AI badge for first image */}
+                      {formData.enableAI &&
+                        index === 0 &&
+                        !isLocal &&
+                        !isUploading && (
+                          <Image
+                            source={icons.aiImage}
+                            className="w-5 h-5 absolute bottom-2 left-2"
+                            tintColor="white"
+                          />
+                        )}
+
+                      {/* Remove button */}
+                      <TouchableOpacity
+                        onPress={() => removeImage(index)}
+                        disabled={isUploading || isLocal}
+                        className={`absolute top-1 right-1 rounded-full p-1 ${
+                          isUploading || isLocal
+                            ? "bg-gray-400"
+                            : formData.enableAI && index === 0
+                            ? "bg-gray-400"
+                            : isFailed
+                            ? "bg-red-600"
+                            : "bg-red-500"
+                        }`}
+                      >
+                        <Image
+                          source={icons.close}
+                          className="w-4 h-4"
+                          tintColor="white"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                {/* Add photo button */}
+                {formData.images.length < 5 && (
+                  <TouchableOpacity
+                    onPress={openCamera}
+                    className="w-24 h-24 bg-gray-100 rounded-xl items-center justify-center border-2 border-dashed border-gray-300"
+                  >
+                    <Image
+                      source={icons.camera}
+                      className="w-6 h-6"
+                      tintColor="#666"
+                    />
+                    <Text className="text-xs mt-1 text-gray-600">
+                      Add Photo
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+
+              {errors.images ? (
+                <Text className="text-red-500 text-xs mt-2">
+                  {errors.images}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Title Input with Real-time Validation */}
+            <View className="mt-2">
+              <Text className="text-secondary-400 text-lg font-pmedium mb-2">
+                Item Name
+              </Text>
+              <TextInput
+                value={formData.title}
+                onChangeText={(text) => {
+                  setFormData((prev) => ({ ...prev, title: text }));
+                  // Real-time similarity check
+                  checkTitleSimilarityRealTime(text);
+                }}
+                placeholder="Enter item name"
+                className={`border font-pregular text-base rounded-xl p-3 ${
+                  formData.enableAI && !titleValidation.isValid
+                    ? "border-red-400 bg-red-50"
+                    : "border-gray-200"
+                }`}
+              />
+
+              {/* Show similarity warning if AI is enabled and title is invalid */}
+              {formData.enableAI && !titleValidation.isValid && (
+                <View className="mt-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <View className="flex-row items-start">
+                    <View className="flex-1">
+                      <Text className="text-orange-700 font-pmedium text-sm">
+                        Title Similarity Warning
+                      </Text>
+                      <Text className="text-orange-600 font-pregular text-xs mt-1">
+                        {titleValidation.message}
+                      </Text>
+                      {/* <Text className="text-orange-500 font-pregular text-xs mt-1">
+                      Original: "{originalData.title}"
+                    </Text>
+                    <Text className="text-orange-500 font-pregular text-xs">
+                      Similarity: {Math.round(titleValidation.similarity * 100)}
+                      %
+                    </Text> */}
+                    </View>
+                  </View>
+
+                  {/* Quick action buttons */}
+                  <View className="flex-row gap-2 mt-3">
+                    <TouchableOpacity
+                      onPress={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          title: originalData.title,
+                        }));
+                        setTitleValidation({
+                          isValid: true,
+                          message: "",
+                          similarity: 1,
+                        });
+                      }}
+                      className="flex-1 bg-orange-100 rounded-lg py-2"
+                    >
+                      <Text className="text-orange-700 font-pmedium text-center text-base">
+                        Use Original
+                      </Text>
+                    </TouchableOpacity>
+                    {titleValidation.similarity > 0.3 ? (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setTitleValidation({
+                            isValid: true,
+                            message: "",
+                            similarity: titleValidation.similarity,
+                          });
+                        }}
+                        className="flex-1 bg-white border border-gray-200 rounded-lg py-2"
+                      >
+                        <Text className="text-gray-700 font-pmedium text-center text-base">
+                          Keep Current
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+              )}
+
+              {/* Similarity meter */}
+              {formData.enableAI && (
+                <SimilarityMeter
+                  similarity={titleValidation.similarity}
+                  isVisible={formData.title.length > 3}
+                />
+              )}
+
+              {/* Regular validation error */}
+              {errors.title ? (
+                <Text className="text-red-500 text-xs mt-1">
+                  {errors.title}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Category Selection */}
+            <View className="mt-2">
+              <Text className="text-secondary-400 text-lg font-pmedium mb-2 ">
+                Category
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (formData.enableAI) {
+                    Toast.show({
+                      type: ALERT_TYPE.INFO,
+                      title: "Category Locked",
+                      textBody:
+                        "Category cannot be changed for AI-identified items",
+                    });
+                    return;
+                  }
+                  setShowCategoryDropdown(true);
+                }}
+                className={`border border-gray-200 rounded-xl p-3 ${
+                  formData.enableAI ? "bg-gray-100" : ""
+                }`}
+              >
+                <Text
+                  className={`font-pregular text-base ${
+                    formData.enableAI ? "text-gray-400" : ""
+                  }`}
+                >
+                  {formData.category || "Select category"}
+                </Text>
+              </TouchableOpacity>
+
+              {errors.category ? (
+                <Text className="text-red-500 text-xs mt-1">
+                  {errors.category}
+                </Text>
+              ) : null}
+            </View>
+
+            <View className="flex-row justify-between gap-4 mt-2">
+              <View className="flex-1">
+                <Text className="text-secondary-400 text-lg font-pmedium  mb-2">
+                  Price per Day
+                </Text>
+                <View className="flex-row items-center border border-gray-200 rounded-xl">
+                  <Text className="rounded-xl p-3 pr-0 font-pregular text-base">
+                    ₱
+                  </Text>
+                  <TextInput
+                    value={formData.price}
+                    onChangeText={(text) => {
+                      const numValue = parseFloat(text);
+                      if (text === "" || (numValue > 0 && !isNaN(numValue))) {
+                        setFormData((prev) => ({ ...prev, price: text }));
+                      }
+                    }}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                    className="flex-1 p-3 font-pregular text-base"
+                  />
+                </View>
+                {errors.price ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.price}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="flex-1">
+                <Text className="text-secondary-400 text-lg font-pmedium  mb-2">
+                  Min. Rental Days
+                </Text>
+                <TextInput
+                  value={formData.minimumDays}
+                  onChangeText={(text) => {
+                    const numValue = parseInt(text);
+                    if (text === "" || (numValue > 0 && !isNaN(numValue))) {
+                      setFormData((prev) => ({ ...prev, minimumDays: text }));
+                    }
+                  }}
+                  placeholder="Enter days"
+                  keyboardType="number-pad"
+                  className="border border-gray-200 rounded-xl p-3"
+                />
+                {errors.minimumDays ? (
+                  <Text className="text-red-500 text-xs mt-1">
+                    {errors.minimumDays}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
+            {/* Condition Selection */}
+            <View className="my-2">
+              <Text className="text-secondary-400 font-pmedium text-lg">
+                Item Condition
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowConditionDropdown(true)}
+                className="border border-gray-200 rounded-xl p-3"
+              >
+                <Text>{formData.condition || "Select condition"}</Text>
+              </TouchableOpacity>
+              {errors.condition ? (
+                <Text className="text-red-500 text-xs mt-1">
+                  {errors.condition}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Description Input */}
+            <View className="my-2">
+              <Text className="text-secondary-400 text-lg font-pmedium ">
+                Description
+              </Text>
+              <TextInput
+                value={formData.description}
+                onChangeText={(text) =>
+                  setFormData((prev) => ({ ...prev, description: text }))
+                }
+                placeholder="Describe your item (min. 20 characters)"
+                multiline
+                numberOfLines={4}
+                className="border border-gray-200 rounded-xl p-3 h-32 text-base"
+                textAlignVertical="top"
+              />
+              {errors.description ? (
+                <Text className="text-red-500 text-xs mt-1">
+                  {errors.description}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Add Payment Settings Section */}
+            <View className="my-2">
+              <Text className="text-secondary-400 text-lg font-pmedium ">
+                Payment Options
+              </Text>
+
+              <View className="bg-gray-50 rounded-xl p-4 ">
+                <View className="flex-row items-center justify-between mb-2">
+                  <View className="flex-1">
+                    <Text className="text-secondary-400 font-pmedium">
+                      Downpayment Requirement
+                    </Text>
+                    <Text className="text-secondary-300 font-pregular text-xs">
+                      Secures rental and must be paid at pickup
+                    </Text>
+                  </View>
+                  <Switch
+                    value={formData.enableDownpayment}
+                    onValueChange={(value) => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        enableDownpayment: value,
+                        downpaymentPercentage: value
+                          ? prev.downpaymentPercentage || "30"
+                          : "",
+                      }));
+                    }}
+                    trackColor={{ false: "#767577", true: "#5C6EF6" }}
+                    thumbColor={
+                      formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
+                    }
+                  />
+                </View>
+
+                {formData.enableDownpayment && (
+                  <View>
+                    {/* Percentage Input */}
+
+                    {/* Quick Select Buttons */}
+                    <View className="flex-row gap-2">
+                      {["10", "20", "30", "40", "50"].map((percentage) => (
+                        <TouchableOpacity
+                          key={percentage}
+                          onPress={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              downpaymentPercentage: percentage,
+                            }));
+                          }}
+                          className={`px-3 py-2 rounded-lg border ${
+                            formData.downpaymentPercentage === percentage
+                              ? "bg-primary border-primary"
+                              : "bg-white border-gray-300"
+                          }`}
+                        >
+                          <Text
+                            className={`font-pmedium ${
+                              formData.downpaymentPercentage === percentage
+                                ? "text-white"
+                                : "text-secondary-400"
+                            }`}
+                          >
+                            {percentage}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Location Display - Static Map */}
+            {formData.location &&
+              formData.location.latitude &&
+              formData.location.longitude && (
+                <View className="my-2">
+                  <View className="flex-row items-center ">
+                    <Text className="text-secondary-400 font-pmedium">
+                      Location
+                    </Text>
+                    <Text className="text-secondary-300 font-pregular text-xs ml-2">
+                      (Pickup location cannot be changed)
+                    </Text>
+                  </View>
+
+                  {/* Static Map Container */}
+                  <View className="relative">
+                    <View className="h-48 rounded-s-xloverflow-hidden border border-gray-200">
+                      <MapView
+                        style={{ flex: 1 }}
+                        rotateEnabled={false}
+                        scrollEnabled={false}
+                        zoomEnabled={false}
+                        pitchEnabled={false}
+                        attributionEnabled={false}
+                        compassViewPosition={3}
+                        mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
+                      >
+                        <Camera
+                          defaultSettings={{
+                            centerCoordinate: [
                               formData.location.longitude,
                               formData.location.latitude,
                             ],
-                            formData.location.radius
-                          )}
+                            zoomLevel: 15,
+                          }}
+                        />
+
+                        {/* Radius circle if available */}
+                        {formData.location.radius && (
+                          <ShapeSource
+                            id="pickup-radius"
+                            shape={createCirclePolygon(
+                              [
+                                formData.location.longitude,
+                                formData.location.latitude,
+                              ],
+                              formData.location.radius
+                            )}
+                          >
+                            <FillLayer
+                              id="pickup-radius-fill"
+                              style={{
+                                fillColor: "rgba(33, 150, 243, 0.15)",
+                                fillOutlineColor: "#2196F3",
+                              }}
+                            />
+                          </ShapeSource>
+                        )}
+
+                        {/* Location marker */}
+                        <MarkerView
+                          coordinate={[
+                            formData.location.longitude,
+                            formData.location.latitude,
+                          ]}
+                          anchor={{ x: 0.5, y: 1 }}
                         >
-                          <FillLayer
-                            id="pickup-radius-fill"
-                            style={{
-                              fillColor: "rgba(33, 150, 243, 0.15)",
-                              fillOutlineColor: "#2196F3",
-                            }}
-                          />
-                        </ShapeSource>
-                      )}
+                          <View>
+                            <Image
+                              source={require("@/assets/images/marker-home.png")}
+                              style={{ width: 32, height: 40 }}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        </MarkerView>
+                      </MapView>
+                    </View>
 
-                      {/* Location marker */}
-                      <MarkerView
-                        coordinate={[
-                          formData.location.longitude,
-                          formData.location.latitude,
-                        ]}
-                        anchor={{ x: 0.5, y: 1 }}
-                      >
-                        <View>
-                          <Image
-                            source={require("@/assets/images/marker-home.png")}
-                            style={{ width: 32, height: 40 }}
-                            resizeMode="contain"
-                          />
-                        </View>
-                      </MarkerView>
-                    </MapView>
-                  </View>
-
-                  {/* Location Info Card */}
-                  <View className="p-3 bg-gray-100 rounded-b-xl">
-                    <Text className="text-secondary-400 font-pmedium text-sm">
-                      {formData.location.address}
-                    </Text>
-                    {formData.location.radius && (
-                      <Text className="text-gray-500 text-xs mt-1">
-                        Pickup radius:{" "}
-                        {formData.location.radius >= 1000
-                          ? `${formData.location.radius / 1000}km`
-                          : `${formData.location.radius}m`}
+                    {/* Location Info Card */}
+                    <View className="p-3 bg-gray-100 rounded-b-xl">
+                      <Text className="text-secondary-400 font-pmedium text-sm">
+                        {formData.location.address}
                       </Text>
-                    )}
+                      {formData.location.radius && (
+                        <Text className="text-gray-500 text-xs mt-1">
+                          Pickup radius:{" "}
+                          {formData.location.radius >= 1000
+                            ? `${formData.location.radius / 1000}km`
+                            : `${formData.location.radius}m`}
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 </View>
-              </View>
-            )}
+              )}
 
-          {/* Update Button */}
-          <LargeButton
-            title={isSubmitting ? "Updating..." : "Update Listing"}
-            handlePress={handleUpdate}
-            disabled={isSubmitting}
-            textStyles="text-white font-psemibold"
-            containerStyles={isSubmitting ? "bg-gray-400" : ""}
-          />
-        </View>
-      </ScrollView>
+            {/* Update Button */}
+          </View>
+        </ScrollView>
 
-      {/* Camera Modal */}
-      <Modal visible={showCamera} animationType="slide">
-        <View className="flex-1 bg-black">
-          <CameraView ref={cameraRef} className="flex-1">
-            <View className="absolute top-0 left-0 right-0 z-20 pt-12 pb-4 px-4">
-              <TouchableOpacity
-                onPress={() => setShowCamera(false)}
-                className="bg-black/60 p-3 rounded-full self-start"
-              >
-                <Image
-                  source={icons.close}
-                  className="w-6 h-6"
-                  tintColor="white"
-                />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              onPress={captureImage}
-              className="absolute bottom-10 self-center"
+        <View className="p-4">
+          <TouchableOpacity
+            onPress={handleUpdate}
+            disabled={isSubmitting || !hasChanges}
+            className={`w-full py-4 rounded-xl items-center justify-center ${
+              isSubmitting
+                ? "bg-gray-400"
+                : !hasChanges
+                ? "bg-gray-300"
+                : "bg-primary"
+            }`}
+            style={{
+              opacity: isSubmitting || !hasChanges ? 0.6 : 1,
+            }}
+          >
+            <Text
+              className={`text-lg font-psemibold ${
+                !hasChanges ? "text-gray-500" : "text-white"
+              }`}
             >
-              <View className="w-20 h-20 rounded-full bg-white items-center justify-center">
-                <View className="w-16 h-16 rounded-full border-4 border-primary" />
-              </View>
-            </TouchableOpacity>
-          </CameraView>
+              {isSubmitting
+                ? "Updating..."
+                : !hasChanges
+                ? "No changes detected"
+                : "Update Listing"}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
 
-      {/* Category Dropdown Modal */}
-      <Modal
-        visible={showCategoryDropdown}
-        animationType="fade"
-        transparent={true}
-      >
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-white rounded-t-3xl p-5">
-            <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-xl font-psemibold">Select Category</Text>
-              <TouchableOpacity onPress={() => setShowCategoryDropdown(false)}>
-                <Image source={icons.close} className="w-6 h-6" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView className="max-h-96">
-              {TOOL_CATEGORIES.map((category) => (
+        {/* Category Dropdown Modal */}
+        <Modal
+          visible={showCategoryDropdown}
+          animationType="fade"
+          transparent={true}
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-white rounded-t-3xl p-5">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-psemibold">Select Category</Text>
                 <TouchableOpacity
-                  key={category}
-                  onPress={() => {
-                    setFormData((prev) => ({ ...prev, category }));
-                    setShowCategoryDropdown(false);
-                  }}
-                  className={`py-3 border-b border-gray-100 flex-row justify-between items-center ${
-                    formData.category === category ? "bg-primary/5" : ""
-                  }`}
+                  onPress={() => setShowCategoryDropdown(false)}
                 >
-                  <Text
-                    className={`text-base ${
-                      formData.category === category
-                        ? "text-primary font-psemibold"
-                        : ""
+                  <Image source={icons.close} className="w-6 h-6" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView className="max-h-96">
+                {TOOL_CATEGORIES.map((category) => (
+                  <TouchableOpacity
+                    key={category}
+                    onPress={() => {
+                      setFormData((prev) => ({ ...prev, category }));
+                      setShowCategoryDropdown(false);
+                    }}
+                    className={`py-3 border-b border-gray-100 flex-row justify-between items-center ${
+                      formData.category === category ? "bg-primary/5" : ""
                     }`}
                   >
-                    {category}
-                  </Text>
-                  {formData.category === category && (
-                    <Image
-                      source={icons.singleCheck}
-                      className="w-5 h-5 mr-5"
-                      tintColor="#5C6EF6"
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Condition Dropdown Modal */}
-      <Modal
-        visible={showConditionDropdown}
-        animationType="slide"
-        transparent={true}
-      >
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-white rounded-t-3xl p-5">
-            <View className="flex-row justify-between items-center mb-4">
-              <Text className="text-xl font-psemibold">Select Condition</Text>
-              <TouchableOpacity onPress={() => setShowConditionDropdown(false)}>
-                <Image source={icons.close} className="w-6 h-6" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView className="max-h-96">
-              {ITEM_CONDITIONS.map((condition) => (
-                <TouchableOpacity
-                  key={condition.value}
-                  onPress={() => {
-                    setFormData((prev) => ({
-                      ...prev,
-                      condition: condition.value,
-                    }));
-                    setShowConditionDropdown(false);
-                  }}
-                  className={`py-3 border-b border-gray-100 ${
-                    formData.condition === condition.value ? "bg-primary/5" : ""
-                  }`}
-                >
-                  <View className="flex-row justify-between items-center">
-                    <View className="flex-1">
-                      <Text
-                        className={`text-base ${
-                          formData.condition === condition.value
-                            ? "text-primary font-psemibold"
-                            : "font-pmedium"
-                        }`}
-                      >
-                        {condition.value}
-                      </Text>
-                      <Text className="text-sm text-gray-500 mt-1">
-                        {condition.details}
-                      </Text>
-                    </View>
-                    {formData.condition === condition.value && (
+                    <Text
+                      className={`text-base ${
+                        formData.category === category
+                          ? "text-primary font-psemibold"
+                          : ""
+                      }`}
+                    >
+                      {category}
+                    </Text>
+                    {formData.category === category && (
                       <Image
                         source={icons.singleCheck}
                         className="w-5 h-5 mr-5"
                         tintColor="#5C6EF6"
                       />
                     )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Condition Dropdown Modal */}
+        <Modal
+          visible={showConditionDropdown}
+          animationType="slide"
+          transparent={true}
+        >
+          <View className="flex-1 bg-black/50 justify-end">
+            <View className="bg-white rounded-t-3xl p-5">
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-psemibold">Select Condition</Text>
+                <TouchableOpacity
+                  onPress={() => setShowConditionDropdown(false)}
+                >
+                  <Image source={icons.close} className="w-6 h-6" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView className="max-h-96">
+                {ITEM_CONDITIONS.map((condition) => (
+                  <TouchableOpacity
+                    key={condition.value}
+                    onPress={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        condition: condition.value,
+                      }));
+                      setShowConditionDropdown(false);
+                    }}
+                    className={`py-3 border-b border-gray-100 ${
+                      formData.condition === condition.value
+                        ? "bg-primary/5"
+                        : ""
+                    }`}
+                  >
+                    <View className="flex-row justify-between items-center">
+                      <View className="flex-1">
+                        <Text
+                          className={`text-base ${
+                            formData.condition === condition.value
+                              ? "text-primary font-psemibold"
+                              : "font-pmedium"
+                          }`}
+                        >
+                          {condition.value}
+                        </Text>
+                        <Text className="text-sm text-gray-500 mt-1">
+                          {condition.details}
+                        </Text>
+                      </View>
+                      {formData.condition === condition.value && (
+                        <Image
+                          source={icons.singleCheck}
+                          className="w-5 h-5 mr-5"
+                          tintColor="#5C6EF6"
+                        />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+
+      {/* Camera Modal */}
+      <Modal
+        visible={showCamera}
+        animationType="slide"
+        statusBarTranslucent={true}
+        onRequestClose={() => setShowCamera(false)}
+      >
+        <View style={StyleSheet.absoluteFillObject}>
+          {permission?.granted ? (
+            <CameraView
+              ref={cameraRef}
+              facing={facing}
+              style={StyleSheet.absoluteFillObject}
+              mode="picture"
+            >
+              {/* Header with close and flip camera buttons */}
+              <View
+                className="absolute top-0 left-0 right-0 z-50 flex-row justify-between items-center px-4 py-2"
+                style={{
+                  paddingTop: insets.top + 10,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setShowCamera(false)}
+                  className="bg-black/60 p-3 rounded-full"
+                >
+                  <Image
+                    source={icons.close}
+                    className="w-6 h-6"
+                    tintColor="white"
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() =>
+                    setFacing(facing === "back" ? "front" : "back")
+                  }
+                  className="bg-black/60 p-3 rounded-full"
+                >
+                  <Image
+                    source={icons.refresh} // or use a flip camera icon
+                    className="w-6 h-6"
+                    tintColor="white"
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Capture button */}
+              <View
+                className="absolute bottom-0 left-0 right-0 flex-row justify-center items-center pb-10"
+                style={{
+                  paddingBottom: insets.bottom + 30,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={captureImage}
+                  disabled={isSubmitting}
+                  className="items-center justify-center"
+                >
+                  <View
+                    className={`w-20 h-20 rounded-full ${
+                      isSubmitting ? "bg-gray-400" : "bg-white"
+                    } items-center justify-center`}
+                  >
+                    <View className="w-16 h-16 rounded-full border-4 border-primary" />
                   </View>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+              </View>
+
+              {/* Loading overlay */}
+              {isSubmitting && (
+                <View className="absolute inset-0 bg-black/30 items-center justify-center">
+                  <View className="bg-white/0 rounded-lg p-4 items-center">
+                    <LottieView
+                      source={require("../../assets/lottie/RR.json")}
+                      autoPlay
+                      loop
+                      style={{ width: 100, height: 100 }}
+                    />
+                    <Text className="text-white mt-2">Uploading image...</Text>
+                  </View>
+                </View>
+              )}
+            </CameraView>
+          ) : (
+            <View className="flex-1 items-center justify-center bg-black">
+              <Text className="text-white text-center mb-4">
+                Camera permission required
+              </Text>
+              <TouchableOpacity
+                onPress={requestPermission}
+                className="bg-primary px-6 py-3 rounded-lg"
+              >
+                <Text className="text-white font-pmedium">
+                  Grant Permission
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 };
 
