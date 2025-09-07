@@ -159,7 +159,7 @@ export const ChatCamera = ({ onPhotoTaken, onClose }: ChatCameraProps) => {
         <View className="flex-row justify-between items-center p-4">
           <TouchableOpacity
             onPress={onClose}
-            className="p-3 rounded-full bg-black/30"
+            className="p-3 rounded-full items-center justify-center bg-black/30"
           >
             <Image
               source={icons.close}

@@ -302,28 +302,7 @@ const CustomCamera: React.FC<CustomCameraProps> = ({
                   />
                 </TouchableOpacity>
 
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    className="w-11 h-11 rounded-full bg-black/30 justify-center items-center"
-                    onPress={toggleFlash}
-                  >
-                    <Image
-                      source={getFlashIcon()}
-                      className="w-6 h-6"
-                      style={{ tintColor: "white" }}
-                    />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Instructions */}
-              <View
-                className="flex-1 justify-center items-center px-10"
-                style={{ pointerEvents: "none" }}
-              >
-                <Text className="text-white text-base text-center bg-black/50 py-3 px-5 rounded-2xl">
-                  Point your camera at an item to identify it
-                </Text>
+                <View className="w-12 h-12" />
               </View>
 
               {/* Bottom Controls */}
@@ -341,13 +320,21 @@ const CustomCamera: React.FC<CustomCameraProps> = ({
               >
                 <View className="flex-row justify-between items-center">
                   {/* Gallery Button */}
-                  <TouchableOpacity className="w-12 h-12 rounded-full bg-white/20 justify-center items-center">
-                    <View className="w-8 h-8 rounded bg-white/30" />
+                  <TouchableOpacity
+                    className="w-11 h-11 rounded-full bg-black/30 justify-center items-center"
+                    onPress={toggleFlash}
+                  >
+                    <Image
+                      source={getFlashIcon()}
+                      className="w-6 h-6"
+                      style={{ tintColor: "white" }}
+                    />
                   </TouchableOpacity>
+          
 
                   {/* Capture Button */}
                   <TouchableOpacity
-                    className={`w-20 h-20 rounded-full bg-white justify-center items-center border-4 border-white/30 ${
+                    className={`w-20 h-20 rounded-full bg-primary justify-center items-center border-4 border-white/30 ${
                       isCapturing ? "opacity-50" : ""
                     }`}
                     style={{ zIndex: 1000 }}

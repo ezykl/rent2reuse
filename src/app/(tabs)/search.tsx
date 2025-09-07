@@ -785,7 +785,7 @@ const Search = () => {
   return (
     <SafeAreaView
       className="flex-1 bg-white"
-      style={{ paddingTop: insets.top  -20 }}
+      style={{ paddingTop: insets.top - 20 }}
     >
       <ScrollView
         className="flex-1"

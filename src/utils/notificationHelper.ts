@@ -25,6 +25,7 @@ export const sendRentRequestNotifications = async (
     requesterName: string;
     startDate: any;
     endDate: any;
+    imageUrl?: string;
   }
 ) => {
   try {
@@ -92,6 +93,7 @@ export const sendRentRequestNotifications = async (
         to: pushTokens.token,
         title: "New Rental Request",
         body: `${requestData.requesterName} wants to rent your ${requestData.itemName} for ${requestData.daysDifference} days on ${requestData.startDate} to ${requestData.endDate}.`,
+        imageUrl: requestData.imageUrl,
         data: {
           type: "RENT_REQUEST",
           itemId: requestData.itemId,
@@ -173,14 +175,16 @@ export const sendPushNotification = async ({
   title,
   body,
   data,
+  imageUrl,
 }: {
   to: string;
   title: string;
   body: string;
   data?: any;
+  imageUrl?: string;
 }) => {
   try {
-    const message = {
+    const message: any = {
       to,
       sound: "default",
       title,
@@ -189,6 +193,28 @@ export const sendPushNotification = async ({
       badge: 1,
       _displayInForeground: true,
     };
+
+    if (imageUrl) {
+      console.log("Testing image URL:", imageUrl);
+      try {
+        const imageResponse = await fetch(imageUrl, { method: "HEAD" });
+        console.log("Image URL status:", imageResponse.status);
+        console.log(
+          "Image content-type:",
+          imageResponse.headers.get("content-type")
+        );
+      } catch (error) {
+        console.error("Image URL test failed:", error);
+      }
+    }
+
+    if (imageUrl) {
+      message.android = {
+        notification: {
+          imageUrl: imageUrl,
+        },
+      };
+    }
 
     const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -201,13 +227,16 @@ export const sendPushNotification = async ({
     });
 
     if (!response.ok) {
+      const responseText = await response.text();
+      console.error("Push notification failed:", response.status, responseText);
       throw new Error(`Push notification failed: ${response.status}`);
     }
+
+    console.log("Push notification sent successfully with image:", imageUrl);
   } catch (error) {
     console.error("Error sending push notification:", error);
   }
 };
-
 export const sendItemUnavailableNotifications = async (
   declinedUserIds: string[],
   itemData: {

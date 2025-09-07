@@ -617,6 +617,7 @@ export default function ItemDetails() {
         daysDifference: daysDifference,
         startDate: startDateTime.format("MMMM D, YYYY"),
         endDate: endDateTime.format("MMMM D, YYYY"),
+        imageUrl: item?.images[0],
       });
 
       if (user?.uid) {
