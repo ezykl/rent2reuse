@@ -15,6 +15,8 @@ import * as FileSystem from "expo-file-system";
 import { icons } from "@/constant";
 import LottieView from "lottie-react-native";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import { FACE_PLUS_PLUS_API_KEY, FACE_PLUS_PLUS_API_SECRET } from "@env";
+import { opacity } from "react-native-reanimated/lib/typescript/Colors";
 
 interface CustomCameraProps {
   onPhotoTaken: (uri: string) => void;
@@ -97,7 +99,7 @@ export const CustomCamera = ({ onPhotoTaken, onCancel }: CustomCameraProps) => {
         }
       }
     } catch (error) {
-      console.error("Error taking picture:", error);
+
       Alert.alert("Error", "Failed to take picture. Please try again.");
       setAnalyzing(false);
       setCapturedImageUri(null);
@@ -116,7 +118,7 @@ export const CustomCamera = ({ onPhotoTaken, onCancel }: CustomCameraProps) => {
         source={require("../assets/lottie/face.json")}
         autoPlay
         loop
-        style={styles.lottieAnimation}
+        style={[styles.lottieAnimation, { opacity: 0.5 }]}
         resizeMode="contain"
       />
 

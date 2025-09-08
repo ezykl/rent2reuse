@@ -10,45 +10,49 @@ export interface FaceDetectionResult {
   type: "success" | "warning" | "error";
   faces?: any[];
   details?: string;
+  qualityScore?: number;
+  suggestions?: string[];
+  failureCount?: number;
 }
 
 export const detectFace = async (
-  base64Image: string
+  base64Image: string,
+  failureCount: number = 0
 ): Promise<FaceDetectionResult> => {
   try {
+    console.log("Starting face detection...");
+
     const response = await axios.post(
       "https://api-us.faceplusplus.com/facepp/v3/detect",
       new URLSearchParams({
         api_key: API_KEY,
         api_secret: API_SECRET,
         image_base64: base64Image,
-        return_attributes: "blur,headpose,facequality,eyestatus",
+        return_attributes: "blur,headpose,facequality,eyestatus,mouthstatus",
       }),
       {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        timeout: 10000, // 10 second timeout
+        timeout: 15000,
       }
     );
 
     const data = response.data;
+    console.log("Face++ API Response:", JSON.stringify(data, null, 2));
 
-    if (!data.faces) {
-      return {
-        success: false,
-        message: "No face detected",
-        type: "error",
-        details: "Please make sure your face is clearly visible in the photo.",
-      };
-    }
-
-    if (data.faces.length === 0) {
+    if (!data.faces || data.faces.length === 0) {
       return {
         success: false,
         message: "No face detected",
         type: "error",
         details: "Please make sure your face is clearly visible and well-lit.",
+        suggestions: [
+          "Ensure good lighting on your face",
+          "Move closer to the camera",
+          "Remove any obstructions",
+        ],
+        failureCount: failureCount + 1,
       };
     }
 
@@ -58,64 +62,258 @@ export const detectFace = async (
         message: "Multiple faces detected",
         type: "warning",
         details: `Found ${data.faces.length} faces. Please take a photo with only yourself visible.`,
+        suggestions: [
+          "Make sure you're alone in the frame",
+          "Cover or remove other people from the background",
+        ],
+        failureCount: failureCount + 1,
       };
     }
 
-    // Single face detected - let's validate quality
+    // Single face detected - validate quality
     const face = data.faces[0];
     const faceRect = face.face_rectangle;
 
-    // Check if face is too small (less than 15% of image)
-    // Assuming typical image dimensions, adjust as needed
-    const faceArea = faceRect.width * faceRect.height;
-    if (faceArea < 10000) {
-      // Adjust threshold as needed
+    // Basic face size validation (more lenient)
+    const faceArea = (faceRect?.width || 0) * (faceRect?.height || 0);
+    console.log("Face area:", faceArea, "Face rect:", faceRect);
+
+    // More lenient face size check
+    if (faceArea < 5000) {
       return {
         success: false,
         message: "Face too small",
         type: "warning",
         details:
-          "Please move closer to the camera so your face fills more of the frame.",
+          "Please move closer to the camera so your face is more visible.",
+        suggestions: ["Move closer to the camera"],
+        failureCount: failureCount + 1,
       };
     }
 
+    // Initialize all validation variables
+    let hasBlurIssue = false;
+    let hasPoseIssue = false;
+    let poseMessage = "";
+    let hasEyeIssue = false;
+    let eyeMessage = "";
+    let hasMouthIssue = false;
+    let mouthMessage = "";
+
     // Check blur if available
-    if (face.attributes?.blur) {
-      const blurLevel = face.attributes.blur.blurriness;
-      if (blurLevel > 50) {
-        // Threshold for blur
-        return {
-          success: false,
-          message: "Photo is blurry",
-          type: "warning",
-          details: "Please take a clearer photo. Hold the camera steady.",
-        };
+    if (face.attributes?.blur?.blurriness) {
+      const blurLevel = parseFloat(face.attributes.blur.blurriness) || 0;
+      console.log("Blur level:", blurLevel);
+      if (blurLevel > 70) {
+        hasBlurIssue = true;
       }
     }
 
-    // Check head pose if available
+    // Check head pose - stricter for profile photos
     if (face.attributes?.headpose) {
       const { yaw_angle, pitch_angle, roll_angle } = face.attributes.headpose;
+      const yaw = Math.abs(parseFloat(yaw_angle) || 0);
+      const pitch = Math.abs(parseFloat(pitch_angle) || 0);
+      const roll = Math.abs(parseFloat(roll_angle) || 0);
 
-      // Check if face is looking straight (allow some tolerance)
-      if (Math.abs(yaw_angle) > 30 || Math.abs(pitch_angle) > 25) {
-        return {
-          success: false,
-          message: "Face not looking forward",
-          type: "warning",
-          details:
-            "Please look straight at the camera for the best profile photo.",
-        };
+      console.log("Head pose - Yaw:", yaw, "Pitch:", pitch, "Roll:", roll);
+
+      if (yaw > 20) {
+        hasPoseIssue = true;
+        poseMessage = "Please look straight at the camera";
+      } else if (pitch > 15) {
+        hasPoseIssue = true;
+        poseMessage = "Keep your head level, not tilted up or down";
+      } else if (roll > 10) {
+        hasPoseIssue = true;
+        poseMessage = "Don't tilt your head to the side";
       }
     }
 
+    // Check eye status - both eyes must be open
+    if (face.attributes?.eyestatus) {
+      const leftEyeOpen =
+        face.attributes.eyestatus.left_eye_status?.no_glass_eye_open > 0.7;
+      const rightEyeOpen =
+        face.attributes.eyestatus.right_eye_status?.no_glass_eye_open > 0.7;
+
+      console.log(
+        "Eye status - Left eye open:",
+        leftEyeOpen,
+        "Right eye open:",
+        rightEyeOpen
+      );
+      console.log(
+        "Left eye raw score:",
+        face.attributes.eyestatus.left_eye_status?.no_glass_eye_open
+      );
+      console.log(
+        "Right eye raw score:",
+        face.attributes.eyestatus.right_eye_status?.no_glass_eye_open
+      );
+
+      if (!leftEyeOpen && !rightEyeOpen) {
+        hasEyeIssue = true;
+        eyeMessage = "Please open your eyes";
+      } else if (!leftEyeOpen || !rightEyeOpen) {
+        hasEyeIssue = true;
+        eyeMessage = "Keep both eyes open";
+      }
+    }
+
+    // Check mouth status - mouth should be closed
+    if (face.attributes?.mouthstatus) {
+      const mouthOpen = face.attributes.mouthstatus.open > 0.7;
+
+      console.log(
+        "Mouth status - Open:",
+        mouthOpen,
+        "Raw score:",
+        face.attributes.mouthstatus.open
+      );
+
+      if (mouthOpen) {
+        hasMouthIssue = true;
+        mouthMessage = "Please close your mouth";
+      }
+    }
+
+    // Calculate quality score (0-100)
+    let qualityScore = 50; // Start with base score
+
+    // Face size contribution (20 points max)
+    if (faceArea > 15000) qualityScore += 20;
+    else if (faceArea > 10000) qualityScore += 15;
+    else if (faceArea > 7500) qualityScore += 10;
+    else qualityScore += 5;
+
+    // Blur contribution (20 points max)
+    if (face.attributes?.blur?.blurriness) {
+      const blurLevel = parseFloat(face.attributes.blur.blurriness) || 0;
+      qualityScore += Math.max(0, 20 - blurLevel / 2.5);
+    } else {
+      qualityScore += 15;
+    }
+
+    // Pose contribution (25 points max)
+    if (face.attributes?.headpose) {
+      const yaw = Math.abs(parseFloat(face.attributes.headpose.yaw_angle) || 0);
+      const pitch = Math.abs(
+        parseFloat(face.attributes.headpose.pitch_angle) || 0
+      );
+      const roll = Math.abs(
+        parseFloat(face.attributes.headpose.roll_angle) || 0
+      );
+
+      let poseScore = 25;
+      poseScore -= Math.min(15, yaw * 0.75);
+      poseScore -= Math.min(10, pitch * 0.5);
+      poseScore -= Math.min(5, roll * 0.5);
+
+      qualityScore += Math.max(0, poseScore);
+    } else {
+      qualityScore += 15;
+    }
+
+    // Eye status contribution (15 points max)
+    if (face.attributes?.eyestatus) {
+      const leftEyeOpen =
+        face.attributes.eyestatus.left_eye_status?.no_glass_eye_open > 0.7;
+      const rightEyeOpen =
+        face.attributes.eyestatus.right_eye_status?.no_glass_eye_open > 0.7;
+
+      if (leftEyeOpen && rightEyeOpen) {
+        qualityScore += 15;
+      } else if (leftEyeOpen || rightEyeOpen) {
+        qualityScore += 5;
+      }
+    } else {
+      qualityScore += 10;
+    }
+
+    // Mouth status contribution (20 points max)
+    if (face.attributes?.mouthstatus) {
+      const mouthOpen = face.attributes.mouthstatus.open > 0.5;
+
+      if (!mouthOpen) {
+        qualityScore += 20;
+      } else {
+        qualityScore += 5;
+      }
+    } else {
+      qualityScore += 15;
+    }
+
+    // Ensure score is within bounds
+    qualityScore = Math.min(100, Math.max(0, qualityScore));
+    console.log("Calculated quality score:", qualityScore);
+
+    // Collect all issues and suggestions
+    const issues: string[] = [];
+    const suggestions: string[] = [];
+
+    if (hasEyeIssue) {
+      issues.push(eyeMessage);
+      suggestions.push("Keep both eyes open and look at the camera");
+    }
+
+    if (hasMouthIssue) {
+      issues.push(mouthMessage);
+      suggestions.push("Close your mouth for a professional look");
+    }
+
+    if (hasPoseIssue) {
+      issues.push(poseMessage);
+      suggestions.push("Face the camera directly");
+    }
+
+    if (hasBlurIssue) {
+      issues.push("Photo is blurry");
+      suggestions.push("Hold the camera steady");
+    }
+
+    // Success criteria - all checks must pass
+    if (
+      !hasEyeIssue &&
+      !hasMouthIssue &&
+      !hasPoseIssue &&
+      !hasBlurIssue &&
+      qualityScore >= 70
+    ) {
+      return {
+        success: true,
+        message: qualityScore > 90 ? "Perfect profile photo!" : "Great photo!",
+        type: "success",
+        faces: data.faces,
+        details: `Excellent quality detected. Quality score: ${Math.round(
+          qualityScore
+        )}/100`,
+        qualityScore: Math.round(qualityScore),
+        suggestions: [
+          "Your photo meets all requirements for a professional profile picture",
+        ],
+        failureCount: 0,
+      };
+    }
+
+    // If we have issues, return the most important one
+    const primaryIssue = issues[0] || "Photo needs improvement";
+    const allSuggestions =
+      suggestions.length > 0
+        ? suggestions
+        : ["Please adjust your photo and try again"];
+
     return {
-      success: true,
-      message: "Perfect photo!",
-      type: "success",
-      faces: data.faces,
+      success: false,
+      message: primaryIssue,
+      type: "warning",
       details:
-        "Your face has been detected clearly. This photo is ready to use.",
+        issues.length > 1
+          ? `Multiple issues: ${issues.join(", ")}`
+          : `Quality score: ${Math.round(qualityScore)}/100`,
+      qualityScore: Math.round(qualityScore),
+      suggestions: allSuggestions,
+      failureCount: failureCount + 1,
     };
   } catch (error: any) {
     console.error("Face++ Error:", error.response?.data || error.message);
@@ -126,7 +324,29 @@ export const detectFace = async (
         message: "Connection timeout",
         type: "error",
         details: "Please check your internet connection and try again.",
+        suggestions: [
+          "Check your internet connection",
+          "Try again in a moment",
+        ],
+        failureCount: failureCount + 1,
       };
+    }
+
+    // Handle API-specific errors
+    if (error.response?.data?.error_message) {
+      const errorMsg = error.response.data.error_message;
+      console.log("Face++ API Error:", errorMsg);
+
+      if (errorMsg.includes("INVALID_IMAGE")) {
+        return {
+          success: false,
+          message: "Invalid image format",
+          type: "error",
+          details: "Please use a valid image format.",
+          suggestions: ["Try taking a new photo"],
+          failureCount: failureCount + 1,
+        };
+      }
     }
 
     return {
@@ -134,6 +354,8 @@ export const detectFace = async (
       message: "Detection failed",
       type: "error",
       details: "Unable to analyze the photo. Please try again.",
+      suggestions: ["Try taking a new photo", "Ensure good lighting"],
+      failureCount: failureCount + 1,
     };
   }
 };

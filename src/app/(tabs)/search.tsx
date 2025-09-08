@@ -31,7 +31,8 @@ import { SearchBar } from "@/components/SearchBar";
 import Animated, { useSharedValue, withSpring } from "react-native-reanimated";
 import { useSearchTransition } from "@/context/SearchTransitionContext";
 import { LocationUtils } from "@/utils/locationUtils";
-
+import CustomCamera from "@/components/search/CustomCamera";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 const { width } = Dimensions.get("window");
 
 const Search = () => {
@@ -51,6 +52,7 @@ const Search = () => {
     category: null as string | null,
   });
   const [showImagePicker, setShowImagePicker] = useState(false);
+  const [showCustomCamera, setShowCustomCamera] = useState(false); // New state for custom camera
   const inputRef = useRef<TextInput>(null);
   const { startPosition, shouldAnimate, setShouldAnimate } =
     useSearchTransition();
@@ -58,114 +60,13 @@ const Search = () => {
 
   const { searchItems, popularItems: popularSearches } = useItemSearch();
   const { trackItemView } = useItemViews();
-
+  const insets = useSafeAreaInsets();
   const { userLocation, isLoading: locationLoading } = useLocation({
     autoStart: true,
     watchLocation: false,
   });
 
-  // Define handleImageSelection in parent scope
-  const handleImageSelection = async (type: "camera" | "gallery") => {
-    try {
-      let result;
-      if (type === "camera") {
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          quality: 1,
-        });
-      } else {
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          allowsEditing: false,
-          quality: 1,
-        });
-      }
-
-      if (!result.canceled && result.assets?.[0]) {
-        setShowImagePicker(false);
-        handleImageProcess(result.assets[0].uri);
-      } else {
-        // Camera was closed without taking picture
-        setShowImagePicker(false);
-        // Clear the openCamera parameter
-        router.setParams({ openCamera: "false" });
-      }
-    } catch (error) {
-      // console.error("Image selection error:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Failed to select image. Please try again.",
-      });
-      // Also clear states on error
-      setShowImagePicker(false);
-      router.setParams({ openCamera: "false" });
-    }
-  };
-
-  useEffect(() => {
-    if (openCamera === "true") {
-      // Set timeout to ensure component is mounted
-      setTimeout(() => {
-        setShowImagePicker(true);
-        handleImageSelection("camera");
-      }, 100);
-    }
-    // Clean up function to reset states when component unmounts or openCamera changes
-    return () => {
-      setShowImagePicker(false);
-    };
-  }, [openCamera]);
-
-  // Update the useEffect for input focus
-  useEffect(() => {
-    const focusTimeout = setTimeout(() => {
-      if (inputRef.current && focusInput === "true") {
-        inputRef.current.focus();
-      }
-    }, 100);
-
-    return () => {
-      clearTimeout(focusTimeout);
-      Keyboard.dismiss();
-    };
-  }, [focusInput]);
-
-  // Handle animation when mounting
-  useEffect(() => {
-    if (shouldAnimate) {
-      translateY.value = withSpring(0, {
-        damping: 20,
-        stiffness: 90,
-      });
-      // Reset the animation flag after starting
-      setShouldAnimate(false);
-    }
-  }, [shouldAnimate]);
-
-  // Handle AI prediction result
-  const handlePredictionResult = async (prediction: any) => {
-    if (!prediction || !Array.isArray(prediction)) {
-      Toast.show({
-        type: ALERT_TYPE.WARNING,
-        title: "Warning",
-        textBody: "Could not identify the item. Please try again.",
-      });
-      return;
-    }
-
-    const topPrediction = prediction[0];
-    const predictedItem = topPrediction["Predicted Item"];
-
-    // Update search query state
-    setSearchQuery(predictedItem);
-
-    // Then perform search
-    await handleSearch(predictedItem);
-  };
-
-  // Handle image processing
+  // Handle image processing - same as before
   const handleImageProcess = async (uri: string) => {
     setIsLoading(true);
     try {
@@ -194,29 +95,136 @@ const Search = () => {
       setIsLoading(false);
     }
   };
-  // SearchBar component
+
+  // Handle AI prediction result - same as before
+  const handlePredictionResult = async (prediction: any) => {
+    if (!prediction || !Array.isArray(prediction)) {
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Warning",
+        textBody: "Could not identify the item. Please try again.",
+      });
+      return;
+    }
+
+    const topPrediction = prediction[0];
+    const predictedItem = topPrediction["Predicted Item"];
+
+    // Update search query state
+    setSearchQuery(predictedItem);
+
+    // Then perform search
+    await handleSearch(predictedItem);
+  };
+
+  // Updated handleImageSelection for backward compatibility
+  const handleImageSelection = async (type: "camera" | "gallery") => {
+    try {
+      if (type === "camera") {
+        setShowImagePicker(false);
+        setShowCustomCamera(true);
+      } else {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: false,
+          quality: 1,
+        });
+
+        if (!result.canceled && result.assets?.[0]) {
+          setShowImagePicker(false);
+          handleImageProcess(result.assets[0].uri);
+        } else {
+          setShowImagePicker(false);
+        }
+      }
+    } catch (error) {
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to select image. Please try again.",
+      });
+      setShowImagePicker(false);
+      setShowCustomCamera(false);
+      router.setParams({ openCamera: "false" });
+    }
+  };
+
+  // Handle custom camera close
+  const handleCustomCameraClose = () => {
+    setShowCustomCamera(false);
+    router.setParams({ openCamera: "false" });
+  };
+
+  // Handle image captured from custom camera
+  const handleCustomCameraCapture = (uri: string) => {
+    handleImageProcess(uri);
+  };
+
+  // Handle custom camera error
+  const handleCustomCameraError = (error: string) => {
+    Toast.show({
+      type: ALERT_TYPE.DANGER,
+      title: "Camera Error",
+      textBody: error,
+    });
+  };
+
+  // Handle openCamera parameter - updated to use custom camera
+  useEffect(() => {
+    if (openCamera === "true") {
+      setTimeout(() => {
+        setShowCustomCamera(true);
+      }, 100);
+    }
+
+    return () => {
+      setShowCustomCamera(false);
+    };
+  }, [openCamera]);
+
+  // Update the useEffect for input focus
+  useEffect(() => {
+    const focusTimeout = setTimeout(() => {
+      if (inputRef.current && focusInput === "true") {
+        inputRef.current.focus();
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(focusTimeout);
+      Keyboard.dismiss();
+    };
+  }, [focusInput]);
+
+  // Handle animation when mounting
+  useEffect(() => {
+    if (shouldAnimate) {
+      translateY.value = withSpring(0, {
+        damping: 20,
+        stiffness: 90,
+      });
+      setShouldAnimate(false);
+    }
+  }, [shouldAnimate]);
+
+  // SearchBar component - updated to use custom camera
   const SearchBarComponent = () => {
     const [localSearchQuery, setLocalSearchQuery] = useState(
       category || searchQuery
     );
-    // showImagePicker and setShowImagePicker are now lifted to parent
     const [showImagePicker, setShowImagePicker] = useState(false);
 
-    // Add this function to properly clear search and category
     const handleClear = () => {
       setLocalSearchQuery("");
       setSearchQuery("");
       setSearchResults([]);
-      // Clear the category from router params
       router.setParams({ category: "" });
     };
 
-    // Simplified handleTextChange - just update local state
     const handleTextChange = (text: string) => {
       setLocalSearchQuery(text);
     };
 
-    // Handle search submission
     const handleSubmit = () => {
       if (localSearchQuery.trim()) {
         setSearchQuery(localSearchQuery);
@@ -227,27 +235,22 @@ const Search = () => {
 
     const handleImageSelection = async (type: "camera" | "gallery") => {
       try {
-        let result;
         if (type === "camera") {
-          result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 1,
-          });
-        } else {
-          result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: false,
-            quality: 1,
-          });
-        }
-
-        if (!result.canceled && result.assets?.[0]) {
           setShowImagePicker(false);
-          handleImageProcess(result.assets[0].uri);
+          setShowCustomCamera(true);
+        } else {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: false,
+            quality: 1,
+          });
+
+          if (!result.canceled && result.assets?.[0]) {
+            setShowImagePicker(false);
+            handleImageProcess(result.assets[0].uri);
+          }
         }
       } catch (error) {
-        // console.error("Image selection error:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -274,7 +277,7 @@ const Search = () => {
             textAlignVertical="center"
             placeholder="What are you looking for?"
             placeholderTextColor="#A0AEC0"
-            className="flex-1 text-secondary-400 text-base px-3  py-4 font-pregular "
+            className="flex-1 text-secondary-400 text-base px-3 py-4 font-pregular"
             returnKeyType="search"
             onSubmitEditing={handleSubmit}
             autoCapitalize="none"
@@ -282,14 +285,13 @@ const Search = () => {
           />
 
           {localSearchQuery ? (
-            <View className="flex-row items-center gap-2 ">
+            <View className="flex-row items-center gap-2">
               <TouchableOpacity onPress={handleClear}>
                 <Image source={icons.close} className="w-6 h-6" />
               </TouchableOpacity>
-              {/* Updated filter button */}
               <TouchableOpacity
                 onPress={() => setShowFilter(true)}
-                className="relative  "
+                className="relative"
               >
                 <Image
                   source={icons.filter}
@@ -304,7 +306,7 @@ const Search = () => {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleSubmit}
-                className="bg-primary p-2 overflow-hidden rounded-r-xl  flex-row flex justify-center items-center"
+                className="bg-primary p-2 overflow-hidden rounded-r-xl flex-row flex justify-center items-center"
               >
                 <Image
                   source={icons.search}
@@ -315,7 +317,6 @@ const Search = () => {
             </View>
           ) : (
             <View className="flex-row items-center gap-2 mr-4">
-              {/* Updated filter button */}
               <TouchableOpacity
                 onPress={() => setShowFilter(true)}
                 className="relative"
@@ -337,7 +338,7 @@ const Search = () => {
           )}
         </View>
 
-        {/* Image picker modal */}
+        {/* Image picker modal - same as before */}
         <Modal
           visible={showImagePicker}
           transparent
@@ -377,7 +378,7 @@ const Search = () => {
                   <View className="w-16 h-16 bg-blue-400 rounded-full items-center justify-center mb-2">
                     <Image
                       source={icons.gallery}
-                      className="w-8 h-8 "
+                      className="w-8 h-8"
                       tintColor={"#fff"}
                     />
                   </View>
@@ -401,7 +402,7 @@ const Search = () => {
     );
   };
 
-  // Filter modal component
+  // Filter modal component - same as before
   const FilterModal = () => {
     const [tempFilters, setTempFilters] = useState(activeFilters);
     const conditions = [
@@ -424,7 +425,6 @@ const Search = () => {
       >
         <View className="flex-1 bg-black/50">
           <View className="bg-white h-4/5 mt-auto rounded-t-3xl">
-            {/* Header */}
             <View className="p-4 border-b border-gray-200">
               <View className="flex-row justify-between items-center">
                 <TouchableOpacity onPress={() => setShowFilter(false)}>
@@ -600,7 +600,7 @@ const Search = () => {
     );
   };
 
-  // Update handleSearch function
+  // Update handleSearch function - same as before
   const handleSearch = async (directQuery?: string) => {
     const queryToUse = directQuery || searchQuery;
     if (!queryToUse.trim()) return;
@@ -700,7 +700,13 @@ const Search = () => {
 
       setSearchResults(results);
     } catch (error) {
-      // ... error handling
+      console.error("Search error:", error);
+      setSearchResults([]);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to search items. Please try again.",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -720,7 +726,7 @@ const Search = () => {
 
       setSearchResults(results);
     } catch (error) {
-      // console.error("Category search error:", error);
+      console.error("Category search error:", error);
       setSearchResults([]);
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -732,15 +738,12 @@ const Search = () => {
     }
   };
 
-  // Add this near the top of your component
-
   // Add this effect to handle initial category search
   useEffect(() => {
     if (category) {
       setSearchQuery(category);
       handleCategorySearch(category);
     } else {
-      // Clear search results when no category is selected
       setSearchQuery("");
       setSearchResults([]);
     }
@@ -760,22 +763,19 @@ const Search = () => {
   // Add this near your other useEffects
   useEffect(() => {
     const unsubscribe = () => {
-      // Reset focus parameter when component unmounts or user navigates back
       if (focusInput === "true") {
         router.setParams({ focusInput: "false" });
       }
     };
 
-    // Add listener for hardware back button
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
         unsubscribe();
-        return false; // Let the default back behavior continue
+        return false;
       }
     );
 
-    // Cleanup on component unmount
     return () => {
       unsubscribe();
       backHandler.remove();
@@ -783,24 +783,17 @@ const Search = () => {
   }, [focusInput]);
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView
+      className="flex-1 bg-white"
+      style={{ paddingTop: insets.top - 20 }}
+    >
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 20 }}
         keyboardShouldPersistTaps="handled"
       >
-        <View className="p-5 items-center w-full">
-          <Animated.View
-            style={[
-              {
-                transform: [{ translateY }],
-              },
-              { width: "100%" },
-            ]}
-          >
-            <SearchBarComponent />
-          </Animated.View>
-
+        <View className="px-4 items-center w-full">
+          <SearchBarComponent />
           {/* Rest of content */}
           {isLoading ? (
             <View className="flex- bg-white " />
@@ -858,10 +851,9 @@ const Search = () => {
                       key={index}
                       className="bg-gray-100 px-2 py-2 rounded-full mb-2"
                       onPress={async () => {
-                        setIsLoading(true); // Start loading
+                        setIsLoading(true);
                         try {
                           setSearchQuery(category);
-                          // Get filtered results for available items
                           const results = await searchItems(category, true);
                           const availableResults = results.filter(
                             (item) =>
@@ -870,14 +862,14 @@ const Search = () => {
                           );
                           setSearchResults(availableResults);
                         } catch (error) {
-                          // console.error("Popular search error:", error);
+                          console.error("Popular search error:", error);
                           Toast.show({
                             type: ALERT_TYPE.DANGER,
                             title: "Error",
                             textBody: "Failed to load items. Please try again.",
                           });
                         } finally {
-                          setIsLoading(false); // End loading
+                          setIsLoading(false);
                         }
                       }}
                     >
@@ -909,6 +901,14 @@ const Search = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Custom Camera Component */}
+      <CustomCamera
+        visible={showCustomCamera}
+        onClose={handleCustomCameraClose}
+        onImageCaptured={handleCustomCameraCapture}
+        onError={handleCustomCameraError}
+      />
     </SafeAreaView>
   );
 };
