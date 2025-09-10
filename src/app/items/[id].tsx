@@ -24,6 +24,7 @@ import dayjs from "dayjs";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "../../hooks/useLocation";
 import { LocationUtils } from "../../utils/locationUtils";
+
 import {
   doc,
   getDoc,
@@ -490,7 +491,7 @@ export default function ItemDetails() {
   };
 
   const formatDistance = (distance: number | null) => {
-    if (distance === null || distance === undefined) return null;
+    if (distance === null || distance === undefined) return "";
 
     if (distance < 1) {
       return `${Math.round(distance * 1000)}m`;
@@ -560,6 +561,10 @@ export default function ItemDetails() {
           rentalDays: daysDifference,
           downpaymentPercentage: item?.downpaymentPercentage ?? 0,
           itemLocation: item?.itemLocation ?? null,
+          startDate: Timestamp.fromDate(startDateTime.toDate()),
+          endDate: Timestamp.fromDate(endDateTime.toDate()),
+          pickupTime: timeToMinutes(formData.selectedTime),
+          message: formData.message,
         },
         createdAt: serverTimestamp(),
         lastMessage: formData.message,
@@ -812,7 +817,7 @@ export default function ItemDetails() {
                           className="w-5 h-5"
                           tintColor={"white"}
                         />
-                        <Text className="font-pmedium text-xs text-white ">
+                        <Text className="font-pmedium text-xs text-white ml-1">
                           Ai Enabled
                         </Text>
                       </View>
@@ -976,8 +981,11 @@ export default function ItemDetails() {
                         {ownerRating.averageRating.toFixed(1)}
                       </Text>
                       <Text className="text-gray-400 text-sm ml-1 font-pregular">
-                        ({ownerRating.totalRatings}{" "}
-                        {ownerRating.totalRatings === 1 ? "review" : "reviews"})
+                        ({ownerRating.totalRatings}
+                        {ownerRating.totalRatings === 1
+                          ? " review"
+                          : " reviews"}
+                        )
                       </Text>
                     </>
                   ) : (
@@ -1086,10 +1094,10 @@ export default function ItemDetails() {
                       </Text>
                     </View>
                     <Text className="font-psemibold text-gray-900">
-                      {item?.itemMinRentDuration}{" "}
+                      {item?.itemMinRentDuration}
                       {item?.itemMinRentDuration && item.itemMinRentDuration > 1
-                        ? "days"
-                        : "day"}
+                        ? " days"
+                        : " day"}
                     </Text>
                   </View>
 
@@ -1229,7 +1237,7 @@ export default function ItemDetails() {
                   {item.itemLocation?.radius &&
                     typeof item.itemLocation.radius === "number" && (
                       <Text className="text-gray-500 text-xs">
-                        Pickup radius:{" "}
+                        Pickup radius:
                         {item.itemLocation.radius >= 1000
                           ? `${(item.itemLocation.radius / 1000).toFixed(1)}km`
                           : `${item.itemLocation.radius}m`}
@@ -1591,8 +1599,8 @@ const RentRequestForm = ({
                 {selectedDates.endDate.diff(selectedDates.startDate, "day") <
                   itemMinDuration && (
                   <Text className="text-center text-xs text-red-600 mt-2">
-                    Minimum rental period is {itemMinDuration}{" "}
-                    {itemMinDuration === 1 ? "day" : "days"}
+                    Minimum rental period is {itemMinDuration}
+                    {itemMinDuration === 1 ? " day" : " days"}
                   </Text>
                 )}
               </View>

@@ -16,7 +16,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { icons, images } from "@/constant";
 import LargeButton from "@/components/LargeButton";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+  collection,
+  query,
+  where,
+  getDocs,
+  increment,
+  writeBatch,
+  addDoc,
+} from "firebase/firestore";
 import { db, storage } from "@/lib/firebaseConfig";
 import { TOOL_CATEGORIES } from "@/constant/tool-categories";
 import { Image as ExpoImage } from "expo-image";
@@ -40,6 +52,7 @@ import {
   FillLayer,
 } from "@maplibre/maplibre-react-native";
 import { MAP_TILER_API_KEY } from "@env";
+import { createInAppNotification } from "src/utils/notificationHelper";
 
 const EditListing = () => {
   const { id } = useLocalSearchParams();
@@ -394,6 +407,261 @@ const EditListing = () => {
     return isValid;
   };
 
+  const updateRelatedChats = async (itemId: string, updatedItemData: any) => {
+    try {
+      // 1. Query all chats that reference this item
+      const chatsQuery = query(
+        collection(db, "chat"),
+        where("itemId", "==", itemId),
+        where("status", "==", "pending")
+      );
+
+      const chatsSnapshot = await getDocs(chatsQuery);
+
+      if (chatsSnapshot.empty) {
+        console.log("No related chats found for this item");
+        return;
+      }
+
+      // 2. Process each chat
+      const chatUpdatePromises = chatsSnapshot.docs.map(async (chatDoc) => {
+        const chatData = chatDoc.data();
+        const chatId = chatDoc.id;
+
+        try {
+          const batch = writeBatch(db);
+
+          const rentalDays = chatData.itemDetails?.rentalDays ?? 0;
+          const oldPrice = chatData.itemDetails?.price ?? 0;
+          const newPrice = updatedItemData.itemPrice;
+          const totalPrice = rentalDays * newPrice;
+          const requesterId = chatData.requesterId;
+          const ownerId = chatData.ownerId;
+
+          const lastMessage =
+            oldPrice !== newPrice
+              ? "Item price updated by owner"
+              : "Item details updated by owner";
+
+          batch.update(chatDoc.ref, {
+            itemDetails: {
+              ...chatData.itemDetails,
+              name: updatedItemData.itemName,
+              image: updatedItemData.images[0],
+              price: newPrice,
+              ...(updatedItemData.enableDownpayment
+                ? {
+                    downpaymentPercentage: Number(
+                      updatedItemData.downpaymentPercentage
+                    ),
+                  }
+                : { downpaymentPercentage: null }),
+              totalPrice,
+              rentalDays,
+            },
+            [`unreadCounts.${requesterId}`]: increment(1),
+            lastMessage,
+            lastMessageTime: serverTimestamp(),
+            lastSender: ownerId,
+            updatedAt: serverTimestamp(),
+          });
+          await batch.commit();
+
+          // 3. Add system message to chat
+          const messagesRef = collection(db, "chat", chatId, "messages");
+          await addDoc(messagesRef, {
+            type: "statusUpdate",
+            text: "Item details have been updated by the owner",
+            senderId: ownerId,
+            createdAt: serverTimestamp(),
+            read: false,
+          });
+
+          // 4. Update rent request messages in this chat
+          // const rentRequestQuery = query(
+          //   messagesRef,
+          //   where("type", "==", "rentRequest")
+          // );
+
+          // const rentRequestMessages = await getDocs(rentRequestQuery);
+
+          // if (!rentRequestMessages.empty) {
+          //   const messagesBatch = writeBatch(db);
+
+          //   rentRequestMessages.forEach((msgDoc) => {
+          //     messagesBatch.update(msgDoc.ref, {
+          //       itemName: updatedItemData.itemName,
+          //       itemPrice: updatedItemData.itemPrice,
+          //       itemCondition: updatedItemData.itemCondition,
+          //       itemDesc: updatedItemData.itemDesc,
+          //       itemMinRentDuration: updatedItemData.itemMinRentDuration,
+          //       updatedAt: serverTimestamp(),
+          //     });
+          //   });
+
+          //   await messagesBatch.commit();
+          // }
+
+          // 5. Send notification to the renter
+          if (requesterId !== ownerId) {
+            await createInAppNotification(requesterId, {
+              type: "ITEM_UPDATED",
+              title: "Item Updated",
+              message: `${updatedItemData.itemName} details have been updated by the owner`,
+              data: {
+                route: "/chat",
+                params: { id: chatId },
+              },
+            });
+          }
+
+          console.log(`Successfully updated chat: ${chatId}`);
+        } catch (error) {
+          console.error(`Error updating chat ${chatId}:`, error);
+        }
+      });
+
+      await Promise.allSettled(chatUpdatePromises);
+      console.log("All related chats processed");
+    } catch (error) {
+      console.error("Error updating related chats:", error);
+    }
+  };
+
+  const updateRelatedRentRequests = async (
+    itemId: string,
+    updatedItemData: any
+  ) => {
+    try {
+      // Query all pending rent requests for this item
+      const rentRequestsQuery = query(
+        collection(db, "rentRequests"),
+        where("itemId", "==", itemId),
+        where("status", "==", "pending")
+      );
+
+      const rentRequestsSnapshot = await getDocs(rentRequestsQuery);
+
+      if (rentRequestsSnapshot.empty) {
+        console.log("No pending rent requests found for this item");
+        return;
+      }
+
+      const batch = writeBatch(db);
+
+      rentRequestsSnapshot.forEach((requestDoc) => {
+        const requestData = requestDoc.data();
+
+        const rentalDays = requestData.rentalDays ?? 0;
+        const oldPrice = requestData.itemDetails?.price ?? 0;
+        const newPrice = updatedItemData.itemPrice;
+        const totalPrice = rentalDays * newPrice;
+        const requesterId = requestData.requesterId;
+        const ownerId = requestData.ownerId;
+
+        batch.update(requestDoc.ref, {
+          itemName: updatedItemData.itemName,
+          itemPrice: updatedItemData.itemPrice,
+          itemCategory: updatedItemData.itemCategory,
+          itemCondition: updatedItemData.itemCondition,
+          itemDesc: updatedItemData.itemDesc,
+          itemMinRentDuration: updatedItemData.itemMinRentDuration,
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+      console.log("All related rent requests updated");
+    } catch (error) {
+      console.error("Error updating related rent requests:", error);
+    }
+  };
+
+  // Basic field comparisons
+  type FormData = {
+    title: string;
+    category: string;
+    description: string;
+    price: number;
+    minimumDays: number;
+    condition: string;
+    enableAI: boolean;
+    enableDownpayment: boolean;
+    downpaymentPercentage?: number;
+    images: string[];
+  };
+
+  function detectFieldChanges(
+    currentData: FormData,
+    initialData: FormData,
+    originalData: { firstImage: string }
+  ) {
+    const changes: Record<string, any> = {};
+
+    // 🔑 Mappings between form field names and Firebase keys
+    const fieldMappings: Record<
+      keyof Omit<
+        FormData,
+        "images" | "enableDownpayment" | "downpaymentPercentage"
+      >,
+      string
+    > = {
+      title: "itemName",
+      category: "itemCategory",
+      description: "itemDesc",
+      price: "itemPrice",
+      minimumDays: "itemMinRentDuration",
+      condition: "itemCondition",
+      enableAI: "enableAI",
+    };
+
+    // 🔄 Compare mapped fields
+    (Object.keys(fieldMappings) as Array<keyof typeof fieldMappings>).forEach(
+      (formKey) => {
+        const firebaseKey = fieldMappings[formKey];
+        const currentValue =
+          formKey === "price" || formKey === "minimumDays"
+            ? Number(currentData[formKey])
+            : currentData[formKey];
+        const initialValue =
+          formKey === "price" || formKey === "minimumDays"
+            ? Number(initialData[formKey])
+            : initialData[formKey];
+
+        if (currentValue !== initialValue) {
+          changes[firebaseKey] = currentValue;
+        }
+      }
+    );
+
+    // 💰 Handle downpayment
+    if (currentData.enableDownpayment !== initialData.enableDownpayment) {
+      changes.downpaymentPercentage = currentData.enableDownpayment
+        ? Number(currentData.downpaymentPercentage)
+        : null;
+    } else if (
+      currentData.enableDownpayment &&
+      Number(currentData.downpaymentPercentage) !==
+        Number(initialData.downpaymentPercentage)
+    ) {
+      changes.downpaymentPercentage = Number(currentData.downpaymentPercentage);
+    }
+
+    const currentImages = currentData.enableAI
+      ? [originalData.firstImage, ...currentData.images.slice(1)]
+      : currentData.images;
+
+    if (JSON.stringify(currentImages) !== JSON.stringify(initialData.images)) {
+      changes.images = currentImages;
+    }
+
+    return {
+      hasChanges: Object.keys(changes).length > 0,
+      changes,
+      changedFields: Object.keys(changes),
+    };
+  }
+
   const handleUpdate = async () => {
     if (!validateForm()) {
       Toast.show({
@@ -409,8 +677,101 @@ const EditListing = () => {
     try {
       const docRef = doc(db, "items", id as string);
 
-      // Update document with new structure
-      await updateDoc(docRef, {
+      // Build update object with only changed fields
+      const updateData: any = {};
+      let hasActualChanges = false;
+
+      // Check each field for changes and add only modified ones
+      if (formData.title !== initialFormData?.title) {
+        updateData.itemName = formData.title;
+        hasActualChanges = true;
+      }
+
+      if (formData.category !== initialFormData?.category) {
+        updateData.itemCategory = formData.category;
+        hasActualChanges = true;
+      }
+
+      if (formData.description !== initialFormData?.description) {
+        updateData.itemDesc = formData.description;
+        hasActualChanges = true;
+      }
+
+      if (Number(formData.price) !== Number(initialFormData?.price)) {
+        updateData.itemPrice = Number(formData.price);
+        hasActualChanges = true;
+      }
+
+      if (
+        Number(formData.minimumDays) !== Number(initialFormData?.minimumDays)
+      ) {
+        updateData.itemMinRentDuration = Number(formData.minimumDays);
+        hasActualChanges = true;
+      }
+
+      if (formData.condition !== initialFormData?.condition) {
+        updateData.itemCondition = formData.condition;
+        hasActualChanges = true;
+      }
+
+      if (formData.enableAI !== initialFormData?.enableAI) {
+        updateData.enableAI = formData.enableAI;
+        hasActualChanges = true;
+      }
+
+      // Handle downpayment changes
+      if (formData.enableDownpayment !== initialFormData?.enableDownpayment) {
+        if (formData.enableDownpayment) {
+          updateData.downpaymentPercentage = Number(
+            formData.downpaymentPercentage
+          );
+        } else {
+          updateData.downpaymentPercentage = null;
+        }
+        hasActualChanges = true;
+      } else if (
+        formData.enableDownpayment &&
+        Number(formData.downpaymentPercentage) !==
+          Number(initialFormData?.downpaymentPercentage)
+      ) {
+        updateData.downpaymentPercentage = Number(
+          formData.downpaymentPercentage
+        );
+        hasActualChanges = true;
+      }
+
+      // Handle images - this is more complex due to uploads
+      const currentImages = formData.enableAI
+        ? [originalData.firstImage, ...formData.images.slice(1)]
+        : formData.images;
+
+      if (
+        JSON.stringify(currentImages) !==
+        JSON.stringify(initialFormData?.images)
+      ) {
+        updateData.images = currentImages;
+        hasActualChanges = true;
+      }
+
+      // If no changes detected, don't proceed
+      if (!hasActualChanges) {
+        Toast.show({
+          type: ALERT_TYPE.INFO,
+          title: "No Changes",
+          textBody: "No changes detected to update",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Always add updatedAt timestamp for any update
+      updateData.updatedAt = serverTimestamp();
+
+      // Perform the update with only changed fields
+      await updateDoc(docRef, updateData);
+
+      // Create full data object for related updates (chats/requests need complete data)
+      const completeUpdatedData = {
         itemName: formData.title,
         itemCategory: formData.category,
         itemDesc: formData.description,
@@ -418,22 +779,27 @@ const EditListing = () => {
         itemMinRentDuration: Number(formData.minimumDays),
         itemCondition: formData.condition,
         enableAI: formData.enableAI,
-        // Only include downpaymentPercentage if enabled
         ...(formData.enableDownpayment
           ? { downpaymentPercentage: Number(formData.downpaymentPercentage) }
           : { downpaymentPercentage: null }),
-        updatedAt: serverTimestamp(),
-        // Make sure first image remains if AI enabled
-        images: formData.enableAI
-          ? [originalData.firstImage, ...formData.images.slice(1)]
-          : formData.images,
-      });
+        images: currentImages,
+      };
+
+      // Update related chats and requests with complete data
+      await Promise.all([
+        updateRelatedChats(id as string, completeUpdatedData),
+        updateRelatedRentRequests(id as string, completeUpdatedData),
+      ]);
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
         textBody: "Listing updated successfully",
       });
+
+      // Update initial form data to reflect the changes
+      setInitialFormData({ ...formData });
+      setHasChanges(false);
 
       router.back();
     } catch (error) {

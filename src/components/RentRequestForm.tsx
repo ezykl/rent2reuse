@@ -55,6 +55,15 @@ const RentRequestForm = ({
   onSubmit,
   onClose,
 }: RentRequestFormProps) => {
+  const safeItemData = {
+    itemName: itemData?.itemName || "Unknown Item",
+    itemPrice: typeof itemData?.itemPrice === "number" ? itemData.itemPrice : 0,
+    itemImage: itemData?.itemImage || "",
+    itemMinRentDuration:
+      typeof itemData?.itemMinRentDuration === "number"
+        ? itemData.itemMinRentDuration
+        : 1,
+  };
   const insets = useSafeAreaInsets();
   const defaultClassNames = useDefaultClassNames();
   const [startDate, setStartDate] = useState(
@@ -93,8 +102,14 @@ const RentRequestForm = ({
   }, [startDate, endDate, message, selectedTime, initialData]);
 
   const calculateTotalPrice = () => {
+    if (!startDate || !endDate) return 0;
+
     const days = endDate.diff(startDate, "day");
-    return Math.max(1, days) * itemData.itemPrice;
+    const validDays = Math.max(1, days);
+    const price = itemData?.itemPrice || 0;
+    const total = validDays * price;
+
+    return isNaN(total) || !isFinite(total) ? 0 : Math.round(total);
   };
 
   // Update handleDateChange function
@@ -116,11 +131,13 @@ const RentRequestForm = ({
       // If end date is selected, ensure it meets minimum rental period
       if (end) {
         const days = end.diff(start, "day");
-        if (days < itemData.itemMinRentDuration) {
+        if (days < (itemData.itemMinRentDuration || 1)) {
           Toast.show({
             type: ALERT_TYPE.WARNING,
             title: "Invalid Duration",
-            textBody: `Minimum rental period is ${itemData.itemMinRentDuration} days`,
+            textBody: `Minimum rental period is ${
+              itemData.itemMinRentDuration || 1
+            } days`,
           });
           return;
         }
@@ -134,6 +151,13 @@ const RentRequestForm = ({
       if (start) setStartDate(start);
       if (end) setEndDate(end);
     }
+  };
+
+  const getDurationInDays = () => {
+    if (!startDate || !endDate) return 0;
+    const days = endDate.diff(startDate, "day");
+    const validDays = Math.max(0, days);
+    return isNaN(validDays) ? 0 : validDays;
   };
 
   // Update validateDates function
@@ -182,7 +206,7 @@ const RentRequestForm = ({
         <View className="flex-row items-center p-3 bg-gray-50 rounded-xl my-4">
           <Image
             source={
-              itemData.itemImage
+              itemData?.itemImage
                 ? { uri: itemData.itemImage }
                 : images.thumbnail
             }
@@ -194,14 +218,14 @@ const RentRequestForm = ({
               className="text-lg font-psemibold text-gray-800"
               numberOfLines={1}
             >
-              {itemData.itemName}
+              {itemData?.itemName || "Unknown Item"}
             </Text>
             <Text className="text-primary font-psemibold">
-              ₱{itemData.itemPrice}/day
+              ₱{itemData?.itemPrice || 0}/day
             </Text>
-            {itemData.itemMinRentDuration && (
+            {(itemData?.itemMinRentDuration || 0) > 0 && (
               <Text className="text-xs text-gray-500">
-                Min. {itemData.itemMinRentDuration} day(s)
+                Min. {itemData?.itemMinRentDuration || 0} day(s)
               </Text>
             )}
           </View>
@@ -227,9 +251,12 @@ const RentRequestForm = ({
                       {selectedDates.endDate.format("MMM DD, YYYY")}
                     </Text>
                     <Text className="text-sm text-gray-500 mt-1">
-                      {selectedDates.endDate.diff(
-                        selectedDates.startDate,
-                        "day"
+                      {Math.max(
+                        0,
+                        selectedDates.endDate.diff(
+                          selectedDates.startDate,
+                          "day"
+                        )
                       )}{" "}
                       days
                     </Text>
@@ -287,9 +314,7 @@ const RentRequestForm = ({
         <View className="bg-gray-50 rounded-xl p-4 mb-6">
           <View className="flex-row justify-between items-center mb-2">
             <Text className="text-gray-600">Duration</Text>
-            <Text className="font-psemibold">
-              {endDate.diff(startDate, "day")} days
-            </Text>
+            <Text className="font-psemibold">{getDurationInDays()} days</Text>
           </View>
           <View className="flex-row justify-between items-center">
             <Text className="text-base font-psemibold text-gray-700">

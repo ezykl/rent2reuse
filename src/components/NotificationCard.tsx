@@ -16,6 +16,7 @@ const NotificationCard = ({
 }: NotificationCardProps) => {
   const getNotificationConfig = (type: string) => {
     switch (type) {
+      case "ITEM_UPDATED":
       case "RENT_REQUEST":
         return {
           icon: icons.envelope,

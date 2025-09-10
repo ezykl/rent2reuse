@@ -77,6 +77,7 @@ import {
 } from "firebase/storage";
 import { ChatCamera } from "@/components/ChatCamera";
 import CustomImageViewer from "@/components/CustomImageViewer";
+import { createInAppNotification } from "src/utils/notificationHelper";
 
 // Helper function to check if a request has expired
 const isRequestExpired = (startDate: any): boolean => {
@@ -534,123 +535,52 @@ const RentRequestMessage = ({
 
   // Real-time status listener - SIMPLIFIED VERSION
   useEffect(() => {
-    if (!chatId || !item.id) return;
+    if (!chatId) return;
 
-    // Listen for chat-level status changes (PRIMARY SOURCE)
+    // Single listener for chat-level data (ALL DATA IS HERE)
     const chatRef = doc(db, "chat", String(chatId));
+
     const unsubscribeChat = onSnapshot(chatRef, (snapshot) => {
       if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.status) {
-          console.log("Chat status updated to:", data.status);
-          setCurrentStatus(data.status);
-        }
-      }
-    });
+        const chatData = snapshot.data();
 
-    const messageRef = doc(db, "chat", String(chatId), "messages", item.id);
-    const unsubscribeMessage = onSnapshot(messageRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const messageData = snapshot.data();
-        if (messageData.status) {
-          console.log(
-            `Message ${item.id} status updated to:`,
-            messageData.status
-          );
-          // Only update if chat doesn't have a status
-          setCurrentStatus((prevStatus) => messageData.status || prevStatus);
-        }
+        console.log("Chat data updated:", chatData.status);
+
+        // Update status
+        setCurrentStatus(chatData.status || "pending");
+
+        // Map chat data directly to rent request data
+        const requestData = {
+          name: chatData.itemDetails?.name || "Unknown Item",
+          itemImage: chatData.itemDetails?.image || "",
+          price: chatData.itemDetails?.price || 0,
+          totalPrice: chatData.itemDetails?.totalPrice || 0,
+          rentalDays: chatData.itemDetails?.rentalDays || 0,
+          downpaymentPercentage:
+            chatData.itemDetails?.downpaymentPercentage || 0,
+          itemLocation: chatData.itemDetails?.itemLocation || null,
+          pickupTime: chatData.itemDetails?.pickupTime || 480,
+          startDate: chatData.itemDetails?.startDate?.toDate() || new Date(),
+          endDate: chatData.itemDetails?.endDate?.toDate() || new Date(),
+          message: chatData.itemDetails?.message || "",
+          status: chatData.status || "pending",
+
+          // Additional chat-level fields you might need
+          requesterId: chatData.requesterId,
+          ownerId: chatData.ownerId,
+          itemId: chatData.itemId,
+          participants: chatData.participants,
+          createdAt: chatData.createdAt?.toDate() || new Date(),
+        };
+
+        setRentRequestData(requestData);
       }
     });
 
     return () => {
       unsubscribeChat();
-      unsubscribeMessage();
     };
-  }, [chatId, item.id]);
-
-  useEffect(() => {
-    const setupRequestData = async () => {
-      try {
-        // Use chat data as the primary source
-        if (chatData) {
-          const baseData = {
-            itemName: chatData.itemDetails?.name || "Unknown Item",
-            itemImage: chatData.itemDetails?.image || "",
-            totalPrice: chatData.itemDetails?.price || 0,
-            status: effectiveStatus,
-            rentalDays: 1, // Default, can be enhanced
-            pickupTime: 480, // Default 8 AM
-            message: item.text || "No message provided",
-            startDate: new Date(),
-            endDate: new Date(),
-          };
-
-          if (
-            item.rentRequestId &&
-            effectiveStatus !== "cancelled" &&
-            effectiveStatus !== "declined"
-          ) {
-            try {
-              const rentRequestRef = doc(
-                db,
-                "rentRequests",
-                item.rentRequestId
-              );
-              const rentRequestSnap = await getDoc(rentRequestRef);
-
-              if (rentRequestSnap.exists()) {
-                const requestData = rentRequestSnap.data();
-                // Merge additional details from rentRequest
-                Object.assign(baseData, {
-                  rentalDays: requestData.rentalDays || baseData.rentalDays,
-                  pickupTime: requestData.pickupTime || baseData.pickupTime,
-                  message: requestData.message || baseData.message,
-                  startDate: requestData.startDate || baseData.startDate,
-                  endDate: requestData.endDate || baseData.endDate,
-                  totalPrice: requestData.totalPrice || baseData.totalPrice,
-                });
-              }
-            } catch (error) {
-              console.log(
-                "rentRequest document not available, using chat data"
-              );
-            }
-          }
-
-          setRentRequestData(baseData);
-        }
-      } catch (error) {
-        console.error("Error setting up request data:", error);
-        // Fallback to minimal data
-        const rentRequestRef = query(
-          collection(db, "chat", String(chatId), "messages"),
-          where("type", "==", "rentRequest"),
-          where("id", "==", item.id),
-          limit(1)
-        );
-
-        const rentRequestSnap = await getDocs(rentRequestRef);
-        const rentRequestMessage = !rentRequestSnap.empty
-          ? rentRequestSnap.docs[0].data()
-          : null;
-
-        setRentRequestData({
-          itemName: chatData.itemDetails?.name || "Unknown Item",
-          itemImage: chatData.itemDetails?.image,
-          totalPrice: chatData.itemDetails?.price || 0,
-          status: effectiveStatus,
-          rentalDays: chatData.rentalDays || 1,
-          pickupTime: chatData.pickupTime || 480,
-          message: rentRequestMessage?.text || "Error loading request details",
-          startDate: chatData.startDate || new Date(),
-          endDate: chatData.endDate || new Date(),
-        });
-      }
-    };
-
-    setupRequestData();
-  }, [chatData, effectiveStatus, item.rentRequestId, item.text]);
+  }, [chatId]);
 
   // Format date helper function
   const formatDate = (date: any) => {
@@ -766,7 +696,7 @@ const RentRequestMessage = ({
           />
           <View className="flex-1">
             <Text className="font-pbold text-base  text-gray-900">
-              {rentRequestData.itemName}
+              {rentRequestData.name}
             </Text>
             <View className="flex-row items-center">
               <Image
@@ -794,11 +724,7 @@ const RentRequestMessage = ({
             </View>
 
             <Text className="font-psemibold mt-1 text-primary">
-              ₱
-              {Math.round(
-                (rentRequestData.totalPrice || 0) /
-                  (rentRequestData.rentalDays || 1)
-              )}
+              ₱{rentRequestData.price}
               /day
             </Text>
           </View>
@@ -907,30 +833,30 @@ const RentRequestMessage = ({
 };
 
 // Add this helper function at the top of the file
-const createInAppNotification = async (
-  userId: string,
-  notification: {
-    type: string;
-    title: string;
-    message: string;
-    data?: any;
-  }
-) => {
-  try {
-    const userNotificationsRef = collection(
-      db,
-      `users/${userId}/notifications`
-    );
-    await addDoc(userNotificationsRef, {
-      ...notification,
-      isRead: false,
-      createdAt: serverTimestamp(),
-    });
-    console.log(`📱 In-app notification created for user: ${userId}`);
-  } catch (error) {
-    console.error("Error creating in-app notification:", error);
-  }
-};
+// const createInAppNotification = async (
+//   userId: string,
+//   notification: {
+//     type: string;
+//     title: string;
+//     message: string;
+//     data?: any;
+//   }
+// ) => {
+//   try {
+//     const userNotificationsRef = collection(
+//       db,
+//       `users/${userId}/notifications`
+//     );
+//     await addDoc(userNotificationsRef, {
+//       ...notification,
+//       isRead: false,
+//       createdAt: serverTimestamp(),
+//     });
+//     console.log(`📱 In-app notification created for user: ${userId}`);
+//   } catch (error) {
+//     console.error("Error creating in-app notification:", error);
+//   }
+// };
 
 const requestDataCache = new Map();
 
@@ -1158,6 +1084,10 @@ const ChatScreen = () => {
       image?: string;
       itemId?: string;
       totalPrice?: number;
+      startDate?: any;
+      rentalDays?: any;
+      endDate?: any;
+      pickupTime?: number;
     };
   } | null>(null);
 
@@ -2356,20 +2286,21 @@ const ChatScreen = () => {
       );
       const currentChatRentRequestQuery = query(
         currentChatMessagesRef,
-        where("rentRequestId", "==", requestId)
+        where("type", "==", "rentRequest")
       );
 
       const currentChatRentRequestMessages = await getDocs(
         currentChatRentRequestQuery
       );
-      currentChatRentRequestMessages.forEach((messageDoc) => {
+
+      if (!currentChatRentRequestMessages.empty) {
+        const messageDoc = currentChatRentRequestMessages.docs[0];
         acceptedBatch.update(messageDoc.ref, {
           status: "accepted",
           updatedAt: serverTimestamp(),
         });
-      });
+      }
 
-      // Commit the accepted request batch first
       await acceptedBatch.commit();
 
       // 3. Add status update message to current chat
@@ -2387,7 +2318,7 @@ const ChatScreen = () => {
         collection(db, "rentRequests"),
         where("itemId", "==", itemId),
         where("status", "==", "pending"),
-        where("chatId", "!=", String(chatId)) // Make sure to convert chatId to string
+        where("chatId", "!=", String(chatId))
       );
 
       const otherPendingRequestsSnap = await getDocs(otherPendingRequestsQuery);
@@ -2406,8 +2337,6 @@ const ChatScreen = () => {
             // 1. Decline the rent request
             declineBatch.update(requestDoc.ref, {
               status: "declined",
-              declinedReason: `${acceptedRequestData.itemName} has been rented to another user`,
-              declinedAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
 
