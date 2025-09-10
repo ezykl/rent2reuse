@@ -9,6 +9,7 @@ import {
   Timestamp,
   addDoc,
   collection,
+  increment,
 } from "firebase/firestore";
 import dayjs from "dayjs";
 import { auth, db } from "@/lib/firebaseConfig";
@@ -29,6 +30,7 @@ interface EditRequestData {
   status: string;
   totalPrice: number;
   chatId?: string;
+  ownerId?: string;
 }
 
 interface ItemData {
@@ -131,29 +133,53 @@ export default function EditRequest() {
       const pickupTimeInMinutes = hours * 60 + minutes;
 
       // Update request
-      await updateDoc(doc(db, "rentRequests", id as string), {
-        startDate: Timestamp.fromDate(startDate.toDate()),
-        endDate: Timestamp.fromDate(endDate.toDate()),
-        pickupTime: pickupTimeInMinutes,
-        message: formData.message,
-        totalPrice,
-        rentalDays,
-        updatedAt: serverTimestamp(),
-      });
-
-      // Add chat notification
-      if (requestData.chatId) {
-        await addDoc(collection(db, "chat", requestData.chatId, "messages"), {
-          type: "requestUpdate",
-          text: `Request updated:\n• Duration: ${rentalDays} days\n• Dates: ${startDate.format(
-            "MMM D"
-          )} - ${endDate.format("MMM D, YYYY")}\n• Pickup: ${
-            formData.selectedTime
-          }\n• Total: ₱${totalPrice.toLocaleString()}`,
-          senderId: auth.currentUser?.uid,
-          createdAt: serverTimestamp(),
-          read: false,
+      try {
+        // 1. Update the rentRequests collection (existing)
+        await updateDoc(doc(db, "rentRequests", id as string), {
+          startDate: Timestamp.fromDate(startDate.toDate()),
+          endDate: Timestamp.fromDate(endDate.toDate()),
+          pickupTime: pickupTimeInMinutes,
+          message: formData.message,
+          totalPrice,
+          rentalDays,
+          updatedAt: serverTimestamp(),
         });
+
+        // 2. Update the chat collection itemDetails (NEW)
+        if (requestData.chatId) {
+          await updateDoc(doc(db, "chat", requestData.chatId), {
+            "itemDetails.startDate": Timestamp.fromDate(startDate.toDate()),
+            "itemDetails.endDate": Timestamp.fromDate(endDate.toDate()),
+            "itemDetails.pickupTime": pickupTimeInMinutes,
+            "itemDetails.message": formData.message,
+            "itemDetails.totalPrice": totalPrice,
+            "itemDetails.rentalDays": rentalDays,
+
+            // Update chat-level fields
+            lastMessage: "Request details updated",
+            lastMessageTime: serverTimestamp(),
+            lastSender: auth.currentUser?.uid,
+
+            // Update unread count for the other participant
+            [`unreadCounts.${requestData.ownerId}`]: increment(1),
+          });
+
+          // 3. Add chat notification message (existing)
+          await addDoc(collection(db, "chat", requestData.chatId, "messages"), {
+            type: "statusUpdate",
+            text: "Requester made updates to the request details.",
+            senderId: auth.currentUser?.uid,
+            createdAt: serverTimestamp(),
+            read: false,
+          });
+        }
+
+        console.log(
+          "Successfully updated both rentRequests and chat collections"
+        );
+      } catch (error) {
+        console.error("Error updating request:", error);
+        throw error;
       }
 
       Toast.show({

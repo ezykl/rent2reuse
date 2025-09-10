@@ -97,6 +97,41 @@ const Tools = () => {
     }
   }, [params.tab]);
 
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const requestsQuery = query(
+      collection(db, "rentRequests"),
+      where("requesterId", "==", auth.currentUser.uid),
+      orderBy("createdAt", "desc") // Add ordering for consistency
+    );
+
+    const unsubscribe = onSnapshot(requestsQuery, (snapshot) => {
+      const requests = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          itemId: data.itemId,
+          itemName: data.itemName,
+          itemImage: data.itemImage,
+          ownerName: data.ownerName,
+          status: data.status,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          pickupTime: data.pickupTime,
+          totalPrice: data.totalPrice,
+          createdAt: data.createdAt?.toDate(),
+          type: "outgoing",
+          chatId: data.chatId,
+        };
+      });
+
+      setRentRequests(requests);
+    });
+
+    return () => unsubscribe();
+  }, [auth.currentUser]);
+
   const handleEditRequest = async (requestId: string) => {
     try {
       setLoaderIsLoading(true);
@@ -862,27 +897,21 @@ const Tools = () => {
     );
 
     const unsubscribeOutgoing = onSnapshot(outgoingQuery, (snapshot) => {
-      const updates = snapshot.docChanges();
-      let shouldRefreshRequests = false;
-
-      updates.forEach((change) => {
-        if (change.type === "modified") {
-          const data = change.doc.data();
-          if (data.status !== "pending") {
-            Toast.show({
-              type: ALERT_TYPE.INFO,
-              title: "Request Update",
-              textBody: `Your rental request has been ${data.status}`,
-            });
-            shouldRefreshRequests = true;
-          }
-        }
-      });
-
-      // Refresh requests outside the loop
-      if (shouldRefreshRequests) {
-        fetchSentRequests();
+     const updates = snapshot.docChanges();
+  
+  updates.forEach((change) => {
+    if (change.type === "modified") {
+      const data = change.doc.data();
+      // Only show toast for status changes that matter to the user
+      if (data.status === "accepted" || data.status === "rejected") {
+        Toast.show({
+          type: ALERT_TYPE.INFO,
+          title: "Request Update",
+          textBody: `Your rental request has been ${data.status}`,
+        });
       }
+    }
+  });
     });
 
     setIncomingRequestsListener(() => unsubscribeIncoming);

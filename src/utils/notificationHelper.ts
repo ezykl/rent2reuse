@@ -169,6 +169,31 @@ export const sendRentRequestNotificationsV2 = async (
   }
 };
 
+export const createInAppNotification = async (
+  userId: string,
+  notification: {
+    type: string;
+    title: string;
+    message: string;
+    data?: any;
+  }
+) => {
+  try {
+    const userNotificationsRef = collection(
+      db,
+      `users/${userId}/notifications`
+    );
+    await addDoc(userNotificationsRef, {
+      ...notification,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+    console.log(`📱 In-app notification created for user: ${userId}`);
+  } catch (error) {
+    console.error("Error creating in-app notification:", error);
+  }
+};
+
 // Helper function to send push notifications
 export const sendPushNotification = async ({
   to,
