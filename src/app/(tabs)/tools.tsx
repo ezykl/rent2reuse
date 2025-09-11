@@ -263,7 +263,7 @@ const Tools = () => {
               day: "numeric",
             }),
             requestCount: requestsSnap.size,
-            newRequestCount: newRequestCount, // Add the unread notifications count
+            newRequestCount: newRequestCount, 
             renterInfo: data.renterInfo || null,
           };
 

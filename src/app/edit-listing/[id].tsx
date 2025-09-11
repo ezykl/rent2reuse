@@ -591,76 +591,76 @@ const EditListing = () => {
     images: string[];
   };
 
-  function detectFieldChanges(
-    currentData: FormData,
-    initialData: FormData,
-    originalData: { firstImage: string }
-  ) {
-    const changes: Record<string, any> = {};
+  // function detectFieldChanges(
+  //   currentData: FormData,
+  //   initialData: FormData,
+  //   originalData: { firstImage: string }
+  // ) {
+  //   const changes: Record<string, any> = {};
 
-    // 🔑 Mappings between form field names and Firebase keys
-    const fieldMappings: Record<
-      keyof Omit<
-        FormData,
-        "images" | "enableDownpayment" | "downpaymentPercentage"
-      >,
-      string
-    > = {
-      title: "itemName",
-      category: "itemCategory",
-      description: "itemDesc",
-      price: "itemPrice",
-      minimumDays: "itemMinRentDuration",
-      condition: "itemCondition",
-      enableAI: "enableAI",
-    };
+  //   // 🔑 Mappings between form field names and Firebase keys
+  //   const fieldMappings: Record<
+  //     keyof Omit<
+  //       FormData,
+  //       "images" | "enableDownpayment" | "downpaymentPercentage"
+  //     >,
+  //     string
+  //   > = {
+  //     title: "itemName",
+  //     category: "itemCategory",
+  //     description: "itemDesc",
+  //     price: "itemPrice",
+  //     minimumDays: "itemMinRentDuration",
+  //     condition: "itemCondition",
+  //     enableAI: "enableAI",
+  //   };
 
-    // 🔄 Compare mapped fields
-    (Object.keys(fieldMappings) as Array<keyof typeof fieldMappings>).forEach(
-      (formKey) => {
-        const firebaseKey = fieldMappings[formKey];
-        const currentValue =
-          formKey === "price" || formKey === "minimumDays"
-            ? Number(currentData[formKey])
-            : currentData[formKey];
-        const initialValue =
-          formKey === "price" || formKey === "minimumDays"
-            ? Number(initialData[formKey])
-            : initialData[formKey];
+  //   // 🔄 Compare mapped fields
+  //   (Object.keys(fieldMappings) as Array<keyof typeof fieldMappings>).forEach(
+  //     (formKey) => {
+  //       const firebaseKey = fieldMappings[formKey];
+  //       const currentValue =
+  //         formKey === "price" || formKey === "minimumDays"
+  //           ? Number(currentData[formKey])
+  //           : currentData[formKey];
+  //       const initialValue =
+  //         formKey === "price" || formKey === "minimumDays"
+  //           ? Number(initialData[formKey])
+  //           : initialData[formKey];
 
-        if (currentValue !== initialValue) {
-          changes[firebaseKey] = currentValue;
-        }
-      }
-    );
+  //       if (currentValue !== initialValue) {
+  //         changes[firebaseKey] = currentValue;
+  //       }
+  //     }
+  //   );
 
-    // 💰 Handle downpayment
-    if (currentData.enableDownpayment !== initialData.enableDownpayment) {
-      changes.downpaymentPercentage = currentData.enableDownpayment
-        ? Number(currentData.downpaymentPercentage)
-        : null;
-    } else if (
-      currentData.enableDownpayment &&
-      Number(currentData.downpaymentPercentage) !==
-        Number(initialData.downpaymentPercentage)
-    ) {
-      changes.downpaymentPercentage = Number(currentData.downpaymentPercentage);
-    }
+  //   // 💰 Handle downpayment
+  //   if (currentData.enableDownpayment !== initialData.enableDownpayment) {
+  //     changes.downpaymentPercentage = currentData.enableDownpayment
+  //       ? Number(currentData.downpaymentPercentage)
+  //       : null;
+  //   } else if (
+  //     currentData.enableDownpayment &&
+  //     Number(currentData.downpaymentPercentage) !==
+  //       Number(initialData.downpaymentPercentage)
+  //   ) {
+  //     changes.downpaymentPercentage = Number(currentData.downpaymentPercentage);
+  //   }
 
-    const currentImages = currentData.enableAI
-      ? [originalData.firstImage, ...currentData.images.slice(1)]
-      : currentData.images;
+  //   const currentImages = currentData.enableAI
+  //     ? [originalData.firstImage, ...currentData.images.slice(1)]
+  //     : currentData.images;
 
-    if (JSON.stringify(currentImages) !== JSON.stringify(initialData.images)) {
-      changes.images = currentImages;
-    }
+  //   if (JSON.stringify(currentImages) !== JSON.stringify(initialData.images)) {
+  //     changes.images = currentImages;
+  //   }
 
-    return {
-      hasChanges: Object.keys(changes).length > 0,
-      changes,
-      changedFields: Object.keys(changes),
-    };
-  }
+  //   return {
+  //     hasChanges: Object.keys(changes).length > 0,
+  //     changes,
+  //     changedFields: Object.keys(changes),
+  //   };
+  // }
 
   const handleUpdate = async () => {
     if (!validateForm()) {

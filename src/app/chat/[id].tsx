@@ -78,6 +78,8 @@ import {
 import { ChatCamera } from "@/components/ChatCamera";
 import CustomImageViewer from "@/components/CustomImageViewer";
 import { createInAppNotification } from "src/utils/notificationHelper";
+import ChatDetailsModal from "@/components/chatModal/ChatDetailsModal";
+import ChatHeader from "@/components/chatModal/ChatHeader";
 
 // Helper function to check if a request has expired
 const isRequestExpired = (startDate: any): boolean => {
@@ -231,138 +233,138 @@ const RENTAL_STATUS = {
   CANCELLED: "cancelled",
 } as const;
 
-const ChatHeader = ({
-  recipientName,
-  recipientImage,
-  itemDetails,
-  recipientStatus,
-  status,
-  onBack,
-  recipientId,
-  isOwner,
-  showFullProgress,
-  onToggleProgress,
-}: ChatHeaderProps) => {
-  const formatFullName = () => {
-    const middleInitial = recipientName.middlename
-      ? ` ${recipientName.middlename.charAt(0)}.`
-      : "";
-    return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
-  };
+// const ChatHeader = ({
+//   recipientName,
+//   recipientImage,
+//   itemDetails,
+//   recipientStatus,
+//   status,
+//   onBack,
+//   recipientId,
+//   isOwner,
+//   showFullProgress,
+//   onToggleProgress,
+// }: ChatHeaderProps) => {
+//   const formatFullName = () => {
+//     const middleInitial = recipientName.middlename
+//       ? ` ${recipientName.middlename.charAt(0)}.`
+//       : "";
+//     return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
+//   };
 
-  const isRentalConversation = itemDetails && status;
+//   const isRentalConversation = itemDetails && status;
 
-  return (
-    <View className="bg-white border-b  border-gray-300 rounded-b-xl">
-      {/* Main Header */}
-      <View className="flex-row items-center px-4 pt-4">
-        <TouchableOpacity onPress={onBack} className="mr-3">
-          <Image
-            source={icons.leftArrow}
-            className="w-8 h-8"
-            tintColor="#6B7280"
-          />
-        </TouchableOpacity>
+//   return (
+//     <View className="bg-white border-b  border-gray-300 rounded-b-xl">
+//       {/* Main Header */}
+//       <View className="flex-row items-center px-4 pt-4">
+//         <TouchableOpacity onPress={onBack} className="mr-3">
+//           <Image
+//             source={icons.leftArrow}
+//             className="w-8 h-8"
+//             tintColor="#6B7280"
+//           />
+//         </TouchableOpacity>
 
-        <View className="relative">
-          <Image
-            source={{
-              uri:
-                itemDetails?.image ||
-                recipientImage ||
-                "https://placehold.co/40x40@2x.png",
-            }}
-            className="w-10 h-10 rounded-full bg-gray-200"
-            resizeMode="cover"
-          />
-        </View>
+//         <View className="relative">
+//           <Image
+//             source={{
+//               uri:
+//                 itemDetails?.image ||
+//                 recipientImage ||
+//                 "https://placehold.co/40x40@2x.png",
+//             }}
+//             className="w-10 h-10 rounded-full bg-gray-200"
+//             resizeMode="cover"
+//           />
+//         </View>
 
-        <View className="ml-3 flex-1">
-          <TouchableOpacity onPress={() => router.push(`/user/${recipientId}`)}>
-            <Text
-              className="text-base font-semibold text-gray-900"
-              numberOfLines={1}
-            >
-              {formatFullName()}
-              {itemDetails?.name && (
-                <>
-                  <Text className="text-gray-400"> • </Text>
-                  <Text
-                    className={`${
-                      status === "cancelled" || status === "declined"
-                        ? "text-red-500"
-                        : "text-primary"
-                    }`}
-                  >
-                    {itemDetails.name}
-                  </Text>
-                </>
-              )}
-            </Text>
-          </TouchableOpacity>
+//         <View className="ml-3 flex-1">
+//           <TouchableOpacity onPress={() => router.push(`/user/${recipientId}`)}>
+//             <Text
+//               className="text-base font-semibold text-gray-900"
+//               numberOfLines={1}
+//             >
+//               {formatFullName()}
+//               {itemDetails?.name && (
+//                 <>
+//                   <Text className="text-gray-400"> • </Text>
+//                   <Text
+//                     className={`${
+//                       status === "cancelled" || status === "declined"
+//                         ? "text-red-500"
+//                         : "text-primary"
+//                     }`}
+//                   >
+//                     {itemDetails.name}
+//                   </Text>
+//                 </>
+//               )}
+//             </Text>
+//           </TouchableOpacity>
 
-          {/* Show progress indicator or online status */}
-          {isRentalConversation ? (
-            <View className="mt-1">
-              <RentalProgressIndicator
-                currentStatus={status}
-                isOwner={isOwner}
-                compact={true}
-              />
-            </View>
-          ) : (
-            <Text className="text-xs text-gray-500">
-              {recipientStatus?.isOnline ? "Online" : "Offline"}
-            </Text>
-          )}
-        </View>
+//           {/* Show progress indicator or online status */}
+//           {isRentalConversation ? (
+//             <View className="mt-1">
+//               <RentalProgressIndicator
+//                 currentStatus={status}
+//                 isOwner={isOwner}
+//                 compact={true}
+//               />
+//             </View>
+//           ) : (
+//             <Text className="text-xs text-gray-500">
+//               {recipientStatus?.isOnline ? "Online" : "Offline"}
+//             </Text>
+//           )}
+//         </View>
 
-        {/* Action buttons */}
-        <View className="flex-row items-center">
-          {/* Report button */}
-          <TouchableOpacity
-            onPress={() => router.push(`/report/${recipientId}`)}
-            className="mr-3"
-          >
-            <Image
-              source={icons.report}
-              className="w-6 h-6"
-              tintColor="#EF4444"
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
+//         {/* Action buttons */}
+//         <View className="flex-row items-center">
+//           {/* Report button */}
+//           <TouchableOpacity
+//             onPress={() => router.push(`/report/${recipientId}`)}
+//             className="mr-3"
+//           >
+//             <Image
+//               source={icons.report}
+//               className="w-6 h-6"
+//               tintColor="#EF4444"
+//             />
+//           </TouchableOpacity>
+//         </View>
+//       </View>
 
-      {/* Full Progress Indicator (expandable) */}
-      {isRentalConversation && showFullProgress && (
-        <RentalProgressIndicator
-          currentStatus={status}
-          isOwner={isOwner}
-          compact={false}
-        />
-      )}
+//       {/* Full Progress Indicator (expandable) */}
+//       {isRentalConversation && showFullProgress && (
+//         <RentalProgressIndicator
+//           currentStatus={status}
+//           isOwner={isOwner}
+//           compact={false}
+//         />
+//       )}
 
-      {/* Progress toggle button for rental conversations */}
-      {isRentalConversation && (
-        <View className="flex-row justify-center py-2">
-          <TouchableOpacity
-            onPress={onToggleProgress}
-            className="mr-3 flex-row items-center gap-2"
-          >
-            <Text className="text-gray-500 font-pmedium text-sm">
-              {showFullProgress ? "Hide Progress" : "View Progress"}
-            </Text>
-            <Image
-              source={icons.arrowDown}
-              className={`w-5 h-5 ${showFullProgress ? " rotate-180" : ""}`}
-              tintColor={"#6b7280"}
-            />
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-};
+//       {/* Progress toggle button for rental conversations */}
+//       {isRentalConversation && (
+//         <View className="flex-row justify-center py-2">
+//           <TouchableOpacity
+//             onPress={onToggleProgress}
+//             className="mr-3 flex-row items-center gap-2"
+//           >
+//             <Text className="text-gray-500 font-pmedium text-sm">
+//               {showFullProgress ? "Hide Progress" : "View Progress"}
+//             </Text>
+//             <Image
+//               source={icons.arrowDown}
+//               className={`w-5 h-5 ${showFullProgress ? " rotate-180" : ""}`}
+//               tintColor={"#6b7280"}
+//             />
+//           </TouchableOpacity>
+//         </View>
+//       )}
+//     </View>
+//   );
+// };
 
 // Add these interfaces near your other interfaces
 interface ActionMenuItem {
@@ -1025,6 +1027,7 @@ const ImageMessage = ({
     </View>
   );
 };
+
 const ChatScreen = () => {
   const { id: chatId } = useLocalSearchParams();
   const navigation = useNavigation();
@@ -1041,6 +1044,7 @@ const ChatScreen = () => {
     firstname: "",
     lastname: "",
   });
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [recipientImage, setRecipientImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [showActionMenu, setShowActionMenu] = useState(false);
@@ -2851,8 +2855,7 @@ const ChatScreen = () => {
         onBack={() => router.back()}
         recipientStatus={{ isOnline: true, lastSeen: new Date() }}
         isOwner={currentUserId === chatData?.ownerId}
-        showFullProgress={showFullProgress}
-        onToggleProgress={() => setShowFullProgress(!showFullProgress)}
+        onShowDetails={() => setShowDetailsModal(true)} // Add this line
       />
 
       <KeyboardAvoidingView
@@ -3044,7 +3047,6 @@ const ChatScreen = () => {
             </View>
           )}
         />
-
         {/* Message Input */}
         <View className="flex-row px-2 pb-2  gap-2 ">
           {!canSendMessage ? (
@@ -3156,7 +3158,6 @@ const ChatScreen = () => {
             </View>
           )}
         </View>
-
         <MessageActionsModal
           visible={showMessageActions}
           message={selectedMessage}
@@ -3177,13 +3178,27 @@ const ChatScreen = () => {
             }
           }}
         />
-
         <ActionMenu
           visible={showActionMenu}
           onClose={() => setShowActionMenu(false)}
           items={actionItems}
         />
-
+        <ChatDetailsModal
+          visible={showDetailsModal}
+          onClose={() => setShowDetailsModal(false)}
+          onImagePress={(url) => handleImagePress(url)}
+          chatData={chatData}
+          recipientName={recipientName}
+          recipientImage={recipientImage}
+          recipientId={
+            (chatData?.ownerId === currentUserId
+              ? chatData?.requesterId
+              : chatData?.ownerId) || ""
+          }
+          messages={messages}
+          isOwner={currentUserId === chatData?.ownerId}
+          currentUserId={currentUserId}
+        />
         {/* Camera Modal */}
         {showCamera && (
           <Modal animationType="slide" visible={showCamera}>
@@ -3218,6 +3233,7 @@ const ChatScreen = () => {
             />
           </Modal>
         )}
+        a
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
