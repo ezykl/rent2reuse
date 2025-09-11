@@ -57,25 +57,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         </TouchableOpacity>
 
         <View className="flex-row items-center relative">
-     
           <Image
             source={{
-              uri:
-                itemDetails?.image ||
-               
-                "https://placehold.co/40x40@2x.png",
+              uri: itemDetails?.image || "https://placehold.co/40x40@2x.png",
             }}
             className="w-12 h-12 rounded-xl bg-gray-200"
             resizeMode="cover"
           />
-               <Image
+          <Image
             source={{
-              uri:
-  
-                recipientImage ||
-                "https://placehold.co/40x40@2x.png",
+              uri: recipientImage || "https://placehold.co/40x40@2x.png",
             }}
-           className="w-12 h-12 rounded-xl bg-gray-200 -ml-4 mr-3"
+            className="w-12 h-12 rounded-xl bg-gray-200 -ml-4 mt-4 mr-3"
             resizeMode="cover"
           />
         </View>
