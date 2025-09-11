@@ -31,12 +31,7 @@ import { db, auth } from "@/lib/firebaseConfig";
 import { router } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import Header from "@/components/Header";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from "react-native-reanimated";
+import stringSimilarity from "string-similarity";
 import { icons } from "@/constant";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -89,6 +84,18 @@ interface SearchResult {
   lastMessage?: string;
   lastMessageTime?: Date | null;
   isCurrentUserLastSender?: boolean;
+  // Add these new properties
+  itemDetails?: {
+    id: string;
+    name: string;
+    price: number;
+    image: string;
+  };
+  status?: "pending" | "accepted" | "declined" | "cancelled";
+  isRentRequest?: boolean;
+  unreadCounts?: {
+    [userId: string]: number;
+  };
 }
 
 type TabType = "all" | "sent" | "received" | "closed";
@@ -294,14 +301,102 @@ const ChatList = () => {
     }
   };
 
-  const createNewChat = async (userId: string) => {
-    try {
-      router.push(`/chat/${userId}`);
-    } catch (error) {
-      console.error("Error creating new chat:", error);
-      Alert.alert("Error", "Failed to create new chat");
+  const getTabCount = (tabType: TabType, searchQuery: string = "") => {
+    if (!searchQuery.trim()) {
+      // No search - use default filtering
+      return getFilteredChats(chats, tabType, currentUserId).length;
     }
+
+    // With search - filter matching chats first, then apply tab filter
+    const searchLower = searchQuery.toLowerCase().trim();
+
+    const matchingChats = chats.filter((chat) => {
+      // Search by recipient name
+      const fullName = formatFullName(chat.recipientName).toLowerCase();
+      const firstName = chat.recipientName.firstname.toLowerCase();
+      const lastName = chat.recipientName.lastname.toLowerCase();
+
+      // Search by item name if it's a rent request
+      const itemName = chat.itemDetails?.name?.toLowerCase() || "";
+
+      // Direct string matching
+      const nameMatch =
+        fullName.includes(searchLower) ||
+        firstName.includes(searchLower) ||
+        lastName.includes(searchLower);
+
+      const itemMatch = itemName.includes(searchLower);
+
+      // String similarity matching (threshold of 0.6 for good matches)
+      const nameSimilarity = Math.max(
+        stringSimilarity.compareTwoStrings(searchLower, fullName),
+        stringSimilarity.compareTwoStrings(searchLower, firstName),
+        stringSimilarity.compareTwoStrings(searchLower, lastName)
+      );
+
+      const itemSimilarity = itemName
+        ? stringSimilarity.compareTwoStrings(searchLower, itemName)
+        : 0;
+
+      return (
+        nameMatch || itemMatch || nameSimilarity > 0.6 || itemSimilarity > 0.6
+      );
+    });
+
+    // Apply tab filtering to matching chats
+    const filteredResults = getFilteredChats(
+      matchingChats,
+      tabType,
+      currentUserId
+    );
+
+    // For "all" tab, also count new users when searching
+    if (tabType === "all") {
+      const existingChatUserIds = new Set(
+        matchingChats.map((chat) => chat.recipientId)
+      );
+
+      const matchingNewUsers = allUsers.filter((user) => {
+        if (existingChatUserIds.has(user.id)) return false;
+
+        const fullName = formatFullName({
+          firstname: user.firstname || "",
+          lastname: user.lastname || "",
+          middlename: user.middlename,
+        }).toLowerCase();
+        const firstName = (user.firstname || "").toLowerCase();
+        const lastName = (user.lastname || "").toLowerCase();
+
+        // Direct string matching
+        const nameMatch =
+          fullName.includes(searchLower) ||
+          firstName.includes(searchLower) ||
+          lastName.includes(searchLower);
+
+        // String similarity matching
+        const nameSimilarity = Math.max(
+          stringSimilarity.compareTwoStrings(searchLower, fullName),
+          stringSimilarity.compareTwoStrings(searchLower, firstName),
+          stringSimilarity.compareTwoStrings(searchLower, lastName)
+        );
+
+        return nameMatch || nameSimilarity > 0.6;
+      });
+
+      return filteredResults.length + matchingNewUsers.length;
+    }
+
+    return filteredResults.length;
   };
+
+  // const createNewChat = async (userId: string) => {
+  //   try {
+  //     router.push(`/chat/${userId}`);
+  //   } catch (error) {
+  //     console.error("Error creating new chat:", error);
+  //     Alert.alert("Error", "Failed to create new chat");
+  //   }
+  // };
 
   const formatFullName = (name: {
     firstname: string;
@@ -319,69 +414,117 @@ const ChatList = () => {
       setSearchResults([]);
       return;
     }
-    const searchLower = search.toLowerCase();
 
+    const searchLower = search.toLowerCase().trim();
+
+    // Filter existing chats with improved matching
     const matchingChats = chats.filter((chat) => {
+      // Search by recipient name
       const fullName = formatFullName(chat.recipientName).toLowerCase();
       const firstName = chat.recipientName.firstname.toLowerCase();
       const lastName = chat.recipientName.lastname.toLowerCase();
 
-      return (
+      // Search by item name if it's a rent request
+      const itemName = chat.itemDetails?.name?.toLowerCase() || "";
+
+      // Direct string matching
+      const nameMatch =
         fullName.includes(searchLower) ||
         firstName.includes(searchLower) ||
-        lastName.includes(searchLower)
+        lastName.includes(searchLower);
+
+      const itemMatch = itemName.includes(searchLower);
+
+      // String similarity matching (threshold of 0.6 for good matches)
+      const nameSimilarity = Math.max(
+        stringSimilarity.compareTwoStrings(searchLower, fullName),
+        stringSimilarity.compareTwoStrings(searchLower, firstName),
+        stringSimilarity.compareTwoStrings(searchLower, lastName)
+      );
+
+      const itemSimilarity = itemName
+        ? stringSimilarity.compareTwoStrings(searchLower, itemName)
+        : 0;
+
+      return (
+        nameMatch || itemMatch || nameSimilarity > 0.6 || itemSimilarity > 0.6
       );
     });
 
-    const existingChatUserIds = new Set(
-      matchingChats.map((chat) => chat.recipientId)
+    // Apply the same tab filtering logic as the main chat list
+    const filteredMatchingChats = getFilteredChats(
+      matchingChats,
+      activeTab,
+      currentUserId
     );
 
-    const matchingUsers: SearchResult[] = allUsers
-      .filter((user) => {
-        if (existingChatUserIds.has(user.id)) return false;
+    // Convert existing chats to SearchResult format
+    const chatResults: SearchResult[] = filteredMatchingChats.map((chat) => ({
+      isExistingChat: true,
+      chatId: chat.id,
+      userId: chat.recipientId,
+      fullName: formatFullName(chat.recipientName),
+      profilePic: chat.recipientProfileImage,
+      lastMessage: chat.lastMessage,
+      lastMessageTime: chat.lastMessageTime,
+      isCurrentUserLastSender: chat.isCurrentUserLastSender,
+      itemDetails: chat.itemDetails,
+      status: chat.status,
+      isRentRequest: chat.isRentRequest,
+      unreadCounts: chat.unreadCounts,
+    }));
 
-        const fullName = formatFullName({
-          firstname: user.firstname || "",
-          lastname: user.lastname || "",
-          middlename: user.middlename,
-        }).toLowerCase();
-        const firstName = (user.firstname || "").toLowerCase();
-        const lastName = (user.lastname || "").toLowerCase();
+    // For new users, only show them in "all" tab since they don't have chat history
+    let matchingUsers: SearchResult[] = [];
+    if (activeTab === "all") {
+      // Get existing chat user IDs to avoid duplicates
+      const existingChatUserIds = new Set(
+        matchingChats.map((chat) => chat.recipientId)
+      );
 
-        return (
-          fullName.includes(searchLower) ||
-          firstName.includes(searchLower) ||
-          lastName.includes(searchLower)
-        );
-      })
-      .map((user) => ({
-        isExistingChat: false,
-        userId: user.id,
-        fullName: formatFullName({
-          firstname: user.firstname || "",
-          lastname: user.lastname || "",
-          middlename: user.middlename,
-        }),
-        profilePic: user.profileImage || "https://via.placeholder.com/50",
-      }));
+      // Search for new users (users not in existing chats)
+      matchingUsers = allUsers
+        .filter((user) => {
+          if (existingChatUserIds.has(user.id)) return false;
 
-    const combinedResults: SearchResult[] = [
-      ...matchingChats.map((chat) => ({
-        isExistingChat: true,
-        chatId: chat.id,
-        userId: chat.recipientId,
-        fullName: formatFullName(chat.recipientName),
-        profilePic: chat.recipientProfileImage,
-        lastMessage: chat.lastMessage,
-        lastMessageTime: chat.lastMessageTime,
-        isCurrentUserLastSender: chat.isCurrentUserLastSender,
-      })),
-      ...matchingUsers,
-    ];
+          const fullName = formatFullName({
+            firstname: user.firstname || "",
+            lastname: user.lastname || "",
+            middlename: user.middlename,
+          }).toLowerCase();
+          const firstName = (user.firstname || "").toLowerCase();
+          const lastName = (user.lastname || "").toLowerCase();
 
-    setSearchResults(combinedResults);
-  }, [search, chats, allUsers]);
+          // Direct string matching
+          const nameMatch =
+            fullName.includes(searchLower) ||
+            firstName.includes(searchLower) ||
+            lastName.includes(searchLower);
+
+          // String similarity matching
+          const nameSimilarity = Math.max(
+            stringSimilarity.compareTwoStrings(searchLower, fullName),
+            stringSimilarity.compareTwoStrings(searchLower, firstName),
+            stringSimilarity.compareTwoStrings(searchLower, lastName)
+          );
+
+          return nameMatch || nameSimilarity > 0.6;
+        })
+        .map((user) => ({
+          isExistingChat: false,
+          userId: user.id,
+          fullName: formatFullName({
+            firstname: user.firstname || "",
+            lastname: user.lastname || "",
+            middlename: user.middlename,
+          }),
+          profilePic: user.profileImage || "https://via.placeholder.com/50",
+        }));
+    }
+
+    // Combine results with existing chats first
+    setSearchResults([...chatResults, ...matchingUsers]);
+  }, [search, chats, allUsers, activeTab, currentUserId]);
 
   const handleLongPress = (chatId: string) => {
     if (activeTab !== "closed") return;
@@ -693,7 +836,14 @@ const ChatList = () => {
       if (searchResults.length === 0) {
         return (
           <View className="flex-1 items-center justify-center">
-            <Text className="text-gray-500">No users found</Text>
+            <Image
+              source={icons.emptyBox}
+              className="w-16 h-16 mb-4"
+              tintColor="#9CA3AF"
+            />
+            <Text className="text-gray-500">
+              No results found for "{search}"
+            </Text>
           </View>
         );
       }
@@ -706,50 +856,190 @@ const ChatList = () => {
               ? item.chatId ?? `chat-${item.userId}`
               : `new-${item.userId}`
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              className="flex-row items-center px-4 py-4 border-b border-gray-200"
-              onPress={() => {
-                if (item.isExistingChat) {
-                  router.push(`/chat/${item.chatId}`);
-                } else {
-                  createNewChat(item.userId);
-                }
-              }}
-            >
-              <Image
-                source={{ uri: item.profilePic }}
-                className="w-12 h-12 rounded-full mr-4"
-              />
-              <View className="flex-1">
-                <Text className="text-lg font-semibold">
-                  {item.fullName || "Unknown User"}
-                </Text>
-                {item.isExistingChat ? (
-                  <Text
-                    className={`text-gray-500 ${
-                      item.isCurrentUserLastSender ? "font-bold" : ""
-                    }`}
-                  >
-                    {item.isCurrentUserLastSender ? "You: " : ""}
-                    {item.lastMessage}
-                  </Text>
-                ) : (
-                  <Text className="text-blue-500">Start new conversation</Text>
-                )}
-              </View>
-              {item.isExistingChat && item.lastMessageTime && (
-                <Text className="text-gray-400 text-sm">
-                  {item.lastMessageTime.toLocaleTimeString()}
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            if (item.isExistingChat) {
+              // Render existing chat using the same design as default chat items
+              const unreadCount = item.unreadCounts?.[currentUserId ?? ""] || 0;
+              const hasUnreadMessages =
+                !item.isCurrentUserLastSender && unreadCount > 0;
+              const isUserSender = currentUserId === item.userId; // Adjust based on your logic
+              const isUserReceiver = !isUserSender;
+
+              return (
+                <TouchableOpacity
+                  className="flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border border-gray-50"
+                  onPress={() => router.push(`/chat/${item.chatId}`)}
+                >
+                  <View className="relative">
+                    <Image
+                      source={{
+                        uri:
+                          item.isRentRequest && item.itemDetails?.image
+                            ? item.itemDetails.image
+                            : item.profilePic,
+                      }}
+                      className="w-14 h-14 rounded-full bg-gray-200"
+                      style={
+                        item.isRentRequest
+                          ? { borderRadius: 12 }
+                          : { borderRadius: 28 }
+                      }
+                    />
+
+                    {/* Request Direction Indicator */}
+                    {item.isRentRequest && (
+                      <View
+                        className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center ${
+                          isUserSender ? "bg-blue-500" : "bg-green-500"
+                        }`}
+                      >
+                        <Image
+                          source={icons.leftArrow}
+                          className={`w-5 h-5 ${
+                            isUserSender ? "rotate-90" : "-rotate-90"
+                          }`}
+                          tintColor="#fff"
+                        />
+                      </View>
+                    )}
+
+                    {/* Unread Badge */}
+                    {hasUnreadMessages && (
+                      <View className="absolute -top-1 -right-1 bg-red-500 min-w-[20px] h-5 rounded-full items-center justify-center z-10">
+                        <Text className="text-white text-xs font-bold">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View className="flex-1 ml-4">
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-1">
+                        <Text
+                          className={`text-base ${
+                            hasUnreadMessages
+                              ? "font-bold text-gray-900"
+                              : "font-regular text-gray-800"
+                          }`}
+                          numberOfLines={1}
+                        >
+                          {item.fullName}
+                          {item.itemDetails?.name && (
+                            <>
+                              <Text className="text-gray-400"> • </Text>
+                              <Text
+                                className={
+                                  item.status === "declined" ||
+                                  item.status === "cancelled"
+                                    ? "text-red-500"
+                                    : "text-primary"
+                                }
+                              >
+                                {item.itemDetails.name}
+                              </Text>
+                            </>
+                          )}
+                        </Text>
+                      </View>
+
+                      {item.lastMessageTime && (
+                        <Text
+                          className={`text-xs ${
+                            hasUnreadMessages
+                              ? "font-bold text-primary"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          {item.lastMessageTime.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+                      )}
+                    </View>
+
+                    <View className="flex-row items-center">
+                      <Text
+                        className={`text-sm flex-1 ${
+                          hasUnreadMessages
+                            ? "font-bold text-gray-900"
+                            : "text-gray-500"
+                        }`}
+                        numberOfLines={1}
+                      >
+                        {item.isCurrentUserLastSender && (
+                          <Text className="text-gray-400">You: </Text>
+                        )}
+                        {item.lastMessage}
+                      </Text>
+
+                      {/* Request Status Badge */}
+                      {item.isRentRequest && item.status && (
+                        <View
+                          className={`ml-2 px-2 py-1 rounded-full ${
+                            item.status === "pending"
+                              ? "bg-yellow-100"
+                              : item.status === "accepted"
+                              ? "bg-green-100"
+                              : item.status === "declined" ||
+                                item.status === "cancelled"
+                              ? "bg-red-100"
+                              : "bg-gray-100"
+                          }`}
+                        >
+                          <Text
+                            className={`text-xs font-medium ${
+                              item.status === "pending"
+                                ? "text-yellow-800"
+                                : item.status === "accepted"
+                                ? "text-green-800"
+                                : item.status === "declined" ||
+                                  item.status === "cancelled"
+                                ? "text-red-800"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {item.status.charAt(0).toUpperCase() +
+                              item.status.slice(1)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            } else {
+              // Render new user option
+              return (
+                // <TouchableOpacity
+                //   className="flex-row items-center px-4 py-4 my-1 bg-white rounded-2xl shadow-sm border border-gray-50"
+                //   onPress={() => createNewChat(item.userId)}
+                // >
+                //   <Image
+                //     source={{ uri: item.profilePic }}
+                //     className="w-14 h-14 rounded-full bg-gray-200"
+                //   />
+                //   <View className="flex-1 ml-4">
+                //     <Text className="text-base font-regular text-gray-800">
+                //       {item.fullName}
+                //     </Text>
+                //     <Text className="text-sm text-blue-500">
+                //       Start new conversation
+                //     </Text>
+                //   </View>
+                // </TouchableOpacity>
+                <></>
+              );
+            }
+          }}
           contentContainerStyle={{ paddingBottom: 120, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
         />
       );
     }
 
+    // Rest of the function remains the same...
     const filteredChats = getFilteredChats(chats, activeTab, currentUserId);
 
     if (filteredChats.length === 0) {
@@ -780,6 +1070,7 @@ const ChatList = () => {
       />
     );
   };
+
   const insets = useSafeAreaInsets();
 
   return (
@@ -824,7 +1115,7 @@ const ChatList = () => {
                 title={tab.label}
                 isActive={activeTab === tab.key}
                 onPress={() => setActiveTab(tab.key)}
-                count={getFilteredChats(chats, tab.key, currentUserId).length}
+                count={getTabCount(tab.key, search)}
               />
             ))}
           </View>

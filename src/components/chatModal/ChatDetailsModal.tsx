@@ -353,13 +353,13 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
                     "https://placehold.co/40x40@2x.png",
                 }}
                 className="w-12 h-12 rounded-xl  bg-gray-200 "
-              />{" "}
+              />
               <View className="shadow-lg shadow-red-800">
                 <Image
                   source={{
                     uri: recipientImage || "https://placehold.co/40x40@2x.png",
                   }}
-                  className="w-12 h-12 rounded-xl  bg-gray-200 -ml-4 mr-3"
+                  className="w-12 h-12 rounded-xl  bg-gray-200 -ml-4 mt-4 mr-3"
                 />
               </View>
               <View className="flex-1">

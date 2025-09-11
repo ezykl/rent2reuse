@@ -70,8 +70,8 @@ const Header = ({ variant = "default" }: HeaderProps) => {
             />
 
             {unreadCount > 0 && (
-              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-                <Text className="text-white text-[10px] font-bold">
+              <View className="absolute -top-1 -right-1 bg-red-500 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+                <Text className="text-white text-xs font-bold">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </Text>
               </View>
