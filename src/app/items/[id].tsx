@@ -24,6 +24,7 @@ import dayjs from "dayjs";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "../../hooks/useLocation";
 import { LocationUtils } from "../../utils/locationUtils";
+import { useUserLimits } from "@/hooks/useUserLimits";
 
 import {
   doc,
@@ -82,6 +83,15 @@ interface UserRating {
   };
 }
 
+interface UserPlan {
+  listLimit: number;
+  listUsed: number;
+  rentLimit: number;
+  rentUsed: number;
+  planType: string;
+  status: string;
+}
+
 const { width, height } = Dimensions.get("window");
 
 export default function ItemDetails() {
@@ -101,6 +111,17 @@ export default function ItemDetails() {
     chatId: string;
   } | null>(null);
   const [ownerRating, setOwnerRating] = useState<UserRating | null>(null);
+  const { canList, rentLimit, rentUsed, updateListUsage, fetchUserLimits } =
+    useUserLimits();
+
+  const [userPlan, setUserPlan] = useState<UserPlan>({
+    listLimit: 0,
+    listUsed: 0,
+    rentLimit: 0,
+    rentUsed: 0,
+    planType: "",
+    status: "",
+  });
 
   const [fullscreenImageVisible, setFullscreenImageVisible] = useState(false);
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState(0);
@@ -155,6 +176,26 @@ export default function ItemDetails() {
       },
       properties: {},
     };
+  };
+
+  const fetchUserPlan = async () => {
+    if (user?.uid) return;
+
+    try {
+      const userDoc = await getDoc(doc(db, "users", user!.uid));
+      if (userDoc.exists() && userDoc.data().currentPlan) {
+        const planData = userDoc.data().currentPlan;
+        console.log("Fetched updated plan data:", {
+          rentUsed: planData.rentUsed,
+          renLimit: planData.renLimit,
+        });
+
+        setUserPlan(planData);
+      }
+    } catch (error) {
+      console.error("Error fetching user plan:", error);
+    } finally {
+    }
   };
 
   // Function to get directions to the location
@@ -407,6 +448,7 @@ export default function ItemDetails() {
   useEffect(() => {
     if (item && user) {
       checkExistingRequest();
+      fetchUserPlan();
     }
   }, [item, user]);
 
@@ -455,6 +497,15 @@ export default function ItemDetails() {
           type: ALERT_TYPE.DANGER,
           title: "Error",
           textBody: "Failed to load profile data",
+        });
+        return;
+      }
+
+      if (rentUsed >= rentLimit) {
+        Toast.show({
+          type: ALERT_TYPE.WARNING,
+          title: "Rent Limit Reached",
+          textBody: "Please upgrade your plan to add more items.",
         });
         return;
       }

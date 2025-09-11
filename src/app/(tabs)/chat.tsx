@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   ScrollView,
   Dimensions,
   SafeAreaView,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import {
   collection,
@@ -35,6 +37,7 @@ import stringSimilarity from "string-similarity";
 import { icons } from "@/constant";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import LottieView from "lottie-react-native";
 
 //typeScript
 interface User {
@@ -147,6 +150,15 @@ const ChatList = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedChats, setSelectedChats] = useState<string[]>([]);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const inputRef = useRef<TextInput>(null);
+
+  const handleFocus = () => {
+    // when focused, start a 4s timer
+    setTimeout(() => {
+      inputRef.current?.blur();
+      Keyboard.dismiss();
+    }, 4000);
+  };
 
   // Fixed filtering logic
   const getFilteredChats = (
@@ -204,7 +216,7 @@ const ChatList = () => {
       const userId = user.uid;
       setCurrentUserId(userId);
 
-      loadAllUsers(userId);
+      // loadAllUsers(userId);
       loadExistingChats(userId);
     });
 
@@ -383,7 +395,7 @@ const ChatList = () => {
         return nameMatch || nameSimilarity > 0.6;
       });
 
-      return filteredResults.length + matchingNewUsers.length;
+      return filteredResults.length;
     }
 
     return filteredResults.length;
@@ -523,7 +535,7 @@ const ChatList = () => {
     }
 
     // Combine results with existing chats first
-    setSearchResults([...chatResults, ...matchingUsers]);
+    setSearchResults([...chatResults]);
   }, [search, chats, allUsers, activeTab, currentUserId]);
 
   const handleLongPress = (chatId: string) => {
@@ -820,8 +832,8 @@ const ChatList = () => {
             </TouchableOpacity>
           </View>
         ) : (
-          // <TouchableOpacity
           <></>
+          // <TouchableOpacity
           //   onPress={handleDeleteAll}
           //   className="bg-red-500 px-4 py-2 rounded-lg"
           // >
@@ -835,13 +847,16 @@ const ChatList = () => {
     if (search.trim() !== "") {
       if (searchResults.length === 0) {
         return (
-          <View className="flex-1 items-center justify-center">
-            <Image
-              source={icons.emptyBox}
-              className="w-16 h-16 mb-4"
-              tintColor="#9CA3AF"
+          <View className="flex-1 items-center">
+            <LottieView
+              source={require("../../assets/lottie/BoxOpen.json")}
+              autoPlay
+              loop={false}
+              speed={0.5}
+              style={{ width: 200, height: 200, marginTop: 100 }}
             />
-            <Text className="text-gray-500">
+
+            <Text className="text-gray-500 -m-8">
               No results found for "{search}"
             </Text>
           </View>
@@ -1044,13 +1059,15 @@ const ChatList = () => {
 
     if (filteredChats.length === 0) {
       return (
-        <View className="flex-1 items-center justify-center p-4">
-          <Image
-            source={icons.emptyBox}
-            className="w-16 h-16 mb-4"
-            tintColor="#9CA3AF"
+        <View className="flex-1 items-center">
+          <LottieView
+            source={require("../../assets/lottie/BoxOpen.json")}
+            autoPlay
+            loop={false}
+            speed={0.5}
+            style={{ width: 200, height: 200, marginTop: 100 }}
           />
-          <Text className="text-gray-500 text-center">
+          <Text className="text-gray-500 -m-8">
             No {activeTab === "all" ? "messages" : `${activeTab} requests`}
           </Text>
         </View>
@@ -1081,17 +1098,22 @@ const ChatList = () => {
       <Header />
       {renderHeader()}
       {/* Search Bar */}
+
       <View className="py-2">
-        <View className="flex-row items-center bg-gray-100 rounded-xl px-4 h-12 py-2">
+        <View className="flex-row items-center bg-white rounded-xl border border-secondary-300 h-16 px-4">
           <Image
-            source={require("@/assets/icons/search.png")}
-            className="w-5 h-5 tint-gray-400"
+            source={icons.search}
+            className="w-6 h-6"
+            resizeMode="contain"
           />
           <TextInput
             placeholder="Search conversations..."
+            placeholderTextColor="#A0AEC0"
+            className="flex-1 text-secondary-400 text-base px-3 py-4 font-pregular"
+            ref={inputRef}
             value={search}
             onChangeText={setSearch}
-            className="flex-1 ml-2 text-base font-regular text-gray-800"
+            onFocus={handleFocus}
           />
         </View>
       </View>

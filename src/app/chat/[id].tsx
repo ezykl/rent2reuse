@@ -1377,15 +1377,15 @@ const ChatScreen = () => {
   // Add image handling functions
   const pickImage = async () => {
     try {
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission needed",
-          "Please grant camera roll permissions to send images."
-        );
-        return;
-      }
+      // const { status } =
+      //   await ImagePicker.requestMediaLibraryPermissionsAsync();
+      // if (status !== "granted") {
+      //   Alert.alert(
+      //     "Permission needed",
+      //     "Please grant camera roll permissions to send images."
+      //   );
+      //   return;
+      // }
 
       // Remove allowsEditing to skip cropping
       const result = await ImagePicker.launchImageLibraryAsync({

@@ -563,6 +563,7 @@ const EditListing = () => {
           itemName: updatedItemData.itemName,
           itemPrice: updatedItemData.itemPrice,
           itemCategory: updatedItemData.itemCategory,
+          totalPrice: totalPrice,
           itemCondition: updatedItemData.itemCondition,
           itemDesc: updatedItemData.itemDesc,
           itemMinRentDuration: updatedItemData.itemMinRentDuration,
