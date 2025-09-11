@@ -44,6 +44,7 @@ import { ref, deleteObject, listAll } from "firebase/storage";
 import RequestedItemCard from "@/components/RequestedItemCard";
 import SentRequestCard from "@/components/SentRequestCard";
 import { useLoader } from "@/context/LoaderContext";
+import LottieView from "lottie-react-native";
 
 interface UserPlan {
   listLimit: number;
@@ -263,7 +264,7 @@ const Tools = () => {
               day: "numeric",
             }),
             requestCount: requestsSnap.size,
-            newRequestCount: newRequestCount, 
+            newRequestCount: newRequestCount,
             renterInfo: data.renterInfo || null,
           };
 
@@ -299,6 +300,7 @@ const Tools = () => {
           listUsed: planData.listUsed,
           listLimit: planData.listLimit,
         });
+
         setUserPlan(planData);
       }
     } catch (error) {
@@ -359,7 +361,7 @@ const Tools = () => {
       await Promise.all([
         fetchUserPlan(),
         fetchUserListings(),
-        fetchSentRequests(), // Add this
+        fetchSentRequests(),
       ]);
       setIsDataReady(true);
     };
@@ -399,17 +401,18 @@ const Tools = () => {
       router.push("/profile");
       return;
     }
-
-    if (!canList) {
-      Toast.show({
-        type: ALERT_TYPE.INFO,
-        title: "Listing Limit Reached",
-        textBody: "Please upgrade your plan to add more items.",
-      });
-      return;
+    if (typeof listLimit === "number" && typeof listUsed === "number") {
+      if (listUsed >= listLimit) {
+        Toast.show({
+          type: ALERT_TYPE.WARNING,
+          title: "Listing Limit Reached",
+          textBody: "Please upgrade your plan to add more items.",
+        });
+        return;
+      }
+    } else {
+      router.push("/add-listing");
     }
-
-    router.push("/add-listing");
   };
 
   const handleEditListing = (id: string) => {
@@ -1225,12 +1228,12 @@ const Tools = () => {
                     <ProgressBar
                       used={userPlan.listUsed}
                       limit={userPlan.listLimit}
-                      label="Listings Usage"
+                      label="Item Listings Usage"
                     />
                     <ProgressBar
                       used={userPlan.rentUsed}
                       limit={userPlan.rentLimit}
-                      label="Rentals Usage"
+                      label="Request Rental Usage"
                     />
                   </>
                 )}
@@ -1241,7 +1244,7 @@ const Tools = () => {
                 <View className="bg-white rounded-2xl ">
                   <View className="flex-row justify-between items-center mb-4">
                     <Text className="text-lg font-pbold text-gray-800">
-                      My Listed Tools
+                      My Listed Items
                     </Text>
                     {myListings.length !== 0 && (
                       <View className="flex-row items-center gap-2 justify-center">
@@ -1272,18 +1275,19 @@ const Tools = () => {
                   </View>
 
                   {isLoading ? null : myListings.length === 0 ? (
-                    <View className="py-10 items-center">
-                      <View className=" items-center">
-                        <Image
-                          source={icons.emptyBox}
-                          className="w-16 h-16 mb-4"
-                          tintColor="#9CA3AF"
-                        />
-                        <Text className="text-gray-500">No listing yet</Text>
-                      </View>
+                    <View className="flex-1 items-center">
+                      <LottieView
+                        source={require("../../assets/lottie/BoxOpen.json")}
+                        autoPlay
+                        loop={false}
+                        speed={0.5}
+                        style={{ width: 200, height: 200, marginTop: 60 }}
+                      />
+                      <Text className="text-gray-500 -m-8">No listing yet</Text>
+
                       <TouchableOpacity
                         onPress={handleAddListing}
-                        className="mt-10 bg-primary px-6 py-3 rounded-lg"
+                        className=" bg-primary px-6 py-3 rounded-lg"
                       >
                         <Text className="text-white font-psemibold">
                           Create First Listing
@@ -1312,16 +1316,20 @@ const Tools = () => {
               {activeTab === "rented" && (
                 <View className="bg-white rounded-2xl">
                   <Text className="text-lg font-pbold text-gray-800 mb-4">
-                    Currently Borrowed Tools
+                    Currently Borrowed Items
                   </Text>
                   {rentedTools.length === 0 ? (
-                    <View className="py-10 items-center">
-                      <Image
-                        source={icons.emptyBox}
-                        className="w-16 h-16 mb-4"
-                        tintColor="#9CA3AF"
+                    <View className="flex-1 items-center">
+                      <LottieView
+                        source={require("../../assets/lottie/BoxOpen.json")}
+                        autoPlay
+                        loop={false}
+                        speed={0.5}
+                        style={{ width: 200, height: 200, marginTop: 60 }}
                       />
-                      <Text className="text-gray-500">No rented tools yet</Text>
+                      <Text className="text-gray-500 -m-8">
+                        No rented tools yet
+                      </Text>
                     </View>
                   ) : (
                     <View className="gap-4">
@@ -1336,18 +1344,20 @@ const Tools = () => {
               {activeTab === "incoming" && (
                 <View className="bg-white rounded-2xl ">
                   <Text className="text-lg font-pbold text-gray-800 mb-4">
-                    Tools with Rental Requests
+                    Items with Rental Requests
                   </Text>
 
                   {myListings.filter((item) => item.requestCount > 0).length ===
                   0 ? (
-                    <View className="py-10 items-center">
-                      <Image
-                        source={icons.emptyBox}
-                        className="w-16 h-16 mb-4"
-                        tintColor="#9CA3AF"
+                    <View className="flex-1 items-center">
+                      <LottieView
+                        source={require("../../assets/lottie/BoxOpen.json")}
+                        autoPlay
+                        loop={false}
+                        speed={0.5}
+                        style={{ width: 200, height: 200, marginTop: 60 }}
                       />
-                      <Text className="text-gray-500">
+                      <Text className="text-gray-500 -m-8">
                         No tools with rental request yet
                       </Text>
                     </View>
@@ -1381,13 +1391,15 @@ const Tools = () => {
                     <ActivityIndicator size="large" color="#5C6EF6" />
                   ) : rentRequests.filter((req) => req.type === "outgoing")
                       .length === 0 ? (
-                    <View className="py-10 items-center">
-                      <Image
-                        source={icons.emptyBox}
-                        className="w-16 h-16 mb-4"
-                        tintColor="#9CA3AF"
+                    <View className="flex-1 items-center">
+                      <LottieView
+                        source={require("../../assets/lottie/BoxOpen.json")}
+                        autoPlay
+                        loop={false}
+                        speed={0.5}
+                        style={{ width: 200, height: 200, marginTop: 60 }}
                       />
-                      <Text className="text-gray-500">
+                      <Text className="text-gray-500 -m-8">
                         No sent requests yet
                       </Text>
                     </View>

@@ -17,6 +17,8 @@ interface UserPlan {
 export const useUserLimits = () => {
   const [listLimit, setListLimit] = useState(0);
   const [listUsed, setListUsed] = useState(0);
+  const [rentLimit, setRentLimit] = useState(0);
+  const [rentUsed, setRentUsed] = useState(0);
   const [canList, setCanList] = useState(false);
   const [planDetails, setPlanDetails] = useState<UserPlan | null>(null);
 
@@ -30,7 +32,9 @@ export const useUserLimits = () => {
         setPlanDetails(planData);
         setListLimit(planData.listLimit);
         setListUsed(planData.listUsed);
-        setCanList(planData.listUsed < planData.listLimit);
+        setRentLimit(planData.rentLimit);
+        setRentUsed(planData.rentUsed);
+        setCanList(planData.listUsed <= planData.listLimit);
         return planData;
       }
     } catch (error) {
@@ -69,6 +73,8 @@ export const useUserLimits = () => {
     canList,
     listUsed,
     listLimit,
+    rentLimit,
+    rentUsed,
     fetchUserLimits,
     updateListUsage,
     planDetails,
