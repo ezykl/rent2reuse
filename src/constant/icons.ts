@@ -108,7 +108,10 @@ import aiImage from "../assets/icons/aiImage.png";
 import sparkle from "../assets/icons/stars.png";
 import footstep from "../assets/icons/footstep.png";
 import home2 from "../assets/icons/home2.png";
+import milestone from "../assets/icons/milestone.png";
+
 export default {
+  milestone,
   footstep,
   home2,
   aiImage,

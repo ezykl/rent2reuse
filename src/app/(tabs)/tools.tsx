@@ -230,8 +230,8 @@ const Tools = () => {
           const requestsQuery = query(
             requestsRef,
             where("itemId", "==", doc.id),
-            where("status", "in", ["pending", "approved"])
-            //find me later    where("status", "!=", "accepted")
+            // where("status", "in", ["pending", "approved"])
+            where("status", "==", "pedning")
           );
           const requestsSnap = await getDocs(requestsQuery);
           totalIncomingRequests += requestsSnap.size;
@@ -263,7 +263,7 @@ const Tools = () => {
               day: "numeric",
             }),
             requestCount: requestsSnap.size,
-            newRequestCount: newRequestCount, // Add the unread notifications count
+            newRequestCount: newRequestCount, 
             renterInfo: data.renterInfo || null,
           };
 
@@ -897,21 +897,21 @@ const Tools = () => {
     );
 
     const unsubscribeOutgoing = onSnapshot(outgoingQuery, (snapshot) => {
-     const updates = snapshot.docChanges();
-  
-  updates.forEach((change) => {
-    if (change.type === "modified") {
-      const data = change.doc.data();
-      // Only show toast for status changes that matter to the user
-      if (data.status === "accepted" || data.status === "rejected") {
-        Toast.show({
-          type: ALERT_TYPE.INFO,
-          title: "Request Update",
-          textBody: `Your rental request has been ${data.status}`,
-        });
-      }
-    }
-  });
+      const updates = snapshot.docChanges();
+
+      updates.forEach((change) => {
+        if (change.type === "modified") {
+          const data = change.doc.data();
+          // Only show toast for status changes that matter to the user
+          if (data.status === "accepted" || data.status === "rejected") {
+            Toast.show({
+              type: ALERT_TYPE.INFO,
+              title: "Request Update",
+              textBody: `Your rental request has been ${data.status}`,
+            });
+          }
+        }
+      });
     });
 
     setIncomingRequestsListener(() => unsubscribeIncoming);
