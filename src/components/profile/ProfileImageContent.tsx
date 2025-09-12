@@ -10,7 +10,6 @@ import {
 import { icons } from "@/constant";
 import { CustomCamera } from "@/components/CustomCamera";
 
-
 interface ProfileImageContentProps {
   onSave: (imageUri: string) => void;
   loading?: boolean;

@@ -122,13 +122,7 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
   if (!visible) return null;
 
   return (
-    <Modal
-      visible={visible}
-      transparent={true}
-      animationType="fade"
-      statusBarTranslucent={true}
-      presentationStyle="fullScreen"
-    >
+    <Modal visible={visible} animationType="fade" statusBarTranslucent={true}>
       <StatusBar style="light" backgroundColor="transparent" translucent />
       <View className="flex-1 bg-black p-4">
         {/* Header - NO ABSOLUTE POSITIONING */}
