@@ -16,6 +16,7 @@ import RentalProgressIndicator from "@/components/RentalProgressIndicator";
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
+import ModalImageViewer from "@/components/chatModal/ModalImageViewer";
 
 interface Message {
   id: string;
@@ -29,7 +30,6 @@ interface Message {
 interface ChatDetailsModalProps {
   visible: boolean;
   onClose: () => void;
-  onImagePress: (selectedImageUrl: string) => void;
   chatData: any;
   recipientName: {
     firstname: string;
@@ -53,7 +53,6 @@ interface MediaItem {
 const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
   visible,
   onClose,
-  onImagePress,
   chatData,
   recipientName,
   recipientImage,
@@ -72,6 +71,8 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     middlename?: string;
     profileImage?: string;
   } | null>(null);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string>("");
 
   useEffect(() => {
     // Filter and sort media messages
@@ -210,7 +211,10 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
         key={item.id}
         className="mb-2"
         style={{ width: itemSize, height: itemSize }}
-        onPress={() => onImagePress(item.imageUrl)}
+        onPress={() => {
+          setSelectedImageUrl(item.imageUrl);
+          setImageViewerVisible(true);
+        }}
       >
         <Image
           source={{ uri: item.imageUrl }}
@@ -236,7 +240,10 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
             data={mediaItems}
             renderItem={renderMediaItem}
             numColumns={3}
-            columnWrapperStyle={{ justifyContent: "flex-start", marginLeft: 4 }}
+            columnWrapperStyle={{
+              justifyContent: "space-between",
+              marginLeft: 4,
+            }}
             scrollEnabled={false}
             keyExtractor={(item) => item.id}
           />
@@ -356,89 +363,106 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
-      <View className="flex-1 bg-gray-50">
-        {/* Header */}
-        <View className="bg-white border-b border-gray-200 pt-8 pb-4">
-          <View className="flex-row items-center justify-between px-4 mb-4">
-            <TouchableOpacity
-              onPress={onClose}
-              className="w-8 h-8 items-center justify-center mr-3"
-            >
-              <Image
-                source={icons.leftArrow}
-                className="w-8 h-8"
-                tintColor="#6B7280"
-              />
-            </TouchableOpacity>
-            <View className="flex-row items-center flex-1">
-              <Image
-                source={{
-                  uri:
-                    chatData.itemDetails.image ||
-                    "https://placehold.co/40x40@2x.png",
-                }}
-                className="w-12 h-12 rounded-xl  bg-gray-200 "
-              />
-              <View className="shadow-lg shadow-red-800">
+    <>
+      <Modal
+        visible={visible}
+        transparent={true}
+        animationType="fade"
+        presentationStyle="fullScreen"
+      >
+        <View className="flex-1 bg-gray-50">
+          {/* Header */}
+          <View className="bg-white border-b border-gray-200 pt-4 pb-4">
+            <View className="flex-row items-center justify-between px-4 mb-4">
+              <TouchableOpacity
+                onPress={onClose}
+                className="w-8 h-8 items-center justify-center mr-3"
+              >
+                <Image
+                  source={icons.leftArrow}
+                  className="w-8 h-8"
+                  tintColor="#6B7280"
+                />
+              </TouchableOpacity>
+              <View className="flex-row items-center flex-1">
                 <Image
                   source={{
-                    uri: recipientImage || "https://placehold.co/40x40@2x.png",
+                    uri:
+                      chatData.itemDetails.image ||
+                      "https://placehold.co/40x40@2x.png",
                   }}
-                  className="w-12 h-12 rounded-xl  bg-gray-200 -ml-4 mt-4 mr-3"
+                  className="w-12 h-12 rounded-xl  bg-gray-200 "
                 />
-              </View>
-              <View className="flex-1">
-                <Text className="text-lg font-pbold text-gray-800 ">
-                  {formatFullName()}
-                </Text>
-                {chatData?.itemDetails?.name && (
-                  <Text className="text-sm text-gray-500">
-                    {chatData.itemDetails.name}
+                <View className="shadow-lg shadow-red-800">
+                  <Image
+                    source={{
+                      uri:
+                        recipientImage || "https://placehold.co/40x40@2x.png",
+                    }}
+                    className="w-12 h-12 rounded-xl  bg-gray-200 -ml-4 mt-4 mr-3"
+                  />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-lg font-pbold text-gray-800 ">
+                    {formatFullName()}
                   </Text>
-                )}
+                  {chatData?.itemDetails?.name && (
+                    <Text className="text-sm text-gray-500">
+                      {chatData.itemDetails.name}
+                    </Text>
+                  )}
+                </View>
               </View>
+              <TabButton
+                id="report"
+                title="Report"
+                icon={icons.report}
+                isActive={activeTab === "report"}
+                onPress={() => setActiveTab("report")}
+              />
             </View>
-            <TabButton
-              id="report"
-              title="Report"
-              icon={icons.report}
-              isActive={activeTab === "report"}
-              onPress={() => setActiveTab("report")}
-            />
+
+            {/* Tab Navigation */}
+            <View className="flex-row bg-gray-100 mx-4 rounded-lg overflow-hidden">
+              <TabButton
+                id="progress"
+                title="Progress"
+                icon={icons.milestone}
+                isActive={activeTab === "progress"}
+                onPress={() => setActiveTab("progress")}
+              />
+
+              <TabButton
+                id="media"
+                title="Media"
+                icon={icons.gallery}
+                isActive={activeTab === "media"}
+                onPress={() => setActiveTab("media")}
+              />
+              <TabButton
+                id="participants"
+                title="People"
+                icon={icons.profile}
+                isActive={activeTab === "participants"}
+                onPress={() => setActiveTab("participants")}
+              />
+            </View>
           </View>
 
-          {/* Tab Navigation */}
-          <View className="flex-row bg-gray-100 mx-4 rounded-lg overflow-hidden">
-            <TabButton
-              id="progress"
-              title="Progress"
-              icon={icons.milestone}
-              isActive={activeTab === "progress"}
-              onPress={() => setActiveTab("progress")}
-            />
-
-            <TabButton
-              id="media"
-              title="Media"
-              icon={icons.gallery}
-              isActive={activeTab === "media"}
-              onPress={() => setActiveTab("media")}
-            />
-            <TabButton
-              id="participants"
-              title="People"
-              icon={icons.profile}
-              isActive={activeTab === "participants"}
-              onPress={() => setActiveTab("participants")}
-            />
-          </View>
+          {/* Tab Content */}
+          {renderTabContent()}
         </View>
-
-        {/* Tab Content */}
-        {renderTabContent()}
-      </View>
-    </Modal>
+      </Modal>
+      <ModalImageViewer
+        visible={imageViewerVisible}
+        imageUrl={selectedImageUrl}
+        onClose={() => {
+          setImageViewerVisible(false);
+          setSelectedImageUrl("");
+        }}
+        imageName={`RentEase_${chatData?.itemDetails?.name || "Image"}`}
+      />
+    </>
   );
 };
 

@@ -1152,7 +1152,7 @@ const ChatScreen = () => {
       let album;
       try {
         // First, try to get existing album
-        album = await MediaLibrary.getAlbumAsync("rent2reuse");
+        album = await MediaLibrary.getAlbumAsync("rent2reuse/chat");
 
         if (!album) {
           // Create new album in Pictures directory
@@ -3020,7 +3020,6 @@ const ChatScreen = () => {
         <ChatDetailsModal
           visible={showDetailsModal}
           onClose={() => setShowDetailsModal(false)}
-          onImagePress={(url) => handleImagePress(url)}
           chatData={chatData}
           recipientName={recipientName}
           recipientImage={recipientImage}
