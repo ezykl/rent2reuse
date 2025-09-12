@@ -330,7 +330,6 @@ const CustomCamera: React.FC<CustomCameraProps> = ({
                       style={{ tintColor: "white" }}
                     />
                   </TouchableOpacity>
-          
 
                   {/* Capture Button */}
                   <TouchableOpacity
