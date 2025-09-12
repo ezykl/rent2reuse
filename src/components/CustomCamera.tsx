@@ -99,7 +99,6 @@ export const CustomCamera = ({ onPhotoTaken, onCancel }: CustomCameraProps) => {
         }
       }
     } catch (error) {
-
       Alert.alert("Error", "Failed to take picture. Please try again.");
       setAnalyzing(false);
       setCapturedImageUri(null);

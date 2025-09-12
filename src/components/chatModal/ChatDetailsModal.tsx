@@ -136,25 +136,45 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     isActive: boolean;
     onPress: () => void;
   }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      className={`flex-1 flex-row items-center justify-center py-3 px-2 ${
-        isActive ? "border-b-2 border-primary" : ""
-      }`}
-    >
-      <Image
-        source={icon}
-        className="w-4 h-4 mr-2"
-        tintColor={isActive ? "#5C6EF6" : "#9CA3AF"}
-      />
-      <Text
-        className={`text-sm font-pmedium ${
-          isActive ? "text-primary" : "text-gray-500"
-        }`}
-      >
-        {title}
-      </Text>
-    </TouchableOpacity>
+    <>
+      {id != "report" ? (
+        <TouchableOpacity
+          onPress={onPress}
+          className={`flex-1 flex-row items-center justify-center py-3 px-2 ${
+            (isActive ? "border-b-2 border-primary bg-white" : "") ||
+            (id === "report" ? "" : "")
+          }`}
+        >
+          <Image
+            source={icon}
+            className="w-4 h-4 mr-2"
+            tintColor={isActive ? "#4BD07F" : "#9CA3AF"}
+          />
+
+          <Text
+            className={`text-sm font-pmedium ${
+              isActive ? "text-primary" : "text-gray-500"
+            }`}
+          >
+            {title}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          onPress={onPress}
+          className={`p-2 rounded-full justify-center items-center ${
+            isActive ? "bg-red-500 " : "bg-red-100"
+          }`}
+        >
+          <Image
+            source={icon}
+            className="w-6 h-6"
+            tintColor={isActive ? "white" : "#dc2626"}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+      )}
+    </>
   );
 
   const RentalProgressTab = () => (
@@ -216,7 +236,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
             data={mediaItems}
             renderItem={renderMediaItem}
             numColumns={3}
-            columnWrapperStyle={{ justifyContent: "space-between" }}
+            columnWrapperStyle={{ justifyContent: "flex-start", marginLeft: 4 }}
             scrollEnabled={false}
             keyExtractor={(item) => item.id}
           />
@@ -336,15 +356,21 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-    >
+    <Modal visible={visible} animationType="fade" presentationStyle="pageSheet">
       <View className="flex-1 bg-gray-50">
         {/* Header */}
         <View className="bg-white border-b border-gray-200 pt-8 pb-4">
           <View className="flex-row items-center justify-between px-4 mb-4">
+            <TouchableOpacity
+              onPress={onClose}
+              className="w-8 h-8 items-center justify-center mr-3"
+            >
+              <Image
+                source={icons.leftArrow}
+                className="w-8 h-8"
+                tintColor="#6B7280"
+              />
+            </TouchableOpacity>
             <View className="flex-row items-center flex-1">
               <Image
                 source={{
@@ -373,16 +399,13 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
                 )}
               </View>
             </View>
-            <TouchableOpacity
-              onPress={onClose}
-              className="w-8 h-8 items-center justify-center"
-            >
-              <Image
-                source={icons.close}
-                className="w-6 h-6"
-                tintColor="#6B7280"
-              />
-            </TouchableOpacity>
+            <TabButton
+              id="report"
+              title="Report"
+              icon={icons.report}
+              isActive={activeTab === "report"}
+              onPress={() => setActiveTab("report")}
+            />
           </View>
 
           {/* Tab Navigation */}
@@ -394,6 +417,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
               isActive={activeTab === "progress"}
               onPress={() => setActiveTab("progress")}
             />
+
             <TabButton
               id="media"
               title="Media"
@@ -407,13 +431,6 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
               icon={icons.profile}
               isActive={activeTab === "participants"}
               onPress={() => setActiveTab("participants")}
-            />
-            <TabButton
-              id="report"
-              title="Report"
-              icon={icons.report}
-              isActive={activeTab === "report"}
-              onPress={() => setActiveTab("report")}
             />
           </View>
         </View>

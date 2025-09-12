@@ -201,171 +201,6 @@ const MessageActionsModal = ({
   );
 };
 
-// First fix the ChatHeader props interface
-interface ChatHeaderProps {
-  recipientName: {
-    firstname: string;
-    lastname: string;
-    middlename?: string;
-  };
-  recipientImage?: string;
-  itemDetails?: {
-    name?: string;
-    image?: string;
-  };
-  recipientStatus?: any;
-  status: any;
-  recipientId: string;
-  onBack: () => void;
-  isOwner: boolean;
-  showFullProgress?: boolean;
-  onToggleProgress?: () => void;
-}
-
-const RENTAL_STATUS = {
-  PENDING: "pending",
-  ACCEPTED: "accepted",
-  PAID: "paid",
-  PICKED_UP: "pickedup",
-  ACTIVE: "active",
-  COMPLETED: "completed",
-  DECLINED: "declined",
-  CANCELLED: "cancelled",
-} as const;
-
-// const ChatHeader = ({
-//   recipientName,
-//   recipientImage,
-//   itemDetails,
-//   recipientStatus,
-//   status,
-//   onBack,
-//   recipientId,
-//   isOwner,
-//   showFullProgress,
-//   onToggleProgress,
-// }: ChatHeaderProps) => {
-//   const formatFullName = () => {
-//     const middleInitial = recipientName.middlename
-//       ? ` ${recipientName.middlename.charAt(0)}.`
-//       : "";
-//     return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
-//   };
-
-//   const isRentalConversation = itemDetails && status;
-
-//   return (
-//     <View className="bg-white border-b  border-gray-300 rounded-b-xl">
-//       {/* Main Header */}
-//       <View className="flex-row items-center px-4 pt-4">
-//         <TouchableOpacity onPress={onBack} className="mr-3">
-//           <Image
-//             source={icons.leftArrow}
-//             className="w-8 h-8"
-//             tintColor="#6B7280"
-//           />
-//         </TouchableOpacity>
-
-//         <View className="relative">
-//           <Image
-//             source={{
-//               uri:
-//                 itemDetails?.image ||
-//                 recipientImage ||
-//                 "https://placehold.co/40x40@2x.png",
-//             }}
-//             className="w-10 h-10 rounded-full bg-gray-200"
-//             resizeMode="cover"
-//           />
-//         </View>
-
-//         <View className="ml-3 flex-1">
-//           <TouchableOpacity onPress={() => router.push(`/user/${recipientId}`)}>
-//             <Text
-//               className="text-base font-semibold text-gray-900"
-//               numberOfLines={1}
-//             >
-//               {formatFullName()}
-//               {itemDetails?.name && (
-//                 <>
-//                   <Text className="text-gray-400"> • </Text>
-//                   <Text
-//                     className={`${
-//                       status === "cancelled" || status === "declined"
-//                         ? "text-red-500"
-//                         : "text-primary"
-//                     }`}
-//                   >
-//                     {itemDetails.name}
-//                   </Text>
-//                 </>
-//               )}
-//             </Text>
-//           </TouchableOpacity>
-
-//           {/* Show progress indicator or online status */}
-//           {isRentalConversation ? (
-//             <View className="mt-1">
-//               <RentalProgressIndicator
-//                 currentStatus={status}
-//                 isOwner={isOwner}
-//                 compact={true}
-//               />
-//             </View>
-//           ) : (
-//             <Text className="text-xs text-gray-500">
-//               {recipientStatus?.isOnline ? "Online" : "Offline"}
-//             </Text>
-//           )}
-//         </View>
-
-//         {/* Action buttons */}
-//         <View className="flex-row items-center">
-//           {/* Report button */}
-//           <TouchableOpacity
-//             onPress={() => router.push(`/report/${recipientId}`)}
-//             className="mr-3"
-//           >
-//             <Image
-//               source={icons.report}
-//               className="w-6 h-6"
-//               tintColor="#EF4444"
-//             />
-//           </TouchableOpacity>
-//         </View>
-//       </View>
-
-//       {/* Full Progress Indicator (expandable) */}
-//       {isRentalConversation && showFullProgress && (
-//         <RentalProgressIndicator
-//           currentStatus={status}
-//           isOwner={isOwner}
-//           compact={false}
-//         />
-//       )}
-
-//       {/* Progress toggle button for rental conversations */}
-//       {isRentalConversation && (
-//         <View className="flex-row justify-center py-2">
-//           <TouchableOpacity
-//             onPress={onToggleProgress}
-//             className="mr-3 flex-row items-center gap-2"
-//           >
-//             <Text className="text-gray-500 font-pmedium text-sm">
-//               {showFullProgress ? "Hide Progress" : "View Progress"}
-//             </Text>
-//             <Image
-//               source={icons.arrowDown}
-//               className={`w-5 h-5 ${showFullProgress ? " rotate-180" : ""}`}
-//               tintColor={"#6b7280"}
-//             />
-//           </TouchableOpacity>
-//         </View>
-//       )}
-//     </View>
-//   );
-// };
-
 // Add these interfaces near your other interfaces
 interface ActionMenuItem {
   id: string;
@@ -1386,7 +1221,6 @@ const ChatScreen = () => {
       //   );
       //   return;
       // }
-
       // Remove allowsEditing to skip cropping
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -3233,7 +3067,6 @@ const ChatScreen = () => {
             />
           </Modal>
         )}
-        a
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
