@@ -95,20 +95,19 @@ const formatTimestamp = (timestamp: any): string => {
   const date = timestamp.toDate();
 
   if (isToday(date)) {
-    return format(date, "h:mm a"); // "2:30 PM"
+    return format(date, "h:mm a");
   } else if (isYesterday(date)) {
-    return `Yesterday ${format(date, "h:mm a")}`; // "Yesterday 2:30 PM"
+    return `Yesterday ${format(date, "h:mm a")}`;
   } else {
-    // For older messages, show date and time
     const now = new Date();
     const diffInDays = Math.floor(
       (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
     );
 
     if (diffInDays < 7) {
-      return format(date, "EEE h:mm a"); // "Mon 2:30 PM"
+      return format(date, "EEE h:mm a");
     } else {
-      return format(date, "MMM d, h:mm a"); // "Jan 15, 2:30 PM"
+      return format(date, "MMM d, h:mm a");
     }
   }
 };
@@ -292,7 +291,6 @@ const ActionMenu = ({
   );
 };
 
-// First, update the Message interface to match rentRequest data structure
 interface Message {
   isDeleted?: boolean;
   deletedAt?: any;
@@ -450,11 +448,6 @@ const RentRequestMessage = ({
           bgColor: "bg-red-100",
           textColor: "text-red-700",
         };
-      // case "cancelled":
-      //   return {
-      //     bgColor: "bg-gray-100",
-      //     textColor: "text-gray-700",
-      //   };
       case "pending":
         return {
           bgColor: "bg-yellow-100",
@@ -669,32 +662,6 @@ const RentRequestMessage = ({
   );
 };
 
-// Add this helper function at the top of the file
-// const createInAppNotification = async (
-//   userId: string,
-//   notification: {
-//     type: string;
-//     title: string;
-//     message: string;
-//     data?: any;
-//   }
-// ) => {
-//   try {
-//     const userNotificationsRef = collection(
-//       db,
-//       `users/${userId}/notifications`
-//     );
-//     await addDoc(userNotificationsRef, {
-//       ...notification,
-//       isRead: false,
-//       createdAt: serverTimestamp(),
-//     });
-//     console.log(`📱 In-app notification created for user: ${userId}`);
-//   } catch (error) {
-//     console.error("Error creating in-app notification:", error);
-//   }
-// };
-
 const requestDataCache = new Map();
 
 const ImageMessage = ({
@@ -710,26 +677,21 @@ const ImageMessage = ({
 }) => {
   const [imageError, setImageError] = useState(false);
   const maxWidth = Dimensions.get("window").width * 0.65;
-  const maxHeight = 300; // Maximum height for images
+  const maxHeight = 300;
   const [aspectRatio, setAspectRatio] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
 
+  // Get dimensions but don't use loading state
   useEffect(() => {
     if (item.imageUrl && !item.isDeleted) {
       Image.getSize(
         item.imageUrl,
         (width, height) => {
-          const imageAspectRatio = width / height;
-          setAspectRatio(imageAspectRatio);
-          setIsLoading(false);
+          setAspectRatio(width / height);
         },
         () => {
           setImageError(true);
-          setIsLoading(false);
         }
       );
-    } else {
-      setIsLoading(false);
     }
   }, [item.imageUrl, item.isDeleted]);
 
@@ -754,7 +716,6 @@ const ImageMessage = ({
             [Image deleted]
           </Text>
         </View>
-        {/* Message metadata */}
         <View
           className={`flex-row items-center mt-1 px-1 ${
             isCurrentUser ? "justify-end" : "justify-start"
@@ -796,7 +757,6 @@ const ImageMessage = ({
     );
   }
 
-  // Calculate dimensions maintaining aspect ratio with max height
   const imageWidth = maxWidth;
   const calculatedHeight = maxWidth / aspectRatio;
   const imageHeight = Math.min(calculatedHeight, maxHeight);
@@ -809,30 +769,21 @@ const ImageMessage = ({
         delayLongPress={300}
         activeOpacity={0.9}
       >
-        <View className="rounded-xl overflow-hidden bg-gray-200">
-          {isLoading ? (
-            <View
-              style={{ width: imageWidth, height: imageHeight }}
-              className="items-center justify-center bg-gray-100"
-            >
-              <ActivityIndicator color="#4285F4" size="large" />
-            </View>
-          ) : (
-            <Image
-              source={{ uri: item.imageUrl }}
-              style={{
-                width: imageWidth,
-                height: imageHeight,
-              }}
-              className="rounded-xl"
-              resizeMode="cover"
-              onError={() => setImageError(true)}
-            />
-          )}
+        <View className="rounded-xl overflow-hidden">
+          <Image
+            source={{ uri: item.imageUrl }}
+            style={{
+              width: imageWidth,
+              height: imageHeight,
+            }}
+            className="rounded-xl"
+            resizeMode="cover"
+            onError={() => setImageError(true)}
+          />
         </View>
       </TouchableOpacity>
 
-      {/* Message metadata with read status */}
+      {/* Message metadata */}
       <View
         className={`flex-row items-center mt-1 px-1 ${
           isCurrentUser ? "justify-end" : "justify-start"
@@ -891,7 +842,13 @@ const ChatScreen = () => {
   const [canSendMessage, setCanSendMessage] = useState(false);
   const flatListRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
-  const [showFullProgress, setShowFullProgress] = useState(false);
+  const [uploadingMessages, setUploadingMessages] = useState<
+    Array<{
+      id: string;
+      uri: string;
+      timestamp: number;
+    }>
+  >([]);
 
   const [selection, setSelection] = useState<MessageSelection>({
     isSelecting: false,
@@ -930,7 +887,6 @@ const ChatScreen = () => {
     };
   } | null>(null);
 
-  // Add state for camera visibility
   const [showCamera, setShowCamera] = useState(false);
 
   if (!currentUserId || !chatId) {
@@ -946,10 +902,8 @@ const ChatScreen = () => {
       (msg) => msg.type === "image" && msg.imageUrl && !msg.isDeleted
     );
 
-    // Extract image URLs
     const imageUrls = imageMessages.map((msg) => msg.imageUrl!);
 
-    // Find the index of the selected image
     const selectedIndex = imageUrls.findIndex(
       (url) => url === selectedImageUrl
     );
@@ -1167,10 +1121,8 @@ const ChatScreen = () => {
         }
       } catch (albumError) {
         console.log("Album creation/access failed:", albumError);
-        // Image is still saved to gallery, just not in custom folder
       }
 
-      // Clean up temporary file
       try {
         await FileSystem.deleteAsync(downloadResult.uri);
       } catch (cleanupError) {
@@ -1209,44 +1161,43 @@ const ChatScreen = () => {
     }
   };
 
-  // Add image handling functions
   const pickImage = async () => {
     try {
-      // const { status } =
-      //   await ImagePicker.requestMediaLibraryPermissionsAsync();
-      // if (status !== "granted") {
-      //   Alert.alert(
-      //     "Permission needed",
-      //     "Please grant camera roll permissions to send images."
-      //   );
-      //   return;
-      // }
-      // Remove allowsEditing to skip cropping
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false, // Changed to false to remove cropping
+        allowsEditing: false,
         quality: 0.7,
         base64: false,
       });
 
       if (!result.canceled && result.assets[0]) {
-        // Add image to uploading state immediately
-        setUploadingImages((prev) => [...prev, result.assets[0].uri]);
+        const uploadId = `upload_${Date.now()}_${Math.random()
+          .toString(36)
+          .substring(7)}`;
+
+        // Add to uploading state immediately
+        setUploadingMessages((prev) => [
+          ...prev,
+          {
+            id: uploadId,
+            uri: result.assets[0].uri,
+            timestamp: Date.now(),
+          },
+        ]);
 
         try {
-          await uploadAndSendImage(result.assets[0]);
+          await uploadAndSendImage(result.assets[0], uploadId);
         } catch (error) {
           console.error("Error uploading image:", error);
+          // Remove from uploading state on error
+          setUploadingMessages((prev) =>
+            prev.filter((msg) => msg.id !== uploadId)
+          );
           Toast.show({
             type: ALERT_TYPE.DANGER,
             title: "Error",
             textBody: "Failed to upload image",
           });
-        } finally {
-          // Remove from uploading state
-          setUploadingImages((prev) =>
-            prev.filter((uri) => uri !== result.assets[0].uri)
-          );
         }
       }
     } catch (error) {
@@ -1259,127 +1210,68 @@ const ChatScreen = () => {
     }
   };
 
-  // const takePhoto = async () => {
-  //   try {
-  //     // Request permission
-  //     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-  //     if (status !== "granted") {
-  //       Alert.alert(
-  //         "Permission needed",
-  //         "Please grant camera permissions to take photos."
-  //       );
-  //       return;
-  //     }
-
-  //     // Launch camera
-  //     const result = await ImagePicker.launchCameraAsync({
-  //       allowsEditing: false,
-  //       quality: 0.7,
-  //       base64: false,
-  //     });
-
-  //     if (!result.canceled && result.assets[0]) {
-  //       setIsLoading(true);
-  //       await uploadAndSendImage(result.assets[0]);
-  //     }
-  //   } catch (error) {
-  //     console.error("Error taking photo:", error);
-  //     Toast.show({
-  //       type: ALERT_TYPE.DANGER,
-  //       title: "Error",
-  //       textBody: "Failed to take photo",
-  //     });
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  const UploadingImageMessage = ({ uri }: { uri: string }) => {
+  const UploadingImageMessage = ({
+    uploadData,
+  }: {
+    uploadData: { id: string; uri: string; timestamp: number };
+  }) => {
     const maxWidth = Dimensions.get("window").width * 0.65;
+    const maxHeight = 300;
     const [aspectRatio, setAspectRatio] = useState(1);
+    const [imageLoaded, setImageLoaded] = useState(false);
 
     useEffect(() => {
       Image.getSize(
-        uri,
+        uploadData.uri,
         (width, height) => {
           setAspectRatio(width / height);
+          setImageLoaded(true);
         },
         () => {
           setAspectRatio(1);
+          setImageLoaded(true);
         }
       );
-    }, [uri]);
+    }, [uploadData.uri]);
 
     const imageWidth = maxWidth;
-    const imageHeight = imageWidth / aspectRatio;
+    const calculatedHeight = maxWidth / aspectRatio;
+    const imageHeight = Math.min(calculatedHeight, maxHeight);
 
     return (
-      // <View className="items-end mb-2">
-      //   <View className="relative rounded-xl overflow-hidden">
-      //     <Image
-      //       source={{ uri }}
-      //       style={{
-      //         width: imageWidth,
-      //         height: imageHeight,
-      //       }}
-      //       className="rounded-xl opacity-50"
-      //       resizeMode="cover"
-      //     />
-      //     <View className="absolute inset-0 bg-black/30 items-center justify-center">
-      //       <ActivityIndicator color="white" size="large" />
-      //     </View>
-      //   </View>
-      //   <Text className="text-xs text-gray-400 mt-1">Sending...</Text>
-      // </View>
-      null
+      <View className="flex-row justify-end mb-2">
+        <View className="flex-col">
+          <View className="rounded-xl overflow-hidden bg-gray-200 relative">
+            {imageLoaded && (
+              <Image
+                source={{ uri: uploadData.uri }}
+                style={{
+                  width: imageWidth,
+                  height: imageHeight,
+                }}
+                className="rounded-xl"
+                resizeMode="cover"
+              />
+            )}
+
+            {/* Upload overlay */}
+            <View className="absolute inset-0 bg-black/40 items-center justify-center rounded-xl">
+              <View className="bg-white/90 px-4 py-2 rounded-full flex-row items-center">
+                <ActivityIndicator color="#5C6EF6" size="small" />
+                <Text className="text-gray-800 text-sm font-medium ml-2">
+                  Uploading...
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View className="flex-row items-center mt-1 px-1 justify-end">
+            <Text className="text-xs text-gray-400">Sending...</Text>
+          </View>
+        </View>
+      </View>
     );
   };
-
-  // const uploadAndSendImage = async (
-  //   imageAsset: ImagePicker.ImagePickerAsset
-  // ) => {
-  //   try {
-  //     if (!imageAsset.uri) {
-  //       throw new Error("No image URI provided");
-  //     }
-
-  //     // Add image to uploading state
-  //     setUploadingImages((prev) => [...prev, imageAsset.uri]);
-
-  //     // Create a unique filename
-  //     const filename = `chat_images/${chatId}/${Date.now()}_${Math.random()
-  //       .toString(36)
-  //       .substring(7)}.jpg`;
-
-  //     // Convert image to blob
-  //     const response = await fetch(imageAsset.uri);
-  //     const blob = await response.blob();
-
-  //     // Upload to Firebase Storage
-  //     const imageRef = ref(storage, filename);
-  //     await uploadBytes(imageRef, blob);
-  //     const downloadURL = await getDownloadURL(imageRef);
-
-  //     // Send image message
-  //     await sendImageMessage(
-  //       downloadURL,
-  //       imageAsset.width || 300,
-  //       imageAsset.height || 300
-  //     );
-  //   } catch (error) {
-  //     console.error("Error uploading image:", error);
-  //     Toast.show({
-  //       type: ALERT_TYPE.DANGER,
-  //       title: "Error",
-  //       textBody: "Failed to upload image",
-  //     });
-  //   } finally {
-  //     // Remove image from uploading state
-  //     setUploadingImages((prev) =>
-  //       prev.filter((uri) => uri !== imageAsset.uri)
-  //     );
-  //   }
-  // };
 
   const sendImageMessage = async (
     imageUrl: string,
@@ -1432,7 +1324,8 @@ const ChatScreen = () => {
   };
 
   const uploadAndSendImage = async (
-    imageAsset: ImagePicker.ImagePickerAsset
+    imageAsset: ImagePicker.ImagePickerAsset,
+    uploadId: string
   ) => {
     try {
       if (!imageAsset.uri) {
@@ -1480,9 +1373,12 @@ const ChatScreen = () => {
 
       // Send image message
       await sendImageMessage(downloadURL, targetWidth, targetHeight);
+
+      // Remove from uploading state after successful upload
+      setUploadingMessages((prev) => prev.filter((msg) => msg.id !== uploadId));
     } catch (error) {
       console.error("Error uploading image:", error);
-      throw error;
+      throw error; // Re-throw so pickImage can handle it
     }
   };
 
@@ -1994,23 +1890,6 @@ const ChatScreen = () => {
   };
 
   const actionItems: ActionMenuItem[] = [
-    {
-      id: "camera",
-      icon: icons.camera,
-      label: "Camera",
-      action: () => setShowCamera(true), // Update this line
-      bgColor: "#2196F3",
-      iconColor: "#FFF",
-    },
-    {
-      id: "gallery",
-      icon: icons.gallery, // Make sure you have an image/gallery icon
-      label: "Gallery",
-      action: pickImage,
-      bgColor: "#1CCF10",
-      iconColor: "#FFF",
-    },
-
     // Add conditional status progression actions based on current status and user role
     ...(chatData?.status === "accepted" && currentUserId === chatData?.ownerId
       ? [
@@ -2875,8 +2754,11 @@ const ChatScreen = () => {
           }}
           ListFooterComponent={() => (
             <View>
-              {uploadingImages.map((uri, index) => (
-                <UploadingImageMessage key={`uploading-${index}`} uri={uri} />
+              {uploadingMessages.map((uploadData) => (
+                <UploadingImageMessage
+                  key={uploadData.id}
+                  uploadData={uploadData}
+                />
               ))}
             </View>
           )}
@@ -2966,7 +2848,7 @@ const ChatScreen = () => {
                   />
                 </TouchableOpacity>
               ) : (
-                <View className="flex-row gap-2">
+                <View className="flex-row ">
                   <TouchableOpacity
                     onPress={() => setShowCamera(true)}
                     className="w-10 h-10  items-center justify-center"
@@ -3038,28 +2920,46 @@ const ChatScreen = () => {
             <ChatCamera
               onPhotoTaken={async (uri) => {
                 setShowCamera(false);
-                // setIsLoading(true);
-                try {
-                  await uploadAndSendImage({
+                const uploadId = `camera_${Date.now()}_${Math.random()
+                  .toString(36)
+                  .substring(7)}`;
+
+                // Add to uploading state
+                setUploadingMessages((prev) => [
+                  ...prev,
+                  {
+                    id: uploadId,
                     uri,
-                    width: 300,
-                    height: 300,
-                    type: "image",
-                    fileName: "photo.jpg",
-                    fileSize: 0,
-                    base64: null,
-                    duration: null,
-                    exif: null,
-                  });
+                    timestamp: Date.now(),
+                  },
+                ]);
+
+                try {
+                  await uploadAndSendImage(
+                    {
+                      uri,
+                      width: 300,
+                      height: 300,
+                      type: "image",
+                      fileName: "photo.jpg",
+                      fileSize: 0,
+                      base64: null,
+                      duration: null,
+                      exif: null,
+                    },
+                    uploadId
+                  );
                 } catch (error) {
                   console.error("Error sending photo:", error);
+                  // Remove from uploading state on error
+                  setUploadingMessages((prev) =>
+                    prev.filter((msg) => msg.id !== uploadId)
+                  );
                   Toast.show({
                     type: ALERT_TYPE.DANGER,
                     title: "Error",
                     textBody: "Failed to send photo",
                   });
-                } finally {
-                  // setIsLoading(false);
                 }
               }}
               onClose={() => setShowCamera(false)}

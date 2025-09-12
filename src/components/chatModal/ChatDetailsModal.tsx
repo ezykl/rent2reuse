@@ -142,19 +142,19 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
         <TouchableOpacity
           onPress={onPress}
           className={`flex-1 flex-row items-center justify-center py-3 px-2 ${
-            (isActive ? "border-b-2 border-primary bg-white" : "") ||
+            (isActive ? "border-b-2 border-primary bg-green-500" : "") ||
             (id === "report" ? "" : "")
           }`}
         >
           <Image
             source={icon}
-            className="w-4 h-4 mr-2"
-            tintColor={isActive ? "#4BD07F" : "#9CA3AF"}
+            className="w-5 h-5 mr-2"
+            tintColor={isActive ? "white" : "#9CA3AF"}
           />
 
           <Text
             className={`text-sm font-pmedium ${
-              isActive ? "text-primary" : "text-gray-500"
+              isActive ? "text-white" : "text-gray-500"
             }`}
           >
             {title}
@@ -163,13 +163,13 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
       ) : (
         <TouchableOpacity
           onPress={onPress}
-          className={`p-2 rounded-full justify-center items-center ${
+          className={`p-1 rounded-full justify-center items-center ${
             isActive ? "bg-red-500 " : "bg-red-100"
           }`}
         >
           <Image
             source={icon}
-            className="w-6 h-6"
+            className="w-5 h-5"
             tintColor={isActive ? "white" : "#dc2626"}
             resizeMode="contain"
           />
