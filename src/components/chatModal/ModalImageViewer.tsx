@@ -24,13 +24,14 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
   visible,
   imageUrl,
   onClose,
-  imageName = "RentEase_Image",
+  imageName = "rent2reuse_chat",
 }) => {
   const [isImageSaved, setIsImageSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (visible) {
+    if (visible && imageUrl) {
+      setIsImageSaved(false);
       checkIfImageExists();
     }
   }, [visible, imageUrl]);
@@ -43,7 +44,9 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
       // Create a unique filename based on the image URL
       const fileName = `${imageName}_${Date.now()}.jpg`;
       const albums = await MediaLibrary.getAlbumsAsync();
-      const rentEaseAlbum = albums.find((album) => album.title === "RentEase");
+      const rentEaseAlbum = albums.find(
+        (album) => album.title === "rent2reuse/chat"
+      );
 
       if (rentEaseAlbum) {
         const assets = await MediaLibrary.getAssetsAsync({
@@ -51,7 +54,6 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
           mediaType: "photo",
         });
 
-        // Check if image with similar name exists (basic check)
         const imageExists = assets.assets.some((asset) =>
           asset.filename.includes(imageName)
         );
@@ -89,11 +91,15 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
 
       if (downloadResult.status === 200) {
         // Create or get RentEase album
-        let album = await MediaLibrary.getAlbumAsync("RentEase");
+        let album = await MediaLibrary.getAlbumAsync("rent2reuse/chat");
         if (!album) {
           // Create the album by first saving an asset
           const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-          album = await MediaLibrary.createAlbumAsync("RentEase", asset, false);
+          album = await MediaLibrary.createAlbumAsync(
+            "rent2reuse/chat",
+            asset,
+            false
+          );
         } else {
           // Add to existing album
           const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
@@ -101,7 +107,7 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
         }
 
         setIsImageSaved(true);
-        Alert.alert("Success", "Image saved to RentEase album!");
+        Alert.alert("Success", "Image saved to Rent2Reuse album!");
       } else {
         throw new Error("Failed to download image");
       }
@@ -124,19 +130,15 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
       presentationStyle="fullScreen"
     >
       <StatusBar style="light" backgroundColor="transparent" translucent />
-      <View className="flex-1 bg-black">
-        {/* Header */}
-        <View className="absolute top-0 left-0 right-0 z-10 bg-black/50 pt-12 pb-4 px-4">
+      <View className="flex-1 bg-black p-4">
+        {/* Header - NO ABSOLUTE POSITIONING */}
+        <View className="bg-black/80 pt-12 pb-4 px-4">
           <View className="flex-row items-center justify-between">
             <TouchableOpacity
               onPress={onClose}
               className="w-10 h-10 bg-white/20 rounded-full items-center justify-center"
             >
-              <Image
-                source={icons.close}
-                className="w-6 h-6"
-                tintColor="white"
-              />
+              <Image source={icons.close} className="w-6 h-6" tintColor="red" />
             </TouchableOpacity>
 
             <View className="flex-1 items-center">
@@ -167,18 +169,20 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
           </View>
         </View>
 
-        {/* Image */}
-        <View className="flex-1 items-center justify-center">
-          <Image
-            source={{ uri: imageUrl }}
-            className="w-full h-full"
-            resizeMode="contain"
-          />
+        {/* Image - CENTER */}
+        <View className="flex-1 items-center justify-center p-4">
+          <View className="w-full h-full rounded-2xl overflow-hidden">
+            <Image
+              source={{ uri: imageUrl }}
+              className="w-full h-full"
+              resizeMode="cover"
+            />
+          </View>
         </View>
 
-        {/* Footer with save status */}
-        {isImageSaved && (
-          <View className="absolute bottom-0 left-0 right-0 bg-black/50 py-3">
+        {/* Footer */}
+        <View className="bg-black/80 py-4">
+          {isImageSaved ? (
             <View className="flex-row items-center justify-center">
               <Image
                 source={icons.check}
@@ -189,9 +193,12 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
                 Image already saved to gallery
               </Text>
             </View>
-          </View>
-        )}
+          ) : (
+            <View className="h-6" />
+          )}
+        </View>
       </View>
     </Modal>
   );
 };
+export default ModalImageViewer;

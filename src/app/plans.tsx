@@ -420,7 +420,7 @@ const PlansScreen: React.FC = () => {
       const asset = await MediaLibrary.createAssetAsync(uri);
 
       // Create/get album
-      const albumName = "Receipts";
+      const albumName = "rent2reuse/receipt";
       let album = await MediaLibrary.getAlbumAsync(albumName);
 
       if (!album) {

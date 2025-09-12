@@ -16,7 +16,7 @@ import RentalProgressIndicator from "@/components/RentalProgressIndicator";
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
-import { StatusBar } from "expo-status-bar";
+import ModalImageViewer from "@/components/chatModal/ModalImageViewer";
 
 interface Message {
   id: string;
@@ -30,7 +30,6 @@ interface Message {
 interface ChatDetailsModalProps {
   visible: boolean;
   onClose: () => void;
-  onImagePress: (selectedImageUrl: string) => void;
   chatData: any;
   recipientName: {
     firstname: string;
@@ -54,7 +53,6 @@ interface MediaItem {
 const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
   visible,
   onClose,
-  onImagePress,
   chatData,
   recipientName,
   recipientImage,
@@ -73,6 +71,8 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     middlename?: string;
     profileImage?: string;
   } | null>(null);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string>("");
 
   useEffect(() => {
     // Filter and sort media messages
@@ -211,7 +211,10 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
         key={item.id}
         className="mb-2"
         style={{ width: itemSize, height: itemSize }}
-        onPress={() => onImagePress(item.imageUrl)}
+        onPress={() => {
+          setSelectedImageUrl(item.imageUrl);
+          setImageViewerVisible(true);
+        }}
       >
         <Image
           source={{ uri: item.imageUrl }}
@@ -237,7 +240,10 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
             data={mediaItems}
             renderItem={renderMediaItem}
             numColumns={3}
-            columnWrapperStyle={{ justifyContent: "flex-start", marginLeft: 4 }}
+            columnWrapperStyle={{
+              justifyContent: "space-between",
+              marginLeft: 4,
+            }}
             scrollEnabled={false}
             keyExtractor={(item) => item.id}
           />
@@ -447,6 +453,15 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
           {renderTabContent()}
         </View>
       </Modal>
+      <ModalImageViewer
+        visible={imageViewerVisible}
+        imageUrl={selectedImageUrl}
+        onClose={() => {
+          setImageViewerVisible(false);
+          setSelectedImageUrl("");
+        }}
+        imageName={`RentEase_${chatData?.itemDetails?.name || "Image"}`}
+      />
     </>
   );
 };
