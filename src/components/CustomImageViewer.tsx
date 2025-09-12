@@ -202,11 +202,13 @@ const CustomImageViewer: React.FC<CustomImageViewerProps> = ({
         <View style={styles.imageContainer}>
           <GestureDetector gesture={combinedGesture}>
             <View style={styles.gestureArea}>
-              <Animated.Image
-                source={{ uri: images[currentIndex] }}
-                style={[styles.image, animatedStyle]}
-                resizeMode="contain"
-              />
+              <View className="rounded-md overflow-hidden">
+                <Animated.Image
+                  source={{ uri: images[currentIndex] }}
+                  style={[styles.image, animatedStyle]}
+                  resizeMode="contain"
+                />
+              </View>
             </View>
           </GestureDetector>
         </View>
@@ -307,6 +309,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     flex: 1,
+    marginTop: 60,
     justifyContent: "center",
     alignItems: "center",
   },
