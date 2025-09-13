@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  Platform,
   FlatList,
   Dimensions,
 } from "react-native";
@@ -17,6 +18,16 @@ import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import ModalImageViewer from "@/components/chatModal/ModalImageViewer";
+import { useTimeConverter } from "@/hooks/useTimeConverter";
+import {
+  MapView,
+  Camera,
+  MarkerView,
+  ShapeSource,
+  FillLayer,
+} from "@maplibre/maplibre-react-native";
+import * as Linking from "expo-linking";
+import { MAP_TILER_API_KEY } from "@env";
 
 interface Message {
   id: string;
@@ -117,6 +128,68 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     fetchCurrentUserData();
   }, [currentUserId]);
 
+  const createCirclePolygon = (
+    center: [number, number],
+    radiusInMeters: number,
+    points: number = 64
+  ) => {
+    const coords: number[][] = [];
+    const distanceX =
+      radiusInMeters / (111320 * Math.cos((center[1] * Math.PI) / 180));
+    const distanceY = radiusInMeters / 110540;
+
+    for (let i = 0; i < points; i++) {
+      const theta = (i / points) * (2 * Math.PI);
+      const x = distanceX * Math.cos(theta);
+      const y = distanceY * Math.sin(theta);
+      coords.push([center[0] + x, center[1] + y]);
+    }
+    coords.push(coords[0]);
+
+    return {
+      type: "Feature" as const,
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [coords],
+      },
+      properties: {},
+    };
+  };
+
+  const getDirectionsToLocation = (
+    latitude: number,
+    longitude: number,
+    address: string
+  ) => {
+    const latLng = `${latitude},${longitude}`;
+    const label = address || "Pickup Location";
+
+    // URL schemes for directions
+    const url =
+      Platform.select({
+        ios: `maps:?daddr=${latLng}&dirflg=w`,
+        android: `google.navigation:q=${latLng}&mode=w`,
+      }) || "";
+
+    // Fallback to web Google Maps directions
+    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${latLng}&destination_place_id=${encodeURIComponent(
+      label
+    )}`;
+
+    Linking.canOpenURL(url || webUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(url);
+        } else {
+          return Linking.openURL(webUrl);
+        }
+      })
+      .catch((err) => {
+        // Fallback to web version
+        Linking.openURL(webUrl);
+      });
+  };
+
   const formatFullName = () => {
     const middleInitial = recipientName.middlename
       ? ` ${recipientName.middlename.charAt(0)}.`
@@ -178,24 +251,249 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     </>
   );
 
-  const RentalProgressTab = () => (
-    <ScrollView className="flex-1 p-4">
-      {chatData?.status ? (
-        <RentalProgressIndicator
-          currentStatus={chatData.status}
-          isOwner={isOwner}
-          compact={false}
-        />
-      ) : (
-        <View className="items-center py-8">
-          <Text className="text-gray-500 text-center">
-            No rental process active
-          </Text>
-        </View>
-      )}
-    </ScrollView>
-  );
+  const RentalProgressTab = () => {
+    const { minutesToTime } = useTimeConverter();
+    const formatDate = (date: any) => {
+      if (!date) return "";
+      if (date.toDate) return format(date.toDate(), "MMM d, yyyy");
+      if (date instanceof Date) return format(date, "MMM d, yyyy");
+      return "Date unavailable";
+    };
 
+    return (
+      <ScrollView className="flex-1 p-4">
+        {chatData?.status ? (
+          <RentalProgressIndicator
+            currentStatus={chatData.status}
+            isOwner={isOwner}
+            compact={false}
+          />
+        ) : (
+          <View className="items-center py-8">
+            <Text className="text-gray-500 text-center">
+              No rental process active
+            </Text>
+          </View>
+        )}
+
+        {/* Item Details Section */}
+        {chatData?.itemDetails && (
+          <>
+            <View className="mt-6 bg-white rounded-xl p-4 border border-gray-200">
+              <Text className="text-xl font-psemibold text-gray-900 mb-4">
+                Rental Details
+              </Text>
+
+              {/* Item Info */}
+              <View className="flex-row items-center mb-4">
+                <Image
+                  source={{
+                    uri:
+                      chatData.itemDetails.image ||
+                      "https://placehold.co/60x60@2x.png",
+                  }}
+                  className="w-16 h-16 rounded-lg bg-gray-200 mr-3"
+                />
+                <View className="flex-1">
+                  <Text className="text-lg font-pmedium text-gray-800">
+                    {chatData.itemDetails.name}
+                  </Text>
+                  <Text className="text-sm text-gray-600 mt-1">
+                    {chatData.itemDetails.message}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Rental Information Grid */}
+              <View className="space-y-3">
+                {/* Price Information */}
+                <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+                  <Text className="text-gray-600 font-pmedium">Daily Rate</Text>
+                  <Text className="text-gray-800 font-psemibold">
+                    ₱{chatData.itemDetails.price?.toLocaleString() || "N/A"}
+                  </Text>
+                </View>
+
+                {/* Rental Duration */}
+                {/* Rental Period - Updated Start Date */}
+                <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+                  <Text className="text-gray-600 font-pmedium">Start Date</Text>
+                  <Text className="text-gray-800 font-psemibold">
+                    {formatDate(chatData.itemDetails.startDate)}
+                  </Text>
+                </View>
+
+                {/* Rental Period - Updated End Date */}
+                <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+                  <Text className="text-gray-600 font-pmedium">End Date</Text>
+                  <Text className="text-gray-800 font-psemibold">
+                    {formatDate(chatData.itemDetails.endDate)}
+                  </Text>
+                </View>
+
+                {/* Total Price */}
+                <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+                  <Text className="text-gray-600 font-pmedium">
+                    Total Price
+                  </Text>
+                  <Text className="text-green-600 font-pbold text-lg">
+                    ₱
+                    {chatData.itemDetails.totalPrice?.toLocaleString() || "N/A"}
+                  </Text>
+                </View>
+
+                {/* Downpayment if applicable */}
+                {chatData.itemDetails.downpaymentPercentage && (
+                  <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+                    <Text className="text-gray-600 font-pmedium">
+                      Downpayment
+                    </Text>
+                    <Text className="text-orange-600 font-psemibold">
+                      {chatData.itemDetails.downpaymentPercentage}%
+                    </Text>
+                  </View>
+                )}
+
+                {/* Pickup Time */}
+                {chatData.itemDetails.pickupTime && (
+                  <View className="flex-row justify-between items-center py-2">
+                    <Text className="text-gray-600 font-pmedium">
+                      Pickup Time
+                    </Text>
+                    <Text className="text-gray-800 font-psemibold">
+                      {minutesToTime(chatData.itemDetails.pickupTime)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Pickup Location Section */}
+            {chatData.itemDetails.itemLocation && (
+              <View className="mt-6 bg-white rounded-xl overflow-hidden border border-gray-200">
+                <View className="p-4 border-b border-gray-200">
+                  <Text className="text-xl font-psemibold text-gray-900">
+                    Pickup Location
+                  </Text>
+                </View>
+
+                {/* Map container */}
+                <View className="relative">
+                  <View className="h-48">
+                    <MapView
+                      style={{ flex: 1 }}
+                      rotateEnabled={false}
+                      attributionEnabled={false}
+                      logoEnabled={false}
+                      compassEnabled={false}
+                      compassViewPosition={3}
+                      mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAP_TILER_API_KEY}`}
+                    >
+                      <Camera
+                        defaultSettings={{
+                          centerCoordinate: [
+                            chatData.itemDetails.itemLocation.longitude,
+                            chatData.itemDetails.itemLocation.latitude,
+                          ],
+                          zoomLevel: 15,
+                        }}
+                      />
+
+                      {/* Radius circle if available */}
+                      {chatData.itemDetails.itemLocation.radius && (
+                        <ShapeSource
+                          id="pickup-radius"
+                          shape={createCirclePolygon(
+                            [
+                              chatData.itemDetails.itemLocation.longitude,
+                              chatData.itemDetails.itemLocation.latitude,
+                            ],
+                            chatData.itemDetails.itemLocation.radius
+                          )}
+                        >
+                          <FillLayer
+                            id="pickup-radius-fill"
+                            style={{
+                              fillColor: "rgba(33, 150, 243, 0.15)",
+                              fillOutlineColor: "#2196F3",
+                            }}
+                          />
+                        </ShapeSource>
+                      )}
+
+                      {/* Pickup location marker */}
+                      <MarkerView
+                        coordinate={[
+                          chatData.itemDetails.itemLocation.longitude,
+                          chatData.itemDetails.itemLocation.latitude,
+                        ]}
+                        anchor={{ x: 0.5, y: 1 }}
+                      >
+                        <View
+                          style={{
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Image
+                            source={require("@/assets/images/marker-home.png")}
+                            style={{ width: 32, height: 40 }}
+                            resizeMode="contain"
+                          />
+                        </View>
+                      </MarkerView>
+                    </MapView>
+                  </View>
+
+                  {/* Get Directions Button */}
+                  <TouchableOpacity
+                    className="absolute bottom-2 right-2 flex-row justify-center items-end bg-white rounded-lg p-2 shadow-md"
+                    onPress={() =>
+                      getDirectionsToLocation(
+                        chatData.itemDetails.itemLocation.latitude,
+                        chatData.itemDetails.itemLocation.longitude,
+                        chatData.itemDetails.itemLocation.address
+                      )
+                    }
+                  >
+                    <Text className="text-blue-600 text-sm font-medium">
+                      Get Direction
+                    </Text>
+                    <Image
+                      source={icons.rightArrow}
+                      className="w-5 h-5 ml-1"
+                      tintColor={"#2563eb"}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Address Information */}
+                <View className="p-4 bg-gray-50">
+                  <Text className="text-gray-600 font-pmedium text-sm">
+                    {chatData.itemDetails.itemLocation.address ||
+                      "Address not available"}
+                  </Text>
+                  {chatData.itemDetails.itemLocation.radius &&
+                    typeof chatData.itemDetails.itemLocation.radius ===
+                      "number" && (
+                      <Text className="text-gray-500 text-xs mt-1">
+                        Pickup radius:{" "}
+                        {chatData.itemDetails.itemLocation.radius >= 1000
+                          ? `${(
+                              chatData.itemDetails.itemLocation.radius / 1000
+                            ).toFixed(1)}km`
+                          : `${chatData.itemDetails.itemLocation.radius}m`}
+                      </Text>
+                    )}
+                </View>
+              </View>
+            )}
+          </>
+        )}
+        <View className="h-12" />
+      </ScrollView>
+    );
+  };
   const MediaTab = () => {
     const screenWidth = Dimensions.get("window").width;
     const itemSize = (screenWidth - 48) / 3; // 3 columns with padding
@@ -246,6 +544,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
             }}
             scrollEnabled={false}
             keyExtractor={(item) => item.id}
+            style={{ paddingBottom: 12 }}
           />
         ) : (
           <View className="items-center py-8">
@@ -364,12 +663,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
 
   return (
     <>
-      <Modal
-        visible={visible}
-        transparent={true}
-        animationType="fade"
-        presentationStyle="fullScreen"
-      >
+      <Modal visible={visible} transparent={true} animationType="fade">
         <View className="flex-1 bg-gray-50">
           {/* Header */}
           <View className="bg-white border-b border-gray-200 pt-4 pb-4">
@@ -460,7 +754,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
           setImageViewerVisible(false);
           setSelectedImageUrl("");
         }}
-        imageName={`RentEase_${chatData?.itemDetails?.name || "Image"}`}
+        imageName={`r2r_${chatData?.itemDetails?.name || "Image"}`}
       />
     </>
   );
