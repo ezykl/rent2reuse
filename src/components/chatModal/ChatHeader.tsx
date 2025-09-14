@@ -43,6 +43,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   };
 
   const isRentalConversation = itemDetails && status;
+  const isRentRequest = isOwner;
 
   return (
     <View className="bg-white border-b border-gray-300 rounded-b-xl">
@@ -64,13 +65,27 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             className="w-12 h-12 rounded-xl bg-gray-200"
             resizeMode="cover"
           />
-          <Image
+          {/* <Image
             source={{
               uri: recipientImage || "https://placehold.co/40x40@2x.png",
             }}
             className="w-12 h-12 rounded-xl bg-gray-200 -ml-4 mt-4 mr-3"
             resizeMode="cover"
-          />
+          /> */}
+
+          <View
+            className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center ${
+              isRentRequest ? "bg-green-500" : "bg-blue-500"
+            }`}
+          >
+            <Image
+              source={icons.leftArrow}
+              className={`w-5 h-5 ${
+                isRentRequest ? "-inset-9rotate-90" : "rotate-90"
+              }`}
+              tintColor="#fff"
+            />
+          </View>
         </View>
 
         <View className="ml-3 flex-1">
