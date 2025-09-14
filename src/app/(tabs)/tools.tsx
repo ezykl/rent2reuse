@@ -401,15 +401,14 @@ const Tools = () => {
       router.push("/profile");
       return;
     }
-    if (typeof listLimit === "number" && typeof listUsed === "number") {
-      if (listUsed >= listLimit) {
-        Toast.show({
-          type: ALERT_TYPE.WARNING,
-          title: "Listing Limit Reached",
-          textBody: "Please upgrade your plan to add more items.",
-        });
-        return;
-      }
+
+    if (listUsed >= listLimit) {
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Listing Limit Reached",
+        textBody: "Please upgrade your plan to add more items.",
+      });
+      return;
     } else {
       router.push("/add-listing");
     }
@@ -1283,11 +1282,10 @@ const Tools = () => {
                         speed={0.5}
                         style={{ width: 200, height: 200, marginTop: 60 }}
                       />
-                      <Text className="text-gray-500 -m-8">No listing yet</Text>
 
                       <TouchableOpacity
                         onPress={handleAddListing}
-                        className=" bg-primary px-6 py-3 rounded-lg"
+                        className=" -m-8 bg-primary px-6 py-3 rounded-lg"
                       >
                         <Text className="text-white font-psemibold">
                           Create First Listing
