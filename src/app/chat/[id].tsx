@@ -1454,10 +1454,6 @@ const ChatScreen = () => {
     const currentTime = currentMessage.createdAt.toDate();
     const previousTime = previousMessage.createdAt.toDate();
 
-    // Show timestamp if:
-    // 1. More than 5 minutes have passed
-    // 2. Different senders
-    // 3. Different days
     return (
       differenceInMinutes(currentTime, previousTime) > 5 ||
       currentMessage.senderId !== previousMessage.senderId ||
@@ -1489,7 +1485,6 @@ const ChatScreen = () => {
     }
   };
 
-  // Helper function to check if we should show day separator
   const shouldShowDaySeparator = (
     currentMessage: Message,
     previousMessage: Message | null
@@ -1507,7 +1502,6 @@ const ChatScreen = () => {
     return !isSameDay(currentDate, previousDate);
   };
 
-  // 2. Create a TimeIndicator component
   const TimeIndicator = ({ timestamp }: { timestamp: any }) => {
     return (
       <View className="flex-row justify-center my-2">
@@ -1520,7 +1514,6 @@ const ChatScreen = () => {
     );
   };
 
-  // 3. Create a DaySeparator component
   const DaySeparator = ({ timestamp }: { timestamp: any }) => {
     return (
       <View className="flex-row justify-center my-4">
@@ -1533,7 +1526,6 @@ const ChatScreen = () => {
     );
   };
 
-  // Initialize or fetch chat data
   useEffect(() => {
     const initializeChat = async () => {
       try {
@@ -1541,7 +1533,6 @@ const ChatScreen = () => {
         const chatSnap = await getDoc(chatRef);
 
         if (!chatSnap.exists()) {
-          // New chat initialization
           const recipientRef = doc(db, "users", String(chatId));
           const recipientSnap = await getDoc(recipientRef);
 
@@ -1551,7 +1542,7 @@ const ChatScreen = () => {
           }
 
           const recipientData = recipientSnap.data();
-          // Fix: Don't use chatData before it's initialized
+
           setRecipientImage(recipientData?.profileImage || "");
           setRecipientName({
             firstname: recipientData.firstname || "",
@@ -1570,7 +1561,6 @@ const ChatScreen = () => {
           await setDoc(chatRef, newChatData);
           console.log("New chat created");
         } else {
-          // Existing chat logic...
           const chatData = chatSnap.data();
           if (chatData?.participants) {
             const otherUserId = chatData.participants.find(
@@ -1604,7 +1594,7 @@ const ChatScreen = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
-    }, 60000); // Update every minute
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
@@ -1627,13 +1617,11 @@ const ChatScreen = () => {
         const isOwner = currentUserId === data.ownerId;
         const hasOwnerResponded = data.hasOwnerResponded || false;
 
-        // Updated logic: Disable messaging for cancelled or declined requests
         if (data.status === "cancelled" || data.status === "declined") {
           setCanSendMessage(false);
           return;
         }
 
-        // Allow sending messages if owner, or if status is "accepted"
         const canSend =
           isOwner ||
           data.status === "accepted" ||
@@ -1648,14 +1636,12 @@ const ChatScreen = () => {
     return () => unsubscribe();
   }, [chatId, currentUserId]);
 
-  // Set header title
   useLayoutEffect(() => {
     if (recipientEmail) {
       navigation.setOptions({ title: recipientEmail });
     }
   }, [navigation, recipientEmail]);
 
-  // Listen for messages
   useEffect(() => {
     if (!chatId) return;
 
@@ -1671,7 +1657,6 @@ const ChatScreen = () => {
       setMessages(fetchedMessages);
     });
 
-    // Clean up listener on unmount
     return () => unsubscribe();
   }, [chatId]);
 
@@ -1705,7 +1690,6 @@ const ChatScreen = () => {
         readAt: null,
       };
 
-      // Add message to subcollection
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       await addDoc(messagesRef, messageData);
 
@@ -1732,7 +1716,6 @@ const ChatScreen = () => {
         const chatRef = doc(db, "chat", String(chatId));
         const messagesRef = collection(db, "chat", String(chatId), "messages");
 
-        // Query for unread messages not sent by current user (including images)
         const q = query(
           messagesRef,
           where("senderId", "!=", currentUserId),
@@ -1751,7 +1734,6 @@ const ChatScreen = () => {
             });
           });
 
-          // Update chat document to reset unread count for current user
           batch.update(chatRef, {
             [`unreadCounts.${currentUserId}`]: 0,
             [`lastReadTimestamps.${currentUserId}`]: serverTimestamp(),
@@ -1764,10 +1746,8 @@ const ChatScreen = () => {
       }
     };
 
-    // Mark messages as read when entering chat
     markMessagesAsRead();
 
-    // Set up listener for new messages
     const messagesRef = collection(db, "chat", String(chatId), "messages");
     const q = query(messagesRef, orderBy("createdAt", "desc"), limit(1));
 
@@ -1791,10 +1771,9 @@ const ChatScreen = () => {
       }
       await handleDeclineRequest(requestId);
     },
-    [chatId, currentUserId] // Add dependencies
+    [chatId, currentUserId]
   );
 
-  // 2. Fix memoizedHandleAccept with dependencies
   const memoizedHandleAccept = useCallback(
     async (requestId: string) => {
       if (!requestId) {
@@ -1803,10 +1782,9 @@ const ChatScreen = () => {
       }
       await handleAcceptRequest(requestId);
     },
-    [chatId, currentUserId] // Add dependencies
+    [chatId, currentUserId]
   );
 
-  // 3. Fix memoizedHandleCancel with dependencies
   const memoizedHandleCancel = useCallback(
     async (requestId: string) => {
       if (!requestId) {
@@ -1815,26 +1793,22 @@ const ChatScreen = () => {
       }
       await handleCancelRequest(requestId);
     },
-    [chatId, currentUserId] // Add dependencies
+    [chatId, currentUserId]
   );
 
   const handleSendLocation = async () => {
-    // Implement location sharing
     Alert.alert("Send Location", "Location sharing will be implemented here");
   };
 
   const handleSendAgreement = () => {
-    // Navigate to agreement form
     router.push("/agreement-form");
   };
 
   const handleViewRequests = () => {
-    // Navigate to requests list
     router.push(`/requests/${chatId}`);
   };
 
   const handleSendVerdict = () => {
-    // Navigate to verdict form
     router.push(`/verdict-form/${chatId}`);
   };
 

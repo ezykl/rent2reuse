@@ -238,7 +238,7 @@ const RentalProgressIndicator: React.FC<RentalProgressIndicatorProps> = ({
 
   // Enhanced current step view
   return (
-    <View className="py-4 px-5 bg-white border-b border-gray-100">
+    <View className="py-4 px-5 bg-white border border-gray-200 rounded-xl">
       {/* Progress Bar */}
       <View className="flex-row items-center mb-4">
         <View className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">

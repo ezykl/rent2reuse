@@ -73,7 +73,6 @@ interface Chat {
     [userId: string]: number;
   };
   lastSender: string;
-  // Add missing properties from your Firestore structure
   requesterId?: string;
   ownerId?: string;
 }
@@ -87,7 +86,6 @@ interface SearchResult {
   lastMessage?: string;
   lastMessageTime?: Date | null;
   isCurrentUserLastSender?: boolean;
-  // Add these new properties
   itemDetails?: {
     id: string;
     name: string;
@@ -114,23 +112,23 @@ const TabButton = ({ title, isActive, onPress, count }: TabButtonProps) => {
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`mr-3 px-4 py-2.5 rounded-full border ${
+      className={` px-4 py-3 min-w-24 rounded-full border ${
         isActive ? "bg-primary border-primary" : "bg-white border-gray-200"
       }`}
     >
-      <View className="flex-row items-center">
+      <View className="flex-row justify-center item-center ">
         <Text
           className={`${
-            isActive ? "text-white font-pbold" : "text-gray-600 font-pmedium"
+            isActive ? "text-white font-pmedium" : "text-gray-600 font-pmedium"
           } text-sm`}
         >
           {title}
         </Text>
         {count !== undefined && (
           <Text
-            className={`ml-1 text-xs ${
+            className={`ml-1 text-sm font-pmedium  ${
               isActive ? "text-white/80" : "text-gray-400"
-            } font-pmedium`}
+            }`}
           >
             ({count})
           </Text>
@@ -401,15 +399,6 @@ const ChatList = () => {
     return filteredResults.length;
   };
 
-  // const createNewChat = async (userId: string) => {
-  //   try {
-  //     router.push(`/chat/${userId}`);
-  //   } catch (error) {
-  //     console.error("Error creating new chat:", error);
-  //     Alert.alert("Error", "Failed to create new chat");
-  //   }
-  // };
-
   const formatFullName = (name: {
     firstname: string;
     lastname: string;
@@ -429,17 +418,13 @@ const ChatList = () => {
 
     const searchLower = search.toLowerCase().trim();
 
-    // Filter existing chats with improved matching
     const matchingChats = chats.filter((chat) => {
-      // Search by recipient name
       const fullName = formatFullName(chat.recipientName).toLowerCase();
       const firstName = chat.recipientName.firstname.toLowerCase();
       const lastName = chat.recipientName.lastname.toLowerCase();
 
-      // Search by item name if it's a rent request
       const itemName = chat.itemDetails?.name?.toLowerCase() || "";
 
-      // Direct string matching
       const nameMatch =
         fullName.includes(searchLower) ||
         firstName.includes(searchLower) ||
@@ -447,7 +432,6 @@ const ChatList = () => {
 
       const itemMatch = itemName.includes(searchLower);
 
-      // String similarity matching (threshold of 0.6 for good matches)
       const nameSimilarity = Math.max(
         stringSimilarity.compareTwoStrings(searchLower, fullName),
         stringSimilarity.compareTwoStrings(searchLower, firstName),
@@ -463,14 +447,12 @@ const ChatList = () => {
       );
     });
 
-    // Apply the same tab filtering logic as the main chat list
     const filteredMatchingChats = getFilteredChats(
       matchingChats,
       activeTab,
       currentUserId
     );
 
-    // Convert existing chats to SearchResult format
     const chatResults: SearchResult[] = filteredMatchingChats.map((chat) => ({
       isExistingChat: true,
       chatId: chat.id,
@@ -486,7 +468,6 @@ const ChatList = () => {
       unreadCounts: chat.unreadCounts,
     }));
 
-    // For new users, only show them in "all" tab since they don't have chat history
     let matchingUsers: SearchResult[] = [];
     if (activeTab === "all") {
       // Get existing chat user IDs to avoid duplicates
@@ -625,8 +606,8 @@ const ChatList = () => {
   const renderChatItem = ({ item }: { item: Chat }) => {
     const unreadCount = item.unreadCounts?.[currentUserId ?? ""] || 0;
     const hasUnreadMessages = !item.isCurrentUserLastSender && unreadCount > 0;
-    const isUserSender = currentUserId === item.requesterId; // User sent the request
-    const isUserReceiver = currentUserId === item.ownerId; // User received the request
+    const isUserSender = currentUserId === item.requesterId;
+    const isUserReceiver = currentUserId === item.ownerId;
     const isSelected = selectedChats.includes(item.id);
     const isClosed = ["declined", "cancelled"].includes(item.status);
 
@@ -717,7 +698,6 @@ const ChatList = () => {
             </View>
 
             {item.lastMessageTime && (
-              // <View className="gap-2 flex-row">
               <Text
                 className={`text-xs ${
                   hasUnreadMessages ? "font-bold text-primary" : "text-gray-500"
@@ -728,12 +708,7 @@ const ChatList = () => {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-                {/*
-                </Text>
-                <Text className="text-xs text-gray-500"> */}
-                {/* {dayjs(item.lastMessageTime).fromNow()} */}
               </Text>
-              // </View>
             )}
           </View>
 
@@ -1120,28 +1095,22 @@ const ChatList = () => {
 
       {/* Tabs */}
       <View className="py-2">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 2 }}
-        >
-          <View className="flex-row">
-            {[
-              { key: "all" as TabType, label: "All" },
-              { key: "sent" as TabType, label: "Sent" },
-              { key: "received" as TabType, label: "Received" },
-              { key: "closed" as TabType, label: "Closed" },
-            ].map((tab) => (
-              <TabButton
-                key={tab.key}
-                title={tab.label}
-                isActive={activeTab === tab.key}
-                onPress={() => setActiveTab(tab.key)}
-                count={getTabCount(tab.key, search)}
-              />
-            ))}
-          </View>
-        </ScrollView>
+        <View className="flex-row justify-between">
+          {[
+            { key: "all" as TabType, label: "All" },
+            { key: "sent" as TabType, label: "Sent" },
+            { key: "received" as TabType, label: "Received" },
+            { key: "closed" as TabType, label: "Closed" },
+          ].map((tab) => (
+            <TabButton
+              key={tab.key}
+              title={tab.label}
+              isActive={activeTab === tab.key}
+              onPress={() => setActiveTab(tab.key)}
+              count={getTabCount(tab.key, search)}
+            />
+          ))}
+        </View>
       </View>
       {/* Chat List */}
       {loading ? (

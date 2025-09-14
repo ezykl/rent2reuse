@@ -9,6 +9,7 @@ import {
   Image,
   Platform,
   FlatList,
+  BackHandler,
   Dimensions,
 } from "react-native";
 import { format } from "date-fns";
@@ -19,6 +20,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import ModalImageViewer from "@/components/chatModal/ModalImageViewer";
 import { useTimeConverter } from "@/hooks/useTimeConverter";
+import { formatDistance, set } from "date-fns";
 import {
   MapView,
   Camera,
@@ -81,9 +83,28 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     lastname: string;
     middlename?: string;
     profileImage?: string;
+    createdAt?: any;
   } | null>(null);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string>("");
+
+  useEffect(() => {
+    const backAction = () => {
+      if (visible) {
+        onClose(); // Close the modal when hardware back is pressed
+        return true; // Prevent default behavior
+      }
+      return false; // Allow default behavior if modal is not visible
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    // Cleanup function to remove the listener
+    return () => backHandler.remove();
+  }, [visible, onClose]);
 
   useEffect(() => {
     // Filter and sort media messages
@@ -103,6 +124,32 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
     setMediaItems(imageMessages);
   }, [messages]);
 
+  const formatFirestoreDate = (firestoreTimestamp: any) => {
+    try {
+      if (!firestoreTimestamp) return "recently";
+
+      if (
+        firestoreTimestamp.toDate &&
+        typeof firestoreTimestamp.toDate === "function"
+      ) {
+        const date = firestoreTimestamp.toDate();
+        return formatDistance(date, new Date(), { addSuffix: true });
+      }
+
+      if (typeof firestoreTimestamp === "string") {
+        const date = new Date(firestoreTimestamp);
+        if (!isNaN(date.getTime())) {
+          return formatDistance(date, new Date(), { addSuffix: true });
+        }
+      }
+
+      return "recently";
+    } catch (error) {
+      console.error("Error formatting Firestore date:", error);
+      return "recently";
+    }
+  };
+
   useEffect(() => {
     const fetchCurrentUserData = async () => {
       if (!currentUserId) return;
@@ -118,6 +165,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
             lastname: userData.lastname || "",
             middlename: userData.middlename || "",
             profileImage: userData.profileImage || "",
+            createdAt: userData.createdAt || "",
           });
         }
       } catch (error) {
@@ -666,7 +714,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
       <Modal visible={visible} transparent={true} animationType="fade">
         <View className="flex-1 bg-gray-50">
           {/* Header */}
-          <View className="bg-white border-b border-gray-200 pt-4 pb-4">
+          <View className="bg-white border-b border-gray-200 py-4">
             <View className="flex-row items-center justify-between px-4 mb-4">
               <TouchableOpacity
                 onPress={onClose}
@@ -678,35 +726,51 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
                   tintColor="#6B7280"
                 />
               </TouchableOpacity>
-              <View className="flex-row items-center flex-1">
-                <Image
+              <TouchableOpacity
+                className="flex-row items-center flex-1"
+                onPress={() => {
+                  onClose(); // close the modal first
+                  router.push(`/user/${recipientId}`); // then navigate
+                }}
+              >
+                {/* <Image
                   source={{
                     uri:
                       chatData.itemDetails.image ||
                       "https://placehold.co/40x40@2x.png",
                   }}
                   className="w-12 h-12 rounded-xl  bg-gray-200 "
-                />
-                <View className="shadow-lg shadow-red-800">
+                /> */}
+                {/* <View className="shadow-lg shadow-red-800"> */}
+                <View>
                   <Image
                     source={{
                       uri:
                         recipientImage || "https://placehold.co/40x40@2x.png",
                     }}
-                    className="w-12 h-12 rounded-xl  bg-gray-200 -ml-4 mt-4 mr-3"
+                    className="w-12 h-12 rounded-full  bg-gray-200 mr-3"
+                  />
+                  <Image
+                    source={icons.verified}
+                    className="w-4 h-4 absolute bottom-0 right-2"
+                    resizeMode="contain"
                   />
                 </View>
-                <View className="flex-1">
+                {/* </View> */}
+                <View className="flex-1 ml-1">
                   <Text className="text-lg font-pbold text-gray-800 ">
                     {formatFullName()}
                   </Text>
-                  {chatData?.itemDetails?.name && (
+                  <Text className="text-gray-500 text-sm ">
+                    Joined {formatFirestoreDate(currentUserData?.createdAt)}
+                  </Text>
+                  {/* {chatData?.itemDetails?.name && (
                     <Text className="text-sm text-gray-500">
                       {chatData.itemDetails.name}
                     </Text>
-                  )}
+                  )} */}
                 </View>
-              </View>
+              </TouchableOpacity>
               <TabButton
                 id="report"
                 title="Report"

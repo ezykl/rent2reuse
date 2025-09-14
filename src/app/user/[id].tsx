@@ -26,6 +26,7 @@ import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ItemCard from "@/components/ItemCard";
 import { useLocation } from "@/hooks/useLocation";
+import LottieView from "lottie-react-native";
 
 interface UserProfile {
   id: string;
@@ -113,7 +114,6 @@ export default function UserProfile() {
     try {
       if (!firestoreTimestamp) return "recently";
 
-      // Firestore Timestamps have a .toDate() method
       if (
         firestoreTimestamp.toDate &&
         typeof firestoreTimestamp.toDate === "function"
@@ -122,7 +122,6 @@ export default function UserProfile() {
         return formatDistance(date, new Date(), { addSuffix: true });
       }
 
-      // Fallback for string dates (shouldn't happen with proper Firestore usage)
       if (typeof firestoreTimestamp === "string") {
         const date = new Date(firestoreTimestamp);
         if (!isNaN(date.getTime())) {
@@ -137,41 +136,6 @@ export default function UserProfile() {
     }
   };
 
-  // Render item card
-  // const renderItemCard = ({ item }: { item: Item }) => (
-  //   <TouchableOpacity
-  //     className="w-[48%] mb-4"
-  //     onPress={() => router.push(`/items/${item.id}`)}
-  //   >
-  //     <View className="bg-white rounded-xl overflow-hidden border border-gray-100">
-  //       <View className="aspect-square">
-  //         {item.images && item.images[0] ? (
-  //           <Image
-  //             source={{ uri: item.images[0] }}
-  //             className="w-full h-full"
-  //             resizeMode="cover"
-  //           />
-  //         ) : (
-  //           <View className="w-full h-full bg-gray-100 items-center justify-center">
-  //             <Image source={images.empty} className="w-12 h-12 opacity-30" />
-  //           </View>
-  //         )}
-  //       </View>
-  //       <View className="p-3">
-  //         <Text
-  //           className="text-lg font-pbold text-gray-900 mb-1"
-  //           numberOfLines={1}
-  //         >
-  //           {item.itemName}
-  //         </Text>
-  //         <Text className="text-primary text-base font-pbold">
-  //           ₱{item.itemPrice}
-  //           <Text className="text-gray-500 text-sm font-pregular">/day</Text>
-  //         </Text>
-  //       </View>
-  //     </View>
-  //   </TouchableOpacity>
-  // );
   const renderItemCard = ({ item }: { item: Item }) => {
     if (!item) return null;
 
@@ -346,12 +310,15 @@ export default function UserProfile() {
           </View>
         )}
         ListEmptyComponent={() => (
-          <View className="flex-1 items-center justify-center p-8">
-            <Image
-              source={icons.emptyBox}
-              className="w-20 h-20 opacity-30 mb-4"
+          <View className="flex-1 items-center">
+            <LottieView
+              source={require("../../assets/lottie/BoxOpen.json")}
+              autoPlay
+              loop={false}
+              speed={0.5}
+              style={{ width: 200, height: 200, marginTop: 40 }}
             />
-            <Text className="text-gray-500 text-center">
+            <Text className="text-gray-500 -mt-8">
               This user hasn't listed any items yet
             </Text>
           </View>
