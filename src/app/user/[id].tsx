@@ -26,6 +26,7 @@ import { useLoader } from "@/context/LoaderContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ItemCard from "@/components/ItemCard";
 import { useLocation } from "@/hooks/useLocation";
+import LottieView from "lottie-react-native";
 
 interface UserProfile {
   id: string;
@@ -346,12 +347,15 @@ export default function UserProfile() {
           </View>
         )}
         ListEmptyComponent={() => (
-          <View className="flex-1 items-center justify-center p-8">
-            <Image
-              source={icons.emptyBox}
-              className="w-20 h-20 opacity-30 mb-4"
+          <View className="flex-1 items-center">
+            <LottieView
+              source={require("../../assets/lottie/BoxOpen.json")}
+              autoPlay
+              loop={false}
+              speed={0.5}
+              style={{ width: 200, height: 200, marginTop: 40 }}
             />
-            <Text className="text-gray-500 text-center">
+            <Text className="text-gray-500 -mt-8">
               This user hasn't listed any items yet
             </Text>
           </View>

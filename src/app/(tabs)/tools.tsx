@@ -1249,7 +1249,7 @@ const Tools = () => {
                       <View className="flex-row items-center gap-2 justify-center">
                         <TouchableOpacity
                           onPress={handleAddListing}
-                          className="bg-primary p-2  flex-row rounded-lg justify-center items-center gap-2"
+                          className="bg-primary p-2 px-4  flex-row rounded-lg justify-center items-center gap-2"
                           activeOpacity={0.8}
                           style={{
                             elevation: 3,
@@ -1259,13 +1259,15 @@ const Tools = () => {
                             shadowRadius: 2,
                           }}
                         >
-                          <Image
-                            source={icons.plus}
-                            className="w-5 h-5"
-                            tintColor="white"
-                            resizeMode="cover"
-                          />
-                          <Text className="text-white font-psemibold">
+                          <View className="bg-white/20 rounded-full p-2">
+                            <Image
+                              source={icons.bigPlus}
+                              className="w-4 h-4 "
+                              tintColor="white"
+                              resizeMode="contain"
+                            />
+                          </View>
+                          <Text className="text-white font-psemibold mt-1">
                             Add Listing
                           </Text>
                         </TouchableOpacity>
@@ -1313,7 +1315,7 @@ const Tools = () => {
 
               {activeTab === "rented" && (
                 <View className="bg-white rounded-2xl">
-                  <Text className="text-lg font-pbold text-gray-800 mb-4">
+                  <Text className="text-lg font-pbold text-gray-800 py-2 mb-4">
                     Currently Borrowed Items
                   </Text>
                   {rentedTools.length === 0 ? (
@@ -1341,7 +1343,7 @@ const Tools = () => {
 
               {activeTab === "incoming" && (
                 <View className="bg-white rounded-2xl ">
-                  <Text className="text-lg font-pbold text-gray-800 mb-4">
+                  <Text className="text-lg font-pbold py-2 text-gray-800 mb-4">
                     Items with Rental Requests
                   </Text>
 
@@ -1382,7 +1384,7 @@ const Tools = () => {
 
               {activeTab === "outgoing" && (
                 <View className="bg-white rounded-2xl">
-                  <Text className="text-lg font-pbold text-gray-800 mb-4">
+                  <Text className="text-lg font-pbold py-2 text-gray-800 mb-4">
                     My Sent Requests
                   </Text>
                   {isRequestsLoading ? (

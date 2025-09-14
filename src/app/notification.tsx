@@ -16,6 +16,7 @@ import { useNotifications } from "@/context/NotificationProvider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FirestoreNotification } from "@/types/notification";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import LottieView from "lottie-react-native";
 
 const NotificationScreen = () => {
   const insets = useSafeAreaInsets();
@@ -111,18 +112,15 @@ const NotificationScreen = () => {
           contentContainerStyle={{ paddingBottom: insets.bottom }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={() => (
-            <View
-              className="flex-1 items-center   justify-center py-8 px-4"
-              style={{ height: 300 }}
-            >
-              <Image
-                source={icons.emptyBox}
-                className="w-16 h-16 mb-4"
-                tintColor="#9CA3AF"
+            <View className="flex-1 items-center">
+              <LottieView
+                source={require("../assets/lottie/BoxOpen.json")}
+                autoPlay
+                loop={false}
+                speed={0.5}
+                style={{ width: 200, height: 200, marginTop: 60 }}
               />
-              <Text className="text-gray-500 font-pmedium">
-                No notifications yet
-              </Text>
+              <Text className="text-gray-500 -mt-8">No notifications yet</Text>
             </View>
           )}
         />
