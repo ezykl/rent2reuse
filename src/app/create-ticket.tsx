@@ -31,8 +31,7 @@ export default function CreateTicket() {
       .padStart(3, "0");
     const ticketId = `${prefix}-${timestamp}-${random}`;
 
-    // Debug log to verify generation
-    console.log("Generated Ticket ID:", ticketId);
+  
     return ticketId;
   };
 
@@ -79,8 +78,6 @@ export default function CreateTicket() {
         },
       };
 
-      // Debug log the complete ticket data
-      console.log("Complete ticket data:", JSON.stringify(ticketData, null, 2));
 
       const docRef = await addDoc(collection(db, "support"), ticketData);
 

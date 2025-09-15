@@ -392,7 +392,6 @@ export default function ItemDetails() {
           } as Item;
 
           setItem(completeItemData);
-          console.log("Fetched item:", completeItemData);
 
           // Fetch owner rating
           if (completeItemData.owner?.id) {
@@ -1288,7 +1287,7 @@ export default function ItemDetails() {
                   {item.itemLocation?.radius &&
                     typeof item.itemLocation.radius === "number" && (
                       <Text className="text-gray-500 text-xs">
-                        Pickup radius:
+                        Pickup radius:{" "}
                         {item.itemLocation.radius >= 1000
                           ? `${(item.itemLocation.radius / 1000).toFixed(1)}km`
                           : `${item.itemLocation.radius}m`}

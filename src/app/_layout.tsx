@@ -21,8 +21,7 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutContent() {
   const { expoPushToken, notification } = usePushNotifications();
   const data = JSON.stringify(notification, undefined, 2);
-  console.log("Push Notification Data:", data);
-  console.log("Expo Push Token:", expoPushToken);
+
   // Monitor account status
   useAccountStatus();
 

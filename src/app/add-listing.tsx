@@ -276,7 +276,7 @@ const AddListing = () => {
       });
 
       const result = await response.json();
-      console.log("API Prediction:", result);
+
 
       if (Array.isArray(result)) {
         setApiPrediction(result);
