@@ -21,8 +21,7 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutContent() {
   const { expoPushToken, notification } = usePushNotifications();
   const data = JSON.stringify(notification, undefined, 2);
-  console.log("Push Notification Data:", data);
-  console.log("Expo Push Token:", expoPushToken);
+
   // Monitor account status
   useAccountStatus();
 
@@ -44,13 +43,11 @@ function RootLayoutContent() {
           presentation: "transparentModal",
         }}
       >
+         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="setting" options={{ headerShown: false }} />
         <Stack.Screen name="notification" options={{ headerShown: false }} />
         <Stack.Screen name="add-listing" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-
-        <Stack.Screen name="(profile)" options={{ headerShown: false }} />
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="items/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
@@ -67,17 +64,7 @@ function RootLayoutContent() {
         <Stack.Screen name="create-ticket" options={{ headerShown: false }} />
         <Stack.Screen name="rating-screen" options={{ headerShown: false }} />
         <Stack.Screen name="plans" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="search"
-          options={{
-            animation: "fade",
-            presentation: "containedModal",
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: "transparent",
-            },
-          }}
-        />
+
       </Stack>
     </>
   );

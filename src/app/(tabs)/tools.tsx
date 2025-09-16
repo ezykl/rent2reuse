@@ -268,13 +268,7 @@ const Tools = () => {
             renterInfo: data.renterInfo || null,
           };
 
-          console.log("📦 Debug: Final listing data:", {
-            id: listingData.id,
-            name: listingData.itemName,
-            requestCount: listingData.requestCount,
-            newRequestCount: listingData.newRequestCount,
-          });
-
+         
           return listingData;
         })
       );
@@ -296,10 +290,7 @@ const Tools = () => {
       const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
       if (userDoc.exists() && userDoc.data().currentPlan) {
         const planData = userDoc.data().currentPlan;
-        console.log("Fetched updated plan data:", {
-          listUsed: planData.listUsed,
-          listLimit: planData.listLimit,
-        });
+
 
         setUserPlan(planData);
       }
@@ -315,7 +306,7 @@ const Tools = () => {
 
     try {
       setIsRequestsLoading(true);
-      console.log("Fetching sent requests for user:", auth.currentUser.uid);
+
 
       const requestsQuery = query(
         collection(db, "rentRequests"),
@@ -327,7 +318,7 @@ const Tools = () => {
 
       const requests = querySnapshot.docs.map((doc) => {
         const data = doc.data();
-        console.log("Request data:", data);
+   
 
         return {
           id: doc.id,
@@ -398,7 +389,7 @@ const Tools = () => {
         title: "Complete Your Profile",
         textBody: `Your profile is ${completionPercentage}% complete. Please complete your profile before listing items.`,
       });
-      router.push("/profile");
+      router.push("/tabs/profile");
       return;
     }
 

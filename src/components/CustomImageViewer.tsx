@@ -41,7 +41,27 @@ const CustomImageViewer: React.FC<CustomImageViewerProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(imageIndex);
 
-  // Animation values
+  const getVisibleDots = (currentIndex: number, total: number) => {
+    const maxDots = 5;
+    if (total <= maxDots) {
+      // Show all dots if total is less or equal to maxDots
+      return [...Array(total).keys()];
+    }
+
+    let start = currentIndex - 2;
+    let end = currentIndex + 2;
+
+    if (start < 0) {
+      start = 0;
+      end = maxDots - 1;
+    } else if (end > total - 1) {
+      end = total - 1;
+      start = end - (maxDots - 1);
+    }
+
+    return Array.from({ length: end - start + 1 }, (_, i) => i + start);
+  };
+
   const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -214,19 +234,26 @@ const CustomImageViewer: React.FC<CustomImageViewerProps> = ({
         </View>
       </GestureHandlerRootView>
 
-      {/* Navigation Dots */}
       {images.length > 1 && (
-        <View style={styles.dotsContainer}>
-          {images.map((_, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.dot,
-                index === currentIndex ? styles.activeDot : styles.inactiveDot,
-              ]}
-              onPress={() => changeImage(index)}
-            />
-          ))}
+        <View style={[styles.dotsContainer, { paddingVertical: 12 }]}>
+          {getVisibleDots(currentIndex, images.length).map((index) => {
+            const distance = Math.abs(index - currentIndex);
+            const opacity = Math.max(1 - distance * 0.3, 0.3);
+
+            return (
+              <TouchableOpacity
+                key={index}
+                onPress={() => changeImage(index)}
+                style={{
+                  width: index === currentIndex ? 16 : 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: `rgba(255, 255, 255, ${opacity})`,
+                  marginHorizontal: 6,
+                }}
+              />
+            );
+          })}
         </View>
       )}
 
@@ -306,9 +333,11 @@ const styles = StyleSheet.create({
   },
   gestureRoot: {
     flex: 1,
+    paddingHorizontal: 20,
   },
   imageContainer: {
     flex: 1,
+    paddingHorizontal: 20,
     marginTop: 60,
     justifyContent: "center",
     alignItems: "center",

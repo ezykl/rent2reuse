@@ -17,7 +17,7 @@ import { images } from "../../constant";
 import InputField from "../../components/InputField";
 import LargeButton from "../../components/LargeButton";
 import { Link, router, useRouter } from "expo-router";
-import Terms from "./terms"; // Import Terms and Conditions component
+import Terms from "./terms"; 
 import { Checkbox, useTheme } from "react-native-paper"; // Ensure you have this installed
 import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
 import { useLoader } from "@/context/LoaderContext";

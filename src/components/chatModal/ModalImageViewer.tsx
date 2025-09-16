@@ -12,6 +12,8 @@ import { icons } from "@/constant";
 import * as MediaLibrary from "expo-media-library";
 import * as FileSystem from "expo-file-system";
 import { StatusBar } from "expo-status-bar";
+import LottieActivityIndicator from "../LottieActivityIndicator";
+import LottieView from "lottie-react-native";
 
 interface ModalImageViewerProps {
   visible: boolean;
@@ -59,9 +61,7 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
         );
         setIsImageSaved(imageExists);
       }
-    } catch (error) {
-      console.error("Error checking image existence:", error);
-    }
+    } catch (error) {}
   };
 
   const saveImageToGallery = async () => {
@@ -112,7 +112,6 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
         throw new Error("Failed to download image");
       }
     } catch (error) {
-      console.error("Error saving image:", error);
       Alert.alert("Error", "Failed to save image. Please try again.");
     } finally {
       setIsSaving(false);
@@ -122,17 +121,26 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="fade" statusBarTranslucent={true}>
-      <StatusBar style="light" backgroundColor="transparent" translucent />
-      <View className="flex-1 bg-black p-4">
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent
+      statusBarTranslucent={true}
+    >
+      <StatusBar style="light" translucent />
+      <View className="flex-1 bg-black/95 p-4">
         {/* Header - NO ABSOLUTE POSITIONING */}
-        <View className="bg-black/80 pt-12 pb-4 px-4">
+        <View className="pt-12 pb-4 px-4">
           <View className="flex-row items-center justify-between">
             <TouchableOpacity
               onPress={onClose}
-              className="w-10 h-10 bg-white/20 rounded-full items-center justify-center"
+              className=" p-2 bg-white/20 rounded-full items-center justify-center"
             >
-              <Image source={icons.close} className="w-6 h-6" tintColor="red" />
+              <Image
+                source={icons.close}
+                className="w-5 h-5 m-1"
+                tintColor="red"
+              />
             </TouchableOpacity>
 
             <View className="flex-1 items-center">
@@ -142,7 +150,7 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
             <TouchableOpacity
               onPress={saveImageToGallery}
               disabled={isSaving || isImageSaved}
-              className={`w-10 h-10 rounded-full items-center justify-center ${
+              className={`p-2 rounded-full items-center justify-center ${
                 isImageSaved
                   ? "bg-green-500/80"
                   : isSaving
@@ -151,11 +159,16 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
               }`}
             >
               {isSaving ? (
-                <Text className="text-white text-xs">...</Text>
+                <LottieView
+                  source={require("../../assets/lottie/RR.json")}
+                  autoPlay
+                  loop
+                  style={{ width: 24, height: 24 }}
+                />
               ) : (
                 <Image
                   source={isImageSaved ? icons.check : icons.download}
-                  className="w-6 h-6"
+                  className="w-5 h-5 m-1"
                   tintColor="white"
                 />
               )}
@@ -175,7 +188,7 @@ const ModalImageViewer: React.FC<ModalImageViewerProps> = ({
         </View>
 
         {/* Footer */}
-        <View className="bg-black/80 py-4">
+        <View className=" py-4">
           {isImageSaved ? (
             <View className="flex-row items-center justify-center">
               <Image

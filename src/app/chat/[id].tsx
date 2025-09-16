@@ -16,8 +16,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  TouchableWithoutFeedback,
-  Keyboard,
   Alert,
   Image,
   Modal,
@@ -119,7 +117,7 @@ const MessageActionsModal = ({
   onSave,
   onDelete,
   message,
-  currentUserId, // Add this prop
+  currentUserId,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -127,7 +125,7 @@ const MessageActionsModal = ({
   onSave?: () => void;
   onDelete: () => void;
   message?: Message | null;
-  currentUserId?: string; // Add this type
+  currentUserId?: string;
 }) => {
   const isImageMessage = message?.type === "image";
   const isTextMessage = message?.type === "message" || !message?.type;
@@ -230,36 +228,10 @@ const ActionMenu = ({
       <TouchableOpacity
         activeOpacity={1}
         onPress={onClose}
-        className="flex-1 bg-black/10 px-2 justify-end"
+        className="flex-1 bg-black/10 px-2 justify-end item"
       >
-        <View className="flex flex-col mb-2 w-full py-4 bg-white rounded-3xl shadow-lg">
-          <View className="flex-row flex-wrap justify-center ">
-            {items.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                onPress={() => {
-                  onClose();
-                  item.action();
-                }}
-                className="items-center w-[72px]"
-              >
-                <View
-                  className={`w-12 h-12 rounded-full items-center justify-center mb-1`}
-                  style={{ backgroundColor: item.bgColor }}
-                >
-                  <Image
-                    source={item.icon}
-                    className="w-6 h-6"
-                    tintColor={item.iconColor}
-                  />
-                </View>
-                <Text className="text-xs text-center text-gray-600 font-pmedium">
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View className="flex-row flex-wrap justify-center ">
+        <View className="mb-2 py-4 flex bg-white rounded-3xl shadow-lg">
+          <View className="flex-row border justify-center ">
             {items.map((item) => (
               <TouchableOpacity
                 key={item.id}
@@ -372,14 +344,11 @@ const RentRequestMessage = ({
   useEffect(() => {
     if (!chatId) return;
 
-    // Single listener for chat-level data (ALL DATA IS HERE)
     const chatRef = doc(db, "chat", String(chatId));
 
     const unsubscribeChat = onSnapshot(chatRef, (snapshot) => {
       if (snapshot.exists()) {
         const chatData = snapshot.data();
-
-        console.log("Chat data updated:", chatData.status);
 
         // Update status
         setCurrentStatus(chatData.status || "pending");
@@ -980,17 +949,15 @@ const ChatScreen = () => {
 
                 // Delete the image from storage
                 await deleteObject(imageRef);
-                console.log("Image deleted from storage successfully");
               } catch (storageError) {
-                console.error(
-                  "Error deleting image from storage:",
-                  storageError
-                );
-                // Continue with message update even if storage deletion fails
+                Toast.show({
+                  type: ALERT_TYPE.DANGER,
+                  title: "Error",
+                  textBody: `Error deleting image from storage.`,
+                });
               }
             }
 
-            // Update the message document
             const updateData = {
               isDeleted: true,
               deletedAt: serverTimestamp(),
@@ -1129,9 +1096,7 @@ const ChatScreen = () => {
         console.log("Could not clean up temporary file");
       }
 
-      // Force media scanner to update (Android specific)
       try {
-        // This helps ensure the image appears in gallery apps immediately
         await MediaLibrary.getAssetsAsync({
           first: 1,
           mediaType: "photo",
@@ -2211,10 +2176,8 @@ const ChatScreen = () => {
     try {
       setIsLoading(true);
 
-      // 1. Create batch for declining operations
       const declineBatch = writeBatch(db);
 
-      // 2. Update chat metadata
       const chatRef = doc(db, "chat", String(chatId));
       declineBatch.update(chatRef, {
         status: "declined",
@@ -2223,7 +2186,6 @@ const ChatScreen = () => {
         hasOwnerResponded: true,
       });
 
-      // 3. Update the rent request in the rentRequests collection (if it exists)
       try {
         const rentRequestRef = doc(db, "rentRequests", requestId);
         const rentRequestSnap = await getDoc(rentRequestRef);

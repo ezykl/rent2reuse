@@ -482,7 +482,7 @@ const SignIn = () => {
 
                 <View className="w-full pt-5 px-2 flex flex-row justify-end">
                   <TouchableOpacity
-                    onPress={() => router.push("/forgot-password")}
+                    onPress={() => router.push("/auth/forgot-password")}
                   >
                     <Text className=" text-lg text-secondary-400 font-pmedium">
                       Forgot Password
