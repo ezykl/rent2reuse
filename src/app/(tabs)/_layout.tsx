@@ -94,7 +94,7 @@ const TabsLayout = () => {
 
       // 1. First check if user is logged in
       if (!user) {
-        router.push("/sign-in");
+        router.push("/tabs/sign-in");
         return;
       }
 
@@ -105,7 +105,7 @@ const TabsLayout = () => {
           title: "Complete Your Profile",
           textBody: `Your profile is ${completionPercentage}% complete. Please complete your profile before listing items.`,
         });
-        router.push("/profile");
+        router.push("/tabs/profile");
         return;
       }
 

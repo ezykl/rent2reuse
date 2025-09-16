@@ -71,7 +71,6 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         ...doc.data(),
       })) as FirestoreNotification[];
 
-      console.log("Fetched notifications:", notificationData); // Debug log
       setNotifications(notificationData);
       setIsLoading(false);
     });

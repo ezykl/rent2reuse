@@ -11,7 +11,7 @@ const Terms = () => {
       {/* Terms Content */}
       <ScrollView
         className="flex-1 mb-4"
-        scrollEventThrottle={16} // Improve scroll performance
+        scrollEventThrottle={16} 
       >
         <Image
           source={images.logo}

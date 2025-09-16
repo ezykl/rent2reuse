@@ -16,8 +16,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  TouchableWithoutFeedback,
-  Keyboard,
   Alert,
   Image,
   Modal,
@@ -119,7 +117,7 @@ const MessageActionsModal = ({
   onSave,
   onDelete,
   message,
-  currentUserId, // Add this prop
+  currentUserId,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -127,7 +125,7 @@ const MessageActionsModal = ({
   onSave?: () => void;
   onDelete: () => void;
   message?: Message | null;
-  currentUserId?: string; // Add this type
+  currentUserId?: string;
 }) => {
   const isImageMessage = message?.type === "image";
   const isTextMessage = message?.type === "message" || !message?.type;
@@ -2178,10 +2176,8 @@ const ChatScreen = () => {
     try {
       setIsLoading(true);
 
-      // 1. Create batch for declining operations
       const declineBatch = writeBatch(db);
 
-      // 2. Update chat metadata
       const chatRef = doc(db, "chat", String(chatId));
       declineBatch.update(chatRef, {
         status: "declined",
@@ -2190,7 +2186,6 @@ const ChatScreen = () => {
         hasOwnerResponded: true,
       });
 
-      // 3. Update the rent request in the rentRequests collection (if it exists)
       try {
         const rentRequestRef = doc(db, "rentRequests", requestId);
         const rentRequestSnap = await getDoc(rentRequestRef);

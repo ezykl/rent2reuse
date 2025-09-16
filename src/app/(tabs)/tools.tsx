@@ -389,7 +389,7 @@ const Tools = () => {
         title: "Complete Your Profile",
         textBody: `Your profile is ${completionPercentage}% complete. Please complete your profile before listing items.`,
       });
-      router.push("/profile");
+      router.push("/tabs/profile");
       return;
     }
 

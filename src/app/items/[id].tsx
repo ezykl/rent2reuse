@@ -29,7 +29,7 @@ import { useUserLimits } from "@/hooks/useUserLimits";
 import {
   doc,
   getDoc,
-  setDoc,
+  setDoc, 
   addDoc,
   collection,
   serverTimestamp,
@@ -1354,7 +1354,6 @@ export default function ItemDetails() {
             if (!uri || uri.trim().length === 0) return false;
             if (!uri.startsWith("http")) return false;
 
-            // Additional validation
             try {
               new URL(uri);
               return true;
@@ -1367,12 +1366,10 @@ export default function ItemDetails() {
         imageIndex={fullscreenImageIndex}
         onRequestClose={() => {
           setFullscreenImageVisible(false);
-          // Reset any other state if needed
           setFullscreenImageIndex(0);
         }}
         onImageIndexChange={(index) => {
           setFullscreenImageIndex(index);
-          // Optional: sync with carousel if needed
           setActiveIndex(index);
         }}
       />
@@ -1416,7 +1413,7 @@ const RentRequestForm = ({
     endDate: dayjs.Dayjs | null;
   }>({
     startDate: today, // Initialize with today's date
-    endDate: today.add(itemMinDuration, "day"), // Initialize with tomorrow's date
+    endDate: today.add(itemMinDuration, "day"),
   });
 
   // Simplified to single time for both start and end
@@ -1438,25 +1435,6 @@ const RentRequestForm = ({
     return Math.max(1, days) * itemPrice;
   };
 
-  // useFocusEffect(
-  //   React.useCallback(() => {
-  //     const onBackPress = () => {
-  //       if (visible) {
-  //         onClose();
-  //         return true;
-  //       }
-  //       return false;
-  //     };
-
-  //     const subscription = BackHandler.addEventListener(
-  //       "hardwareBackPress",
-  //       onBackPress
-  //     );
-
-  //     return () => subscription.remove();
-  //   }, [visible, onClose])
-  // );
-
   const handleDateChange = ({ startDate, endDate }: RangeChange) => {
     if (startDate) {
       const start = dayjs(startDate).startOf("day");
@@ -1472,7 +1450,6 @@ const RentRequestForm = ({
         return;
       }
 
-      // If end date is selected, ensure it's not before start date
       if (end && end.isBefore(start)) {
         Toast.show({
           type: ALERT_TYPE.WARNING,
