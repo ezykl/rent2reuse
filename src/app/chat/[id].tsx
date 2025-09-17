@@ -78,15 +78,12 @@ import CustomImageViewer from "@/components/CustomImageViewer";
 import { createInAppNotification } from "src/utils/notificationHelper";
 import ChatDetailsModal from "@/components/chatModal/ChatDetailsModal";
 import ChatHeader from "@/components/chatModal/ChatHeader";
+import ImageMessage from "@/components/chatModal/ImageMessage";
+import RentRequestMessage from "@/components/chatModal/RentRequestMessage";
+import ActionMenu from "@/components/chatModal/ActionMenu";
+import MessageActionsModal from "@/components/chatModal/MessageActionsModal";
+import Message from "@/types/message";
 
-// Helper function to check if a request has expired
-const isRequestExpired = (startDate: any): boolean => {
-  if (!startDate) return false;
-  const date = startDate.toDate ? startDate.toDate() : startDate;
-  return new Date() > date;
-};
-
-// Helper function to format timestamp for display
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return "";
 
@@ -110,95 +107,6 @@ const formatTimestamp = (timestamp: any): string => {
   }
 };
 
-const MessageActionsModal = ({
-  visible,
-  onClose,
-  onEdit,
-  onSave,
-  onDelete,
-  message,
-  currentUserId,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onEdit: () => void;
-  onSave?: () => void;
-  onDelete: () => void;
-  message?: Message | null;
-  currentUserId?: string;
-}) => {
-  const isImageMessage = message?.type === "image";
-  const isTextMessage = message?.type === "message" || !message?.type;
-  const isCurrentUserMessage = message?.senderId === currentUserId;
-  const isEditableMessage =
-    isTextMessage && !message?.isDeleted && isCurrentUserMessage;
-
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onClose}
-        className="flex-1 bg-black/10 justify-end"
-      >
-        <View className="bg-white rounded-t-3xl p-4">
-          {/* Show Edit option only for text messages sent by current user that aren't deleted */}
-          {isEditableMessage && (
-            <TouchableOpacity
-              onPress={onEdit}
-              className="flex-row items-center p-4"
-            >
-              <Image
-                source={icons.edit}
-                className="w-6 h-6 mr-3"
-                tintColor="#3b82f6"
-              />
-              <Text className="text-blue-500 text-base">Edit Message</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Show Save option for all image messages that aren't deleted */}
-          {isImageMessage && onSave && !message?.isDeleted && (
-            <TouchableOpacity
-              onPress={onSave}
-              className="flex-row items-center p-4"
-            >
-              <Image
-                source={icons.download}
-                className="w-6 h-6 mr-3"
-                tintColor="#10B981"
-              />
-              <Text className="text-green-500 text-base">Save Image</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Delete option - show only for messages sent by current user */}
-          {isCurrentUserMessage && (
-            <TouchableOpacity
-              onPress={onDelete}
-              className="flex-row items-center p-4"
-            >
-              <Image
-                source={icons.trash}
-                className="w-6 h-6 mr-3"
-                tintColor="#EF4444"
-              />
-              <Text className="text-red-500 text-base">
-                Delete {isImageMessage ? "Image" : "Message"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-};
-
-// Add these interfaces near your other interfaces
 interface ActionMenuItem {
   id: string;
   icon: any;
@@ -206,101 +114,6 @@ interface ActionMenuItem {
   action: () => void;
   bgColor: string;
   iconColor: string;
-}
-
-// Add the ActionMenu component before your ChatScreen component
-const ActionMenu = ({
-  visible,
-  onClose,
-  items,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  items: ActionMenuItem[];
-}) => {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onClose}
-        className="flex-1 bg-black/10 px-2 justify-end item"
-      >
-        <View className="mb-2 py-4 flex bg-white rounded-3xl shadow-lg">
-          <View className="flex-row border justify-center ">
-            {items.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                onPress={() => {
-                  onClose();
-                  item.action();
-                }}
-                className="items-center w-[72px]"
-              >
-                <View
-                  className={`w-12 h-12 rounded-full items-center justify-center mb-1`}
-                  style={{ backgroundColor: item.bgColor }}
-                >
-                  <Image
-                    source={item.icon}
-                    className="w-6 h-6"
-                    tintColor={item.iconColor}
-                  />
-                </View>
-                <Text className="text-xs text-center text-gray-600 font-pmedium">
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-};
-
-interface Message {
-  isDeleted?: boolean;
-  deletedAt?: any;
-  isEdited?: boolean;
-  editedAt?: any;
-  status?: string;
-  id: string;
-  senderId: string;
-  text: string;
-  createdAt: any;
-  type?:
-    | "message"
-    | "rentRequest"
-    | "statusUpdate"
-    | "image"
-    | "paymentRequest";
-  read: boolean;
-  readAt: any;
-  rentRequestId?: string;
-  imageUrl?: string;
-  imageWidth?: number;
-  imageHeight?: number;
-  rentRequestDetails?: {
-    itemId: string;
-    itemName: string;
-    itemImage: string;
-    totalPrice: number;
-    startDate: any;
-    endDate: any;
-    rentalDays: number;
-    ownerId: string;
-    ownerName: string;
-    requesterId: string;
-    requesterName: string;
-    pickupTime: number;
-    message: string;
-    status: string;
-  };
 }
 
 interface MessageSelection {
@@ -313,475 +126,6 @@ interface MessageAction {
   icon: any;
   action: () => void;
 }
-
-const RentRequestMessage = ({
-  item,
-  isOwner,
-  onAccept,
-  onDecline,
-  onCancel,
-  chatData,
-  chatId,
-}: {
-  item: Message;
-  isOwner: boolean;
-  onAccept?: () => void;
-  onDecline?: () => void;
-  onCancel?: () => void;
-  chatData?: any;
-  chatId: string;
-}) => {
-  const [currentStatus, setCurrentStatus] = useState<string>("pending");
-  const [rentRequestData, setRentRequestData] = useState<any>(null);
-  const isSender = item.senderId === auth.currentUser?.uid;
-  const { minutesToTime } = useTimeConverter();
-
-  const effectiveStatus = useMemo(() => {
-    return currentStatus || item.status || chatData?.status || "pending";
-  }, [currentStatus, item.status, chatData?.status]);
-
-  // Real-time status listener - SIMPLIFIED VERSION
-  useEffect(() => {
-    if (!chatId) return;
-
-    const chatRef = doc(db, "chat", String(chatId));
-
-    const unsubscribeChat = onSnapshot(chatRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const chatData = snapshot.data();
-
-        // Update status
-        setCurrentStatus(chatData.status || "pending");
-
-        // Map chat data directly to rent request data
-        const requestData = {
-          name: chatData.itemDetails?.name || "Unknown Item",
-          itemImage: chatData.itemDetails?.image || "",
-          price: chatData.itemDetails?.price || 0,
-          totalPrice: chatData.itemDetails?.totalPrice || 0,
-          rentalDays: chatData.itemDetails?.rentalDays || 0,
-          downpaymentPercentage:
-            chatData.itemDetails?.downpaymentPercentage || 0,
-          itemLocation: chatData.itemDetails?.itemLocation || null,
-          pickupTime: chatData.itemDetails?.pickupTime || 480,
-          startDate: chatData.itemDetails?.startDate?.toDate() || new Date(),
-          endDate: chatData.itemDetails?.endDate?.toDate() || new Date(),
-          message: chatData.itemDetails?.message || "",
-          status: chatData.status || "pending",
-
-          // Additional chat-level fields you might need
-          requesterId: chatData.requesterId,
-          ownerId: chatData.ownerId,
-          itemId: chatData.itemId,
-          participants: chatData.participants,
-          createdAt: chatData.createdAt?.toDate() || new Date(),
-        };
-
-        setRentRequestData(requestData);
-      }
-    });
-
-    return () => {
-      unsubscribeChat();
-    };
-  }, [chatId]);
-
-  // Format date helper function
-  const formatDate = (date: any) => {
-    if (!date) return "";
-    if (date.toDate) return format(date.toDate(), "MMM d, yyyy");
-    if (date instanceof Date) return format(date, "MMM d, yyyy");
-    return "Date unavailable";
-  };
-
-  if (!rentRequestData) {
-    return (
-      <View className="bg-white rounded-xl p-4 mb-3">
-        <Text className="text-gray-500">Loading request details...</Text>
-      </View>
-    );
-  }
-
-  const getStatusBadge = (status: string | undefined) => {
-    switch (status?.toLowerCase()) {
-      case "approved":
-      case "accepted":
-        return {
-          bgColor: "bg-green-100",
-          textColor: "text-green-700",
-        };
-      case "cancelled":
-      case "declined":
-      case "rejected":
-        return {
-          bgColor: "bg-red-100",
-          textColor: "text-red-700",
-        };
-      case "pending":
-        return {
-          bgColor: "bg-yellow-100",
-          textColor: "text-yellow-700",
-        };
-      default:
-        return {
-          bgColor: "bg-gray-100",
-          textColor: "text-gray-700",
-        };
-    }
-  };
-
-  const getStatusDisplay = () => {
-    switch (effectiveStatus.toLowerCase()) {
-      case "cancelled":
-        return (
-          <View className="bg-gray-100 p-4 rounded-lg mt-4">
-            <Text className="text-gray-600 text-center">
-              This request was cancelled
-            </Text>
-          </View>
-        );
-      case "declined":
-        return (
-          <View className="bg-red-50 p-4 rounded-lg mt-4">
-            <Text className="text-red-600 text-center">
-              This request was declined
-            </Text>
-          </View>
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <View className={`flex- mb-3 ${isSender ? "pl-8" : "pr-8"}`}>
-      <View
-        className={`p-4 shadow-sm flex-1 ${
-          isSender
-            ? "bg-white rounded-xl rounded-br-none border-2 border-primary"
-            : "bg-white rounded-xl rounded-bl-none border border-gray-200"
-        }`}
-      >
-        {/* Status Badge - Use effectiveStatus */}
-        <View
-          className={`absolute top-4 right-4 px-2 py-1 rounded-full ${
-            getStatusBadge(effectiveStatus).bgColor
-          }`}
-        >
-          <Text
-            className={`text-xs font-psemibold capitalize ${
-              getStatusBadge(effectiveStatus).textColor
-            }`}
-          >
-            {effectiveStatus}
-          </Text>
-        </View>
-
-        <Text className="text-sm font-pmedium mb-2 text-gray-500">
-          {isSender ? "Your Request" : "Rental Request"}
-        </Text>
-
-        {/* Basic Info */}
-        <View className="flex-row items-start gap-3">
-          <Image
-            source={{
-              uri:
-                chatData?.itemDetails?.image ||
-                rentRequestData?.itemImage ||
-                "https://placehold.co/200x200.png",
-            }}
-            className="w-24 h-24 rounded-lg"
-            resizeMode="cover"
-          />
-          <View className="flex-1">
-            <Text className="font-pbold text-base  text-gray-900">
-              {rentRequestData.name}
-            </Text>
-            <View className="flex-row items-center">
-              <Image
-                source={icons.calendar}
-                className="w-4 h-4 mr-2"
-                tintColor="#4B5563"
-                resizeMode="contain"
-              />
-              <Text className="text-sm mt-1 font-pmedium text-gray-600">
-                {formatDate(rentRequestData.startDate)} -{" "}
-                {formatDate(rentRequestData.endDate)}
-              </Text>
-            </View>
-
-            <View className="flex-row items-center">
-              <Image
-                source={icons.clock}
-                className="w-4 h-4 mr-2"
-                tintColor="#4B5563"
-                resizeMode="contain"
-              />
-              <Text className="text-sm mt-1 font-pmedium text-gray-600">
-                {minutesToTime(rentRequestData.pickupTime)}
-              </Text>
-            </View>
-
-            <Text className="font-psemibold mt-1 text-primary">
-              ₱{rentRequestData.price}
-              /day
-            </Text>
-          </View>
-        </View>
-
-        {effectiveStatus !== "cancelled" && effectiveStatus !== "declined" && (
-          <View className="mt-3 pt-3 border-t border-gray-100">
-            <View>
-              <Text className="text-xs font-pbold uppercase text-gray-400">
-                Message
-              </Text>
-              <Text className="text-sm mt-1 font-pregular text-gray-700">
-                {rentRequestData.message}
-              </Text>
-            </View>
-
-            <View className=" mt-3">
-              <View>
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Rental Period
-                </Text>
-                <Text className="text-sm font-pmedium mt-1 text-gray-700">
-                  {rentRequestData.rentalDays} days
-                </Text>
-              </View>
-
-              <View className=" mt-3">
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Total Amount
-                </Text>
-                <Text className="text-sm font-pmedium mt-1 text-gray-700">
-                  ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Status Display */}
-        {getStatusDisplay()}
-
-        {/* Action buttons - Only show if status is pending */}
-        {effectiveStatus === "pending" && (
-          <>
-            {isOwner ? (
-              <View className="flex-row gap-2 mt-4">
-                {!isRequestExpired(rentRequestData.startDate) ? (
-                  <>
-                    <TouchableOpacity
-                      onPress={onAccept}
-                      className="flex-1 bg-primary py-3 rounded-xl"
-                    >
-                      <Text className="text-white font-pbold text-center">
-                        ACCEPT
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <View className="w-full bg-gray-100 p-4 rounded-lg">
-                    <Text className="text-gray-600 text-center">
-                      This request has expired as the start date has passed
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View className="mt-4">
-                {!isRequestExpired(rentRequestData.startDate) ? (
-                  <TouchableOpacity
-                    onPress={onCancel}
-                    className="py-3 rounded-xl bg-red-400"
-                  >
-                    <Text className="font-pbold text-center text-white">
-                      CANCEL REQUEST
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View className="bg-gray-100 p-4 rounded-lg">
-                    <Text className="text-gray-600 text-center">
-                      This request has expired
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </>
-        )}
-
-        {/* Show accepted status message when accepted */}
-        {effectiveStatus === "accepted" && (
-          <View className="bg-green-50 p-4 rounded-lg mt-4">
-            <Text className="text-green-600 text-center font-pmedium">
-              Request accepted!
-            </Text>
-          </View>
-        )}
-
-        <View className="mt-2 flex-row justify-end">
-          <Text className="text-xs text-gray-400">
-            {item.createdAt ? formatTimestamp(item.createdAt) : ""}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-};
-
-const requestDataCache = new Map();
-
-const ImageMessage = ({
-  item,
-  isCurrentUser,
-  onLongPress,
-  onImagePress,
-}: {
-  item: Message;
-  isCurrentUser: boolean;
-  onLongPress: () => void;
-  onImagePress: () => void;
-}) => {
-  const [imageError, setImageError] = useState(false);
-  const maxWidth = Dimensions.get("window").width * 0.65;
-  const maxHeight = 300;
-  const [aspectRatio, setAspectRatio] = useState(1);
-
-  // Get dimensions but don't use loading state
-  useEffect(() => {
-    if (item.imageUrl && !item.isDeleted) {
-      Image.getSize(
-        item.imageUrl,
-        (width, height) => {
-          setAspectRatio(width / height);
-        },
-        () => {
-          setImageError(true);
-        }
-      );
-    }
-  }, [item.imageUrl, item.isDeleted]);
-
-  // Show deleted message state
-  if (item.isDeleted) {
-    return (
-      <View
-        className={`flex-col ${isCurrentUser ? "items-end" : "items-start"}`}
-      >
-        <View
-          className={`p-3 rounded-xl mb-2 ${
-            isCurrentUser
-              ? "bg-primary rounded-tr-none self-end"
-              : "bg-white rounded-tl-none border border-gray-200"
-          }`}
-        >
-          <Text
-            className={`text-base italic ${
-              isCurrentUser ? "text-white/70" : "text-gray-500"
-            }`}
-          >
-            [Image deleted]
-          </Text>
-        </View>
-        <View
-          className={`flex-row items-center mt-1 px-1 ${
-            isCurrentUser ? "justify-end" : "justify-start"
-          }`}
-        >
-          {isCurrentUser && (
-            <>
-              {item.read ? (
-                <Image
-                  source={icons.doubleCheck}
-                  className="w-3 h-3 mr-1"
-                  tintColor="#4285F4"
-                />
-              ) : (
-                <Image
-                  source={icons.singleCheck}
-                  className="w-3 h-3 mr-1"
-                  tintColor="#9CA3AF"
-                />
-              )}
-            </>
-          )}
-          <Text className="text-xs text-gray-400">
-            {item.createdAt ? format(item.createdAt.toDate(), "h:mm a") : ""}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  // Show error state
-  if (imageError || !item.imageUrl) {
-    return (
-      <View className="bg-gray-100 rounded-xl p-3 mb-2">
-        <Text className="text-gray-500 text-center font-pmedium">
-          Image not available
-        </Text>
-      </View>
-    );
-  }
-
-  const imageWidth = maxWidth;
-  const calculatedHeight = maxWidth / aspectRatio;
-  const imageHeight = Math.min(calculatedHeight, maxHeight);
-
-  return (
-    <View className="flex-col">
-      <TouchableOpacity
-        onPress={onImagePress}
-        onLongPress={onLongPress}
-        delayLongPress={300}
-        activeOpacity={0.9}
-      >
-        <View className="rounded-xl overflow-hidden">
-          <Image
-            source={{ uri: item.imageUrl }}
-            style={{
-              width: imageWidth,
-              height: imageHeight,
-            }}
-            className="rounded-xl"
-            resizeMode="cover"
-            onError={() => setImageError(true)}
-          />
-        </View>
-      </TouchableOpacity>
-
-      {/* Message metadata */}
-      <View
-        className={`flex-row items-center mt-1 px-1 ${
-          isCurrentUser ? "justify-end" : "justify-start"
-        }`}
-      >
-        {isCurrentUser && (
-          <>
-            {item.read ? (
-              <Image
-                source={icons.doubleCheck}
-                className="w-3 h-3 mr-1"
-                tintColor="#4285F4"
-              />
-            ) : (
-              <Image
-                source={icons.singleCheck}
-                className="w-3 h-3 mr-1"
-                tintColor="#9CA3AF"
-              />
-            )}
-          </>
-        )}
-        <Text className="text-xs text-gray-400">
-          {item.createdAt ? format(item.createdAt.toDate(), "h:mm a") : ""}
-        </Text>
-      </View>
-    </View>
-  );
-};
 
 const ChatScreen = () => {
   const { id: chatId } = useLocalSearchParams();
@@ -806,6 +150,7 @@ const ChatScreen = () => {
   const [requestStatuses, setRequestStatuses] = useState<
     Record<string, string>
   >({});
+
   const [showMessageActions, setShowMessageActions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [canSendMessage, setCanSendMessage] = useState(false);
@@ -818,7 +163,8 @@ const ChatScreen = () => {
       timestamp: number;
     }>
   >([]);
-
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
   const [selection, setSelection] = useState<MessageSelection>({
     isSelecting: false,
     selectedMessages: [],
@@ -857,6 +203,28 @@ const ChatScreen = () => {
   } | null>(null);
 
   const [showCamera, setShowCamera] = useState(false);
+
+  useEffect(() => {
+    if (messages.length > 0 && !loading) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+    }
+  }, [messages.length > 0, loading]);
+
+  useEffect(() => {
+    // Only auto-scroll for new messages if user is not manually scrolling and is near the bottom
+    if (
+      !isUserScrolling &&
+      !showScrollToBottom &&
+      messages.length > 0 &&
+      !loading
+    ) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages.length, isUserScrolling, showScrollToBottom, loading]);
 
   if (!currentUserId || !chatId) {
     return (
@@ -2520,17 +1888,41 @@ const ChatScreen = () => {
           keyExtractor={(item, index) => `${item.id}-${index}`}
           contentContainerStyle={{
             flexGrow: 1,
-            justifyContent: "flex-end",
+            minHeight: "100%",
             paddingVertical: 16,
             paddingHorizontal: 12,
           }}
-          // Add automatic scrolling to bottom for new messages
-          onContentSizeChange={() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }}
           onLayout={() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
+            if (messages.length > 0 && !loading) {
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: false });
+              }, 50);
+            }
           }}
+          onScroll={(event) => {
+            const { contentOffset, contentSize, layoutMeasurement } =
+              event.nativeEvent;
+            const distanceFromBottom =
+              contentSize.height - (contentOffset.y + layoutMeasurement.height);
+
+            if (distanceFromBottom > 100) {
+              setShowScrollToBottom(true);
+            } else {
+              setShowScrollToBottom(false);
+            }
+
+            setIsUserScrolling(true);
+          }}
+          onScrollBeginDrag={() => {
+            setIsUserScrolling(true);
+          }}
+          onScrollEndDrag={() => {
+            setTimeout(() => setIsUserScrolling(false), 100);
+          }}
+          onMomentumScrollEnd={() => {
+            setTimeout(() => setIsUserScrolling(false), 100);
+          }}
+          scrollEventThrottle={16}
           renderItem={({ item, index }) => {
             const previousMessage = index > 0 ? messages[index - 1] : null;
             const showTimestamp = shouldShowTimestamp(item, previousMessage);
@@ -2552,7 +1944,6 @@ const ChatScreen = () => {
                     item={item}
                     isOwner={currentUserId === chatData?.ownerId}
                     onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
-                    // onDecline={() => memoizedHandleDecline(item.rentRequestId!)}
                     onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
                     chatData={chatData}
                     chatId={String(chatId)}
@@ -2585,7 +1976,6 @@ const ChatScreen = () => {
                     />
                   </View>
                 ) : (
-                  // Regular message
                   <TouchableOpacity
                     onLongPress={() =>
                       handleMessageLongPress(item.id, item.senderId, item)
@@ -2644,7 +2034,6 @@ const ChatScreen = () => {
                         )}
                       </View>
 
-                      {/* Message metadata */}
                       <View
                         className={`flex-row items-center mt-1 px-1 ${
                           isCurrentUser ? "justify-end" : "justify-start"
@@ -2684,10 +2073,6 @@ const ChatScreen = () => {
           maxToRenderPerBatch={10}
           windowSize={10}
           removeClippedSubviews={true}
-          maintainVisibleContentPosition={{
-            minIndexForVisible: 0,
-            autoscrollToTopThreshold: 10,
-          }}
           ListFooterComponent={() => (
             <View>
               {uploadingMessages.map((uploadData) => (
@@ -2699,6 +2084,34 @@ const ChatScreen = () => {
             </View>
           )}
         />
+
+        {showScrollToBottom && (
+          <View className="absolute bottom-20 right-4">
+            <TouchableOpacity
+              onPress={() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+                setShowScrollToBottom(false);
+              }}
+              className="w-12 h-12 bg-primary rounded-full items-center justify-center shadow-lg"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: {
+                  width: 0,
+                  height: 2,
+                },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+                elevation: 5,
+              }}
+            >
+              <Image
+                source={icons.arrowDown}
+                className="w-6 h-6"
+                tintColor="white"
+              />
+            </TouchableOpacity>
+          </View>
+        )}
         {/* Message Input */}
         <View className="flex-row px-2 pb-2  gap-2 ">
           {!canSendMessage ? (

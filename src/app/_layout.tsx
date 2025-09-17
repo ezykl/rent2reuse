@@ -43,7 +43,7 @@ function RootLayoutContent() {
           presentation: "transparentModal",
         }}
       >
-         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="setting" options={{ headerShown: false }} />
         <Stack.Screen name="notification" options={{ headerShown: false }} />
@@ -64,7 +64,6 @@ function RootLayoutContent() {
         <Stack.Screen name="create-ticket" options={{ headerShown: false }} />
         <Stack.Screen name="rating-screen" options={{ headerShown: false }} />
         <Stack.Screen name="plans" options={{ headerShown: false }} />
-
       </Stack>
     </>
   );

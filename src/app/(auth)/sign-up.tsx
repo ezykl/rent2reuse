@@ -40,7 +40,6 @@ const SignUp = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const { isLoading, setIsLoading } = useLoader();
-  // Step management
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 2;
   const { setSignupMode } = useAuth();
@@ -64,7 +63,6 @@ const SignUp = () => {
     sex: "",
   });
 
-  // Real-time validation states
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
