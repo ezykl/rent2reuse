@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 
-export const calendarStyles = StyleSheet.create({
+const calendarStyles = StyleSheet.create({
   container: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -68,3 +68,4 @@ export const calendarStyles = StyleSheet.create({
     color: "#CBD5E1",
   },
 });
+export default calendarStyles;

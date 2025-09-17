@@ -88,7 +88,7 @@ const TabsLayout = () => {
       if (!hasCameraPermission) return;
 
       if (!user) {
-        router.push("/tabs/sign-in");
+        router.push("/(auth)/sign-in");
         return;
       }
 
@@ -98,7 +98,7 @@ const TabsLayout = () => {
           title: "Complete Your Profile",
           textBody: `Your profile is ${completionPercentage}% complete. Please complete your profile before listing items.`,
         });
-        router.push("/tabs/profile");
+        router.push("/(tabs)/profile");
         return;
       }
 

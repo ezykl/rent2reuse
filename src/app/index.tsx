@@ -70,7 +70,7 @@ const Welcome = () => {
       carouselRef.current?.scrollTo({ index: currentScreen + 1 });
       setCurrentScreen(currentScreen + 1);
     } else {
-      router.push("/auth/sign-in");
+      router.push("/(auth)/sign-in");
     }
   };
 
@@ -159,7 +159,7 @@ const Welcome = () => {
             className="h-[28px] w-[160px]"
             resizeMode="contain"
           />
-          <TouchableOpacity onPress={() => router.push("/auth/sign-in")}>
+          <TouchableOpacity onPress={() => router.push("/(auth)/sign-in")}>
             <Text className="text-primary font-pmedium text-lg">Skip</Text>
           </TouchableOpacity>
         </View>
@@ -193,7 +193,7 @@ const Welcome = () => {
           <View className="px-6 ">
             {isLastScreen ? (
               <TouchableOpacity
-                onPress={() => router.push("/auth/sign-in")}
+                onPress={() => router.push("/(auth)/sign-in")}
                 className="w-full bg-primary h-14 justify-center rounded-xl"
               >
                 <Text className="text-white font-pbold text-lg text-center">
