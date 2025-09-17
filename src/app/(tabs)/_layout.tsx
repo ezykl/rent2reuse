@@ -58,8 +58,6 @@ const TabIcon = ({ icon, color, name, focused }: TabIconProps) => {
 const TabsLayout = () => {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  // Message Detection
-  const [hasNewMessages, setHasNewMessages] = useState(true);
   const [isOptionsVisible, setIsOptionsVisible] = useState(false);
   const { user } = useAuth();
   const { completionPercentage } = useProfileCompletion();
@@ -67,7 +65,6 @@ const TabsLayout = () => {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
 
-  // Create a new function to check camera permissions
   const checkCameraPermission = async () => {
     if (!cameraPermission?.granted) {
       const permission = await requestCameraPermission();
@@ -83,22 +80,18 @@ const TabsLayout = () => {
     return true;
   };
 
-  // Update the handleListItem function
   const handleListItem = async () => {
     setIsOptionsVisible(false);
 
     try {
-      // Check camera permission first
       const hasCameraPermission = await checkCameraPermission();
       if (!hasCameraPermission) return;
 
-      // 1. First check if user is logged in
       if (!user) {
         router.push("/tabs/sign-in");
         return;
       }
 
-      // 2. Check profile completion
       if (completionPercentage < 100) {
         Toast.show({
           type: ALERT_TYPE.WARNING,
@@ -109,7 +102,6 @@ const TabsLayout = () => {
         return;
       }
 
-      // 3. Check user's current plan and limits
       const userDoc = await getDoc(doc(db, "users", user.uid));
       const userData = userDoc.data();
       {
@@ -122,7 +114,6 @@ const TabsLayout = () => {
           return;
         }
 
-        // Check if user has any plan
         if (!userData.currentPlan) {
           router.push("/plans");
           Toast.show({
@@ -133,7 +124,7 @@ const TabsLayout = () => {
           return;
         }
       }
-      // Now check the listing limits
+
       const { listLimit, listUsed } = userData.currentPlan || {};
       if (typeof listLimit === "number" && typeof listUsed === "number") {
         if (listUsed >= listLimit) {
@@ -147,7 +138,6 @@ const TabsLayout = () => {
         }
       }
 
-      // 4. If all checks pass, navigate to add listing
       router.push({
         pathname: "/add-listing",
         params: { openCamera: "true" },
@@ -162,7 +152,6 @@ const TabsLayout = () => {
     }
   };
 
-  // Add this useEffect to track unread messages
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
@@ -273,7 +262,7 @@ const TabsLayout = () => {
             title: "Search",
             headerShown: false,
             tabBarItemStyle: {
-              marginTop: -2, // Moves the tab icon a little upwards
+              marginTop: -2,
             },
             tabBarButton: (props) => (
               <>
@@ -282,10 +271,6 @@ const TabsLayout = () => {
                   onPress={() => setIsOptionsVisible(true)}
                   className="items-center justify-center"
                 >
-                  {/* <Image
-                    source={images.logoSmall}
-                    className=" mt-2 w-12 h-12"
-                  /> */}
                   <LottieView
                     source={require("../../assets/lottie/logoBlink.json")}
                     autoPlay

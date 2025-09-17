@@ -5,7 +5,7 @@ type MessageType =
   | "image"
   | "paymentRequest";
 
-export interface Message {
+export default interface Message {
   isDeleted?: boolean;
   deletedAt?: any;
   isEdited?: boolean;

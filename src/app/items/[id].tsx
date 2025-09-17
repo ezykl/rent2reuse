@@ -14,22 +14,19 @@ import {
   Animated,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { BackHandler } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+
 import DateTimePicker, {
   useDefaultClassNames,
 } from "react-native-ui-datepicker";
 import type { DateType } from "react-native-ui-datepicker";
 import dayjs from "dayjs";
 import { useState, useEffect, useRef } from "react";
-import { useLocation } from "../../hooks/useLocation";
-import { LocationUtils } from "../../utils/locationUtils";
 import { useUserLimits } from "@/hooks/useUserLimits";
 
 import {
   doc,
   getDoc,
-  setDoc, 
+  setDoc,
   addDoc,
   collection,
   serverTimestamp,
