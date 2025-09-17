@@ -52,7 +52,7 @@ interface CreatePaymentOrderParams {
 
   // Remove undefined fields
   Object.keys(paymentData).forEach((key) => {
-    if (paymentData[key] === undefined) delete paymentData[key];
+    if (paymentData[key as keyof typeof paymentData] === undefined) delete paymentData[key as keyof typeof paymentData];
   });
 
   return await createPayment(paymentData);
