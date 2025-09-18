@@ -1,4 +1,3 @@
-// services/verificationService.ts
 import {
   doc,
   getDoc,

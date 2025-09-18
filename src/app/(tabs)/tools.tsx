@@ -268,7 +268,6 @@ const Tools = () => {
             renterInfo: data.renterInfo || null,
           };
 
-         
           return listingData;
         })
       );
@@ -291,7 +290,6 @@ const Tools = () => {
       if (userDoc.exists() && userDoc.data().currentPlan) {
         const planData = userDoc.data().currentPlan;
 
-
         setUserPlan(planData);
       }
     } catch (error) {
@@ -307,7 +305,6 @@ const Tools = () => {
     try {
       setIsRequestsLoading(true);
 
-
       const requestsQuery = query(
         collection(db, "rentRequests"),
         where("requesterId", "==", auth.currentUser.uid)
@@ -318,7 +315,6 @@ const Tools = () => {
 
       const requests = querySnapshot.docs.map((doc) => {
         const data = doc.data();
-   
 
         return {
           id: doc.id,
