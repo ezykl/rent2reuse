@@ -1,4 +1,4 @@
-import { Message } from "@/types/message";
+import Message from "@/types/message";
 import React, { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { View, Text, TouchableOpacity, Image, Dimensions } from "react-native";

@@ -1,5 +1,5 @@
 import { icons } from "@/constant";
-import { Message } from "@/types/message";
+import Message from "@/types/message";
 import { Modal, TouchableOpacity, Image, Text, View } from "react-native";
 
 const MessageActionsModal = ({

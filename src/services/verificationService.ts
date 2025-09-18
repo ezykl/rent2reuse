@@ -1,7 +1,14 @@
-// services/verificationService.ts
-import { doc, getDoc, updateDoc, query, where, collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebaseConfig';
-import { updateEmail } from 'firebase/auth';
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  query,
+  where,
+  collection,
+  getDocs,
+} from "firebase/firestore";
+import { db } from "@/lib/firebaseConfig";
+import { updateEmail } from "firebase/auth";
 
 export const verifyEmailToken = async (token: string, userId: string) => {
   try {
