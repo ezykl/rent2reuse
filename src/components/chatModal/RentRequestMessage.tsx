@@ -3,13 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { db, auth } from "@/lib/firebaseConfig";
 import { useTimeConverter } from "@/hooks/useTimeConverter";
 import { doc, onSnapshot } from "firebase/firestore";
-import {
-  format,
-  isToday,
-  isYesterday,
-  differenceInMinutes,
-  isSameDay,
-} from "date-fns";
+import { format, isToday, isYesterday } from "date-fns";
 import { View, Text, TouchableOpacity, Image } from "react-native";
 import { icons } from "@/constant";
 

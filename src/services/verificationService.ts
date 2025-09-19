@@ -13,7 +13,7 @@ import { updateEmail } from "firebase/auth";
 export const verifyEmailToken = async (token: string, userId: string) => {
   try {
     // Find the verification token
-    const tokensRef = collection(db, 'verification-tokens');
+    const tokensRef = collection(db, "verification-tokens");
     const q = query(
       tokensRef,
       where("token", "==", token),
@@ -46,7 +46,7 @@ export const verifyEmailToken = async (token: string, userId: string) => {
     });
 
     // Update user verification status in your users collection
-    const userRef = doc(db, 'users', userId);
+    const userRef = doc(db, "users", userId);
     await updateDoc(userRef, {
       emailVerified: true,
       verifiedAt: new Date(),
