@@ -248,106 +248,6 @@ const Profile: React.FC = () => {
     return () => unsubscribe();
   }, [auth.currentUser?.uid]);
 
-  // useEffect(() => {
-  //   const fetchProfileData = async () => {
-  //     try {
-  //       setIsLoading(true);
-  //       const currentUser = auth.currentUser;
-  //       if (!currentUser) return;
-
-  //       const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-
-  //       if (userDoc.exists()) {
-  //         const userData = userDoc.data() as User;
-  //         console.log("Fetched user data:", userData); // For debugging
-  //         setProfileData({
-  //           firstname: userData.firstname || "",
-  //           middlename: userData.middlename || "",
-  //           lastname: userData.lastname || "",
-  //           profileImage: userData.profileImage || "",
-  //           createdAt: userData.createdAt || new Date().toISOString(),
-  //           contactNumber: userData.contactNumber || "",
-  //           location: {
-  //             address: userData.location?.address || "",
-  //             latitude: userData.location?.latitude || 0,
-  //             longitude: userData.location?.longitude || 0,
-  //             updatedAt:
-  //               userData.location?.updatedAt || new Date().toISOString(),
-  //           },
-  //           currentPlan: userData.currentPlan
-  //             ? {
-  //                 planId: userData.currentPlan.planId || "",
-  //                 planType: userData.currentPlan?.planType
-  //                   ? userData.currentPlan.planType.charAt(0).toUpperCase() +
-  //                     userData.currentPlan.planType.slice(1).toLowerCase()
-  //                   : "Free",
-  //                 rentLimit: userData.currentPlan.rentLimit || 0,
-  //                 listLimit: userData.currentPlan.listLimit || 0,
-  //                 rentUsed: userData.currentPlan.rentUsed || 0,
-  //                 listUsed: userData.currentPlan.listUsed || 0,
-  //                 status: userData.currentPlan.status || "inactive",
-  //               }
-  //             : undefined,
-  //         });
-  //       }
-  //     } catch (error) {
-  //       console.error("Error fetching profile data:", error);
-  //       Toast.show({
-  //         type: ALERT_TYPE.DANGER,
-  //         title: "Error",
-  //         textBody: "Failed to load profile data",
-  //       });
-  //     }
-  //     setIsLoading(false);
-  //   };
-
-  //   // Fetch initial data
-  //   fetchProfileData();
-
-  //   // Set up real-time listener for profile updates
-  //   const unsubscribe = onSnapshot(
-  //     doc(db, "users", auth.currentUser?.uid || ""),
-  //     (doc) => {
-  //       if (doc.exists()) {
-  //         const userData = doc.data() as User;
-  //         setProfileData({
-  //           firstname: userData.firstname || "",
-  //           middlename: userData.middlename || "",
-  //           lastname: userData.lastname || "",
-  //           profileImage: userData.profileImage || "",
-  //           createdAt: userData.createdAt || new Date().toISOString(),
-  //           contactNumber: userData.contactNumber || "",
-  //           location: {
-  //             address: userData.location?.address || "",
-  //             latitude: userData.location?.latitude || 0,
-  //             longitude: userData.location?.longitude || 0,
-  //             updatedAt:
-  //               userData.location?.updatedAt || new Date().toISOString(),
-  //           },
-  //           currentPlan: userData.currentPlan
-  //             ? {
-  //                 planId: userData.currentPlan.planId || "",
-  //                 planType: userData.currentPlan.planType || "Free",
-  //                 rentLimit: userData.currentPlan.rentLimit || 0,
-  //                 listLimit: userData.currentPlan.listLimit || 0,
-  //                 rentUsed: userData.currentPlan.rentUsed || 0,
-  //                 listUsed: userData.currentPlan.listUsed || 0,
-  //                 status: userData.currentPlan.status || "inactive",
-  //                 subscriptionId: userData.currentPlan.subscriptionId,
-  //               }
-  //             : undefined,
-  //         });
-  //       }
-  //     },
-  //     (error) => {
-  //       console.error("Error in profile snapshot:", error);
-  //     }
-  //   );
-
-  //   // Cleanup listener on unmount
-  //   return () => unsubscribe();
-  // }, [auth.currentUser?.uid]);
-
   const ensureUserProfileExists = async (uid: string) => {
     try {
       if (!uid) return;
@@ -1102,24 +1002,6 @@ const Profile: React.FC = () => {
               tintColor="#9CA3AF"
             />
           </TouchableOpacity>
-
-          {/* <TouchableOpacity
-            onPress={handleLogout}
-            className="flex-row items-center px-6 py-4"
-          >
-            <Image
-              source={icons.logout}
-              className="w-6 h-6 mr-3"
-              tintColor="#EF4444"
-              resizeMode="contain"
-            />
-            <Text className="flex-1 font-pmedium text-red-500">Log Out</Text>
-            <Image
-              source={icons.arrowRight}
-              className="w-5 h-5"
-              tintColor="#EF4444"
-            />
-          </TouchableOpacity> */}
         </View>
       </View>
     );
@@ -1147,16 +1029,14 @@ const Profile: React.FC = () => {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
-              colors={["#2563EB"]} // primary color
-              tintColor="#2563EB" // iOS
+              colors={["#2563EB"]}
+              tintColor="#2563EB"
               progressBackgroundColor="#ffffff"
             />
           }
         >
-          {/* Add Profile Completion Alert here - above profile image */}
           {!isProfileComplete && isLoading && (
             <View className=" mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-              {/* Progress Header with Toggle */}
               <TouchableOpacity
                 onPress={() => setShowFullDetails(!showFullDetails)}
                 className="flex-row items-center justify-between mb-3"

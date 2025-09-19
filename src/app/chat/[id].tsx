@@ -121,11 +121,6 @@ interface MessageSelection {
   selectedMessages: string[];
 }
 
-interface MessageAction {
-  label: string;
-  icon: any;
-  action: () => void;
-}
 
 const ChatScreen = () => {
   const { id: chatId } = useLocalSearchParams();
@@ -234,7 +229,7 @@ const ChatScreen = () => {
     );
   }
   const handleImagePress = (selectedImageUrl: string) => {
-    // Get all image messages from the chat
+
     const imageMessages = messages.filter(
       (msg) => msg.type === "image" && msg.imageUrl && !msg.isDeleted
     );
@@ -2272,8 +2267,6 @@ const ChatScreen = () => {
                 const uploadId = `camera_${Date.now()}_${Math.random()
                   .toString(36)
                   .substring(7)}`;
-
-                // Add to uploading state
                 setUploadingMessages((prev) => [
                   ...prev,
                   {
