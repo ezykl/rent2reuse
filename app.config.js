@@ -7,7 +7,7 @@
     icon: 'src/assets/images/logo-small.png',
     android: {
       package: 'com.zykdev.r2r',
-      
+
       adaptiveIcon: {
         foregroundImage: 'src/assets/adaptive-icon.png',
         backgroundColor: '#FFFFFF',

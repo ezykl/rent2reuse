@@ -923,12 +923,32 @@ const Profile: React.FC = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => router.push("/plans")}
+                onPress={() => router.push("/payment-options")}
                 className="flex-row items-center px-6 py-4"
                 disabled={!isProfileComplete}
               >
                 <Image
                   source={icons.card}
+                  className="w-6 h-6 mr-3"
+                  tintColor="#6B7280"
+                />
+                <Text className="flex-1 font-pmedium text-gray-800">
+                  Payment Options
+                </Text>
+                <Image
+                  source={icons.arrowRight}
+                  className="w-5 h-5"
+                  tintColor="#9CA3AF"
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push("/plans")}
+                className="flex-row items-center px-6 py-4"
+                disabled={!isProfileComplete}
+              >
+                <Image
+                  source={icons.sparkle}
                   className="w-6 h-6 mr-3"
                   tintColor="#6B7280"
                 />

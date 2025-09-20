@@ -10,7 +10,7 @@ import {
 import { db } from "@/lib/firebaseConfig";
 import { updateEmail } from "firebase/auth";
 
-export const verifyEmailToken = async (token: string, userId: string) => {
+const verifyEmailToken = async (token: string, userId: string) => {
   try {
     // Find the verification token
     const tokensRef = collection(db, "verification-tokens");
@@ -75,3 +75,5 @@ export const handleVerificationLink = async (url: string) => {
     return { success: false, error: error.message };
   }
 };
+
+export default verifyEmailToken;
