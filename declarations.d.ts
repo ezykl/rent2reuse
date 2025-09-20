@@ -20,4 +20,9 @@ declare module "@env" {
   export const FACE_PLUS_PLUS_API_KEY: string;
   export const FACE_PLUS_PLUS_API_SECRET: string;
   export const EXCHANGE_RATE_API_KEY: string;
+
+  export const EXPO_PUBLIC_PAYPAL_CLIENT_ID: string;
+  export const EXPO_PUBLIC_PAYPAL_CLIENT_SECRET: string;
+  export const EXPO_PUBLIC_PAYPAL_BASE_URL: string;
+  export const EXPO_PUBLIC_PAYPAL_SANDBOX: boolean;
 }
