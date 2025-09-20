@@ -57,23 +57,7 @@ setInterval(fetchExchangeRate, 30 * 60 * 1000);
 fetchExchangeRate();
 
 const DatabaseHelper = {
-  // saveTransaction: async (transactionData: TransactionData) => {
-  //   try {
-  //     const response = await fetch("YOUR_API_ENDPOINT/transactions", {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify(transactionData),
-  //     });
-  //     return await response.json();
-  //   } catch (error) {
-  //     console.error("Database save error:", error);
-  //     throw error;
-  //   }
-  // },
 
-  // Generate transaction ID
   generateTransactionId: () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 10000);

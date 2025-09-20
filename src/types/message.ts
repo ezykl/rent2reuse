@@ -3,7 +3,8 @@ type MessageType =
   | "rentRequest"
   | "statusUpdate"
   | "image"
-  | "paymentRequest";
+  | "paymentRequest"
+  | "payment";
 
 export default interface Message {
   isDeleted?: boolean;
@@ -38,4 +39,13 @@ export default interface Message {
     message: string;
     status: string;
   };
+  paymentType?: "initial" | "full";
+  amount?: number;
+  totalAmount?: number;
+  downpaymentPercentage?: number;
+  paypalOrderId?: string;
+  transactionId?: string;
+  paidAt?: any;
+  confirmedByOwner?: boolean;
+  confirmedAt?: any;
 }

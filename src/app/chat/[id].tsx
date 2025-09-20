@@ -83,6 +83,7 @@ import RentRequestMessage from "@/components/chatModal/RentRequestMessage";
 import ActionMenu from "@/components/chatModal/ActionMenu";
 import MessageActionsModal from "@/components/chatModal/MessageActionsModal";
 import Message from "@/types/message";
+import PaymentMessage from "@/components/chatModal/PaymentMessage";
 
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return "";
@@ -120,7 +121,6 @@ interface MessageSelection {
   isSelecting: boolean;
   selectedMessages: string[];
 }
-
 
 const ChatScreen = () => {
   const { id: chatId } = useLocalSearchParams();
@@ -229,7 +229,6 @@ const ChatScreen = () => {
     );
   }
   const handleImagePress = (selectedImageUrl: string) => {
-
     const imageMessages = messages.filter(
       (msg) => msg.type === "image" && msg.imageUrl && !msg.isDeleted
     );
@@ -379,6 +378,120 @@ const ChatScreen = () => {
         },
       },
     ]);
+  };
+
+  const sendPaymentMessage = async (paymentType: "initial" | "full") => {
+    if (!chatData || !chatData.itemDetails) {
+      Alert.alert("Error", "Item details not found");
+      return;
+    }
+
+    try {
+      const { totalPrice, downpaymentPercentage = 0 } = chatData.itemDetails;
+
+      if (!totalPrice) {
+        Alert.alert("Error", "Total price not available");
+        return;
+      }
+
+      let amount: number;
+      if (paymentType === "initial") {
+        if (downpaymentPercentage === 0) {
+          Alert.alert("Error", "No downpayment required for this item");
+          return;
+        }
+        amount = (totalPrice * downpaymentPercentage) / 100;
+      } else {
+        // Full payment
+        if (downpaymentPercentage > 0) {
+          // Calculate remaining amount after downpayment
+          const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
+          amount = totalPrice - downpaymentAmount;
+        } else {
+          // Full amount if no downpayment
+          amount = totalPrice;
+        }
+      }
+
+      const chatRef = doc(db, "chat", String(chatId));
+      const chatSnap = await getDoc(chatRef);
+
+      if (!chatSnap.exists()) {
+        Alert.alert("Error", "Chat not found");
+        return;
+      }
+
+      const currentChatData = chatSnap.data();
+      const recipientId = currentChatData.participants.find(
+        (id: string) => id !== currentUserId
+      );
+
+      const paymentMessageData = {
+        senderId: currentUserId,
+        type: "payment",
+        paymentType: paymentType,
+        amount: amount,
+        totalAmount: totalPrice,
+        downpaymentPercentage: downpaymentPercentage,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        read: false,
+        readAt: null,
+      };
+
+      // Add message to subcollection
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      await addDoc(messagesRef, paymentMessageData);
+
+      // Update chat document
+      const updateData = {
+        lastMessage: `Payment request: ${
+          paymentType === "initial" ? "Initial Payment" : "Full Payment"
+        }`,
+        lastMessageTime: serverTimestamp(),
+        lastSender: currentUserId,
+        [`unreadCounts.${recipientId}`]: increment(1),
+      };
+
+      await updateDoc(chatRef, updateData);
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Payment Request Sent",
+        textBody: `${
+          paymentType === "initial" ? "Initial" : "Full"
+        } payment request sent successfully`,
+      });
+    } catch (error) {
+      console.error("Error sending payment message:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to send payment request",
+      });
+    }
+  };
+
+  const handleInitialPayment = () => {
+    Alert.alert(
+      "Send Initial Payment Request",
+      `Send an initial payment request to the renter?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Send", onPress: () => sendPaymentMessage("initial") },
+      ]
+    );
+  };
+
+  const handleFullPayment = () => {
+    Alert.alert(
+      "Send Full Payment Request",
+      `Send a full payment request to the renter?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Send", onPress: () => sendPaymentMessage("full") },
+      ]
+    );
   };
 
   const handleSaveImage = async () => {
@@ -1229,6 +1342,36 @@ const ChatScreen = () => {
           },
         ]
       : []),
+
+    // ADD THESE PAYMENT BUTTONS - Only show if current user is owner
+    ...(currentUserId === chatData?.ownerId
+      ? [
+          // Initial Payment button - only show if downpayment percentage > 0
+          ...(chatData?.itemDetails?.downpaymentPercentage &&
+          chatData.itemDetails.downpaymentPercentage > 0
+            ? [
+                {
+                  id: "initial_payment",
+                  icon: icons.card, // Make sure you have a wallet icon
+                  label: "Request Initial Payment",
+                  action: handleInitialPayment,
+                  bgColor: "#FFF3E0",
+                  iconColor: "#FF9800",
+                },
+              ]
+            : []),
+          // Full Payment button - always available for owners
+          {
+            id: "full_payment",
+            icon: icons.card, // Make sure you have a credit card icon
+            label: "Request Full Payment",
+            action: handleFullPayment,
+            bgColor: "#E8F5E8",
+            iconColor: "#4CAF50",
+          },
+        ]
+      : []),
+
     {
       id: "2",
       icon: icons.arrowDown,
@@ -1926,7 +2069,6 @@ const ChatScreen = () => {
               previousMessage
             );
             const isCurrentUser = item.senderId === currentUserId;
-
             return (
               <View>
                 {showDaySeparator && (
@@ -1942,6 +2084,29 @@ const ChatScreen = () => {
                     onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
                     chatData={chatData}
                     chatId={String(chatId)}
+                  />
+                ) : item.type === "payment" ? (
+                  // Type guard to ensure item has all required payment properties
+                  <PaymentMessage
+                    item={{
+                      id: item.id,
+                      senderId: item.senderId,
+                      type: "payment",
+                      paymentType: item.paymentType as "initial" | "full",
+                      amount: item.amount as number,
+                      totalAmount: item.totalAmount as number,
+                      downpaymentPercentage: item.downpaymentPercentage,
+                      status:
+                        (item.status as "pending" | "paid" | "failed") ||
+                        "pending",
+                      createdAt: item.createdAt,
+                      confirmedByOwner: item.confirmedByOwner,
+                    }}
+                    isCurrentUser={isCurrentUser}
+                    isOwner={currentUserId === chatData?.ownerId}
+                    chatId={String(chatId)}
+                    currentUserId={currentUserId}
+                    itemDetails={chatData?.itemDetails}
                   />
                 ) : item.type === "statusUpdate" ? (
                   <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">
