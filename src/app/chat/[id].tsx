@@ -84,6 +84,7 @@ import ActionMenu from "@/components/chatModal/ActionMenu";
 import MessageActionsModal from "@/components/chatModal/MessageActionsModal";
 import Message from "@/types/message";
 import PaymentMessage from "@/components/chatModal/PaymentMessage";
+import CustomAlert from "@/components/CustomAlert";
 
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return "";
@@ -145,6 +146,13 @@ const ChatScreen = () => {
   const [requestStatuses, setRequestStatuses] = useState<
     Record<string, string>
   >({});
+
+  const [showPayPalAlert, setShowPayPalAlert] = useState(false);
+  const [pendingPaymentType, setPendingPaymentType] = useState<
+    "initial" | "full" | null
+  >(null);
+  const [recipientPayPalEmail, setRecipientPayPalEmail] = useState("");
+  const [isCheckingPayPal, setIsCheckingPayPal] = useState(false);
 
   const [showMessageActions, setShowMessageActions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -208,7 +216,62 @@ const ChatScreen = () => {
   }, [messages.length > 0, loading]);
 
   useEffect(() => {
-    // Only auto-scroll for new messages if user is not manually scrolling and is near the bottom
+    const fetchRecipientPayPalEmail = async () => {
+      if (!chatData || !currentUserId) return;
+
+      const recipientId =
+        chatData.ownerId === currentUserId
+          ? chatData.requesterId
+          : chatData.ownerId;
+
+      try {
+        setIsCheckingPayPal(true);
+        const recipientRef = doc(db, "users", recipientId);
+        const recipientSnap = await getDoc(recipientRef);
+
+        if (recipientSnap.exists()) {
+          const recipientData = recipientSnap.data();
+          setRecipientPayPalEmail(recipientData.paypalEmail || "");
+        }
+      } catch (error) {
+        console.error("Error fetching recipient PayPal email:", error);
+        setRecipientPayPalEmail("");
+      } finally {
+        setIsCheckingPayPal(false);
+      }
+    };
+
+    fetchRecipientPayPalEmail();
+  }, [chatData, currentUserId]);
+
+  useEffect(() => {
+    if (!chatData || !currentUserId) return;
+
+    const recipientId =
+      chatData.ownerId === currentUserId
+        ? chatData.requesterId
+        : chatData.ownerId;
+
+    // Set up real-time listener for recipient's user document
+    const recipientRef = doc(db, "users", recipientId);
+
+    const unsubscribe = onSnapshot(
+      recipientRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const recipientData = docSnap.data();
+          setRecipientPayPalEmail(recipientData.paypalEmail || "");
+        }
+      },
+      (error) => {
+        console.error("Error listening to recipient PayPal updates:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [chatData, currentUserId]);
+
+  useEffect(() => {
     if (
       !isUserScrolling &&
       !showScrollToBottom &&
@@ -269,6 +332,122 @@ const ChatScreen = () => {
     setEditText(currentText);
     setShowMessageActions(false);
     setSelectedMessage(null);
+  };
+
+  const sendPaymentMessage = async (paymentType: "initial" | "full") => {
+    if (!chatData || !chatData.itemDetails) {
+      Alert.alert("Error", "Item details not found");
+      return;
+    }
+
+    try {
+      // Check if PayPal email is available (use the state variable)
+      if (!recipientPayPalEmail || recipientPayPalEmail.trim() === "") {
+        // Show custom alert to redirect to payment options
+        setPendingPaymentType(paymentType);
+        setShowPayPalAlert(true);
+        return;
+      }
+
+      const { totalPrice, downpaymentPercentage = 0 } = chatData.itemDetails;
+
+      if (!totalPrice) {
+        Alert.alert("Error", "Total price not available");
+        return;
+      }
+
+      // Calculate payment amount
+      let amount: number;
+      if (paymentType === "initial") {
+        if (downpaymentPercentage === 0) {
+          Alert.alert("Error", "No downpayment required for this item");
+          return;
+        }
+        amount = (totalPrice * downpaymentPercentage) / 100;
+      } else {
+        // Full payment
+        if (downpaymentPercentage > 0) {
+          // Calculate remaining amount after downpayment
+          const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
+          amount = totalPrice - downpaymentAmount;
+        } else {
+          // Full amount if no downpayment
+          amount = totalPrice;
+        }
+      }
+
+      const recipientId =
+        chatData.ownerId === currentUserId
+          ? chatData.requesterId
+          : chatData.ownerId;
+
+      const paymentMessageData = {
+        senderId: currentUserId,
+        type: "payment",
+        paymentType: paymentType,
+        amount: amount,
+        totalAmount: totalPrice,
+        downpaymentPercentage: downpaymentPercentage,
+        status: "pending",
+        recipientPayPalEmail: recipientPayPalEmail, // Use the state variable
+        createdAt: serverTimestamp(),
+        read: false,
+        readAt: null,
+      };
+
+      // Add message to subcollection
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      await addDoc(messagesRef, paymentMessageData);
+
+      // Update chat document
+      const chatRef = doc(db, "chat", String(chatId));
+      const updateData = {
+        lastMessage: `Payment request: ${
+          paymentType === "initial" ? "Initial Payment" : "Full Payment"
+        }`,
+        lastMessageTime: serverTimestamp(),
+        lastSender: currentUserId,
+        [`unreadCounts.${recipientId}`]: increment(1),
+      };
+
+      await updateDoc(chatRef, updateData);
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Payment Request Sent",
+        textBody: `${
+          paymentType === "initial" ? "Initial" : "Full"
+        } payment request sent successfully`,
+      });
+    } catch (error) {
+      console.error("Error sending payment message:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to send payment request",
+      });
+    }
+  };
+
+  const handlePayPalAlertAction = (action: "setup" | "cancel") => {
+    setShowPayPalAlert(false);
+    if (action === "setup") {
+      // Navigate to payment options screen
+      router.push("/payment-options");
+    }
+    // Reset pending payment type
+    setPendingPaymentType(null);
+  };
+
+  const handleInitialPayment = () => {
+    Alert.alert(
+      "Send Initial Payment Request",
+      `Send an initial payment request to the renter?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Send", onPress: () => sendPaymentMessage("initial") },
+      ]
+    );
   };
 
   const handleMessageDelete = async (messageId: string) => {
@@ -378,109 +557,6 @@ const ChatScreen = () => {
         },
       },
     ]);
-  };
-
-  const sendPaymentMessage = async (paymentType: "initial" | "full") => {
-    if (!chatData || !chatData.itemDetails) {
-      Alert.alert("Error", "Item details not found");
-      return;
-    }
-
-    try {
-      const { totalPrice, downpaymentPercentage = 0 } = chatData.itemDetails;
-
-      if (!totalPrice) {
-        Alert.alert("Error", "Total price not available");
-        return;
-      }
-
-      let amount: number;
-      if (paymentType === "initial") {
-        if (downpaymentPercentage === 0) {
-          Alert.alert("Error", "No downpayment required for this item");
-          return;
-        }
-        amount = (totalPrice * downpaymentPercentage) / 100;
-      } else {
-        // Full payment
-        if (downpaymentPercentage > 0) {
-          // Calculate remaining amount after downpayment
-          const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
-          amount = totalPrice - downpaymentAmount;
-        } else {
-          // Full amount if no downpayment
-          amount = totalPrice;
-        }
-      }
-
-      const chatRef = doc(db, "chat", String(chatId));
-      const chatSnap = await getDoc(chatRef);
-
-      if (!chatSnap.exists()) {
-        Alert.alert("Error", "Chat not found");
-        return;
-      }
-
-      const currentChatData = chatSnap.data();
-      const recipientId = currentChatData.participants.find(
-        (id: string) => id !== currentUserId
-      );
-
-      const paymentMessageData = {
-        senderId: currentUserId,
-        type: "payment",
-        paymentType: paymentType,
-        amount: amount,
-        totalAmount: totalPrice,
-        downpaymentPercentage: downpaymentPercentage,
-        status: "pending",
-        createdAt: serverTimestamp(),
-        read: false,
-        readAt: null,
-      };
-
-      // Add message to subcollection
-      const messagesRef = collection(db, "chat", String(chatId), "messages");
-      await addDoc(messagesRef, paymentMessageData);
-
-      // Update chat document
-      const updateData = {
-        lastMessage: `Payment request: ${
-          paymentType === "initial" ? "Initial Payment" : "Full Payment"
-        }`,
-        lastMessageTime: serverTimestamp(),
-        lastSender: currentUserId,
-        [`unreadCounts.${recipientId}`]: increment(1),
-      };
-
-      await updateDoc(chatRef, updateData);
-
-      Toast.show({
-        type: ALERT_TYPE.SUCCESS,
-        title: "Payment Request Sent",
-        textBody: `${
-          paymentType === "initial" ? "Initial" : "Full"
-        } payment request sent successfully`,
-      });
-    } catch (error) {
-      console.error("Error sending payment message:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody: "Failed to send payment request",
-      });
-    }
-  };
-
-  const handleInitialPayment = () => {
-    Alert.alert(
-      "Send Initial Payment Request",
-      `Send an initial payment request to the renter?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Send", onPress: () => sendPaymentMessage("initial") },
-      ]
-    );
   };
 
   const handleFullPayment = () => {
@@ -2473,6 +2549,25 @@ const ChatScreen = () => {
             />
           </Modal>
         )}
+
+        <CustomAlert
+          visible={showPayPalAlert}
+          title="PayPal Setup Required"
+          message="The recipient needs to set up their PayPal email to receive payments. Please ask them to configure their payment options first."
+          buttons={[
+            {
+              text: "Cancel",
+              type: "cancel",
+              onPress: () => handlePayPalAlertAction("cancel"),
+            },
+            {
+              text: "Setup Payment Options",
+              type: "default",
+              onPress: () => handlePayPalAlertAction("setup"),
+            },
+          ]}
+          onClose={() => setShowPayPalAlert(false)}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
