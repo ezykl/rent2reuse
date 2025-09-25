@@ -32,7 +32,7 @@ const ActionMenu = ({
         className="flex-1 bg-black/10 px-2 justify-end item"
       >
         <View className="mb-2 py-4 flex bg-white rounded-3xl shadow-lg">
-          <View className="flex-row border justify-center ">
+          <View className="flex-row justify-center ">
             {items.map((item) => (
               <TouchableOpacity
                 key={item.id}

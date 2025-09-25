@@ -151,7 +151,7 @@ const ChatScreen = () => {
   const [pendingPaymentType, setPendingPaymentType] = useState<
     "initial" | "full" | null
   >(null);
-  const [recipientPayPalEmail, setRecipientPayPalEmail] = useState("");
+  const [currentUserPayPalEmail, setCurrentUserPayPalEmail] = useState("");
   const [isCheckingPayPal, setIsCheckingPayPal] = useState(false);
 
   const [showMessageActions, setShowMessageActions] = useState(false);
@@ -216,60 +216,50 @@ const ChatScreen = () => {
   }, [messages.length > 0, loading]);
 
   useEffect(() => {
-    const fetchRecipientPayPalEmail = async () => {
-      if (!chatData || !currentUserId) return;
-
-      const recipientId =
-        chatData.ownerId === currentUserId
-          ? chatData.requesterId
-          : chatData.ownerId;
+    const fetchCurrentUserPayPalEmail = async () => {
+      if (!currentUserId) return;
 
       try {
         setIsCheckingPayPal(true);
-        const recipientRef = doc(db, "users", recipientId);
-        const recipientSnap = await getDoc(recipientRef);
+        const currentUserRef = doc(db, "users", currentUserId);
+        const currentUserSnap = await getDoc(currentUserRef);
 
-        if (recipientSnap.exists()) {
-          const recipientData = recipientSnap.data();
-          setRecipientPayPalEmail(recipientData.paypalEmail || "");
+        if (currentUserSnap.exists()) {
+          const currentUserData = currentUserSnap.data();
+          setCurrentUserPayPalEmail(currentUserData.paypalEmail || "");
         }
       } catch (error) {
-        console.error("Error fetching recipient PayPal email:", error);
-        setRecipientPayPalEmail("");
+        console.error("Error fetching current user PayPal email:", error);
+        setCurrentUserPayPalEmail("");
       } finally {
         setIsCheckingPayPal(false);
       }
     };
 
-    fetchRecipientPayPalEmail();
-  }, [chatData, currentUserId]);
+    fetchCurrentUserPayPalEmail();
+  }, [currentUserId]);
 
   useEffect(() => {
-    if (!chatData || !currentUserId) return;
+    if (!currentUserId) return;
 
-    const recipientId =
-      chatData.ownerId === currentUserId
-        ? chatData.requesterId
-        : chatData.ownerId;
-
-    // Set up real-time listener for recipient's user document
-    const recipientRef = doc(db, "users", recipientId);
+    // Set up real-time listener for current user's document
+    const currentUserRef = doc(db, "users", currentUserId);
 
     const unsubscribe = onSnapshot(
-      recipientRef,
+      currentUserRef,
       (docSnap) => {
         if (docSnap.exists()) {
-          const recipientData = docSnap.data();
-          setRecipientPayPalEmail(recipientData.paypalEmail || "");
+          const currentUserData = docSnap.data();
+          setCurrentUserPayPalEmail(currentUserData.paypalEmail || "");
         }
       },
       (error) => {
-        console.error("Error listening to recipient PayPal updates:", error);
+        console.error("Error listening to current user PayPal updates:", error);
       }
     );
 
     return () => unsubscribe();
-  }, [chatData, currentUserId]);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (
@@ -341,8 +331,8 @@ const ChatScreen = () => {
     }
 
     try {
-      // Check if PayPal email is available (use the state variable)
-      if (!recipientPayPalEmail || recipientPayPalEmail.trim() === "") {
+      // Check if current user (owner) has PayPal email set up
+      if (!currentUserPayPalEmail || currentUserPayPalEmail.trim() === "") {
         // Show custom alert to redirect to payment options
         setPendingPaymentType(paymentType);
         setShowPayPalAlert(true);
@@ -376,6 +366,7 @@ const ChatScreen = () => {
         }
       }
 
+      // Get recipient (renter) ID
       const recipientId =
         chatData.ownerId === currentUserId
           ? chatData.requesterId
@@ -389,7 +380,8 @@ const ChatScreen = () => {
         totalAmount: totalPrice,
         downpaymentPercentage: downpaymentPercentage,
         status: "pending",
-        recipientPayPalEmail: recipientPayPalEmail, // Use the state variable
+        ownerPayPalEmail: currentUserPayPalEmail, // Owner's PayPal email (current user)
+        recipientId: recipientId, // The renter who will receive the payment request
         createdAt: serverTimestamp(),
         read: false,
         readAt: null,
