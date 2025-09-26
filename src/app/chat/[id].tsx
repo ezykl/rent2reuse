@@ -382,6 +382,10 @@ const ChatScreen = () => {
         status: "pending",
         ownerPayPalEmail: currentUserPayPalEmail, // Owner's PayPal email (current user)
         recipientId: recipientId, // The renter who will receive the payment request
+        recipientPayPalEmail: currentUserPayPalEmail, // CHANGE: Owner's email instead of recipient
+        paypalOrderId: null, // CHANGE: null instead of paypalInvoiceId
+        paypalApprovalUrl: null, // ADD: Store approval URL
+        paypalCaptureId: null, // ADD: Store capture ID when completed
         createdAt: serverTimestamp(),
         read: false,
         readAt: null,

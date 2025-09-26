@@ -6,6 +6,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import { icons, images } from "@/constant";
 import { format } from "date-fns";
@@ -20,9 +21,10 @@ import { db } from "@/lib/firebaseConfig";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import {
   getPayPalAccessToken,
-  createPayPalInvoice,
-  sendPayPalInvoice,
-  getPayPalInvoiceStatus,
+  createPayPalOrder, // CHANGE: from createPayPalInvoice
+  getPayPalOrderApprovalUrl, // ADD: new function
+  capturePayPalOrder, // ADD: new function
+  getPayPalOrderStatus, // CHANGE: from getPayPalInvoiceStatus
   PAYPAL_CLIENT_ID,
   PAYPAL_CLIENT_SECRET,
   DatabaseHelper,
@@ -37,10 +39,12 @@ interface PaymentMessageProps {
     amount: number;
     totalAmount: number;
     downpaymentPercentage?: number;
-    status: "pending" | "sent" | "paid" | "failed";
+    status: "pending" | "pending_approval" | "paid" | "failed"; // REMOVE "sent"
     createdAt: any;
     recipientPayPalEmail?: string;
-    paypalInvoiceId?: string;
+    paypalOrderId?: string; // ADD: replace paypalInvoiceId
+    paypalApprovalUrl?: string; // ADD: new field
+    paypalCaptureId?: string; // ADD: new field
     transactionId?: string;
     paidAt?: any;
     sentAt?: any;
@@ -67,6 +71,52 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
 
+  // Add this useEffect to auto-check payment status periodically
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    // Only auto-check if status is pending_approval and user is the owner
+    if (item.status === "pending_approval" && isCurrentUser) {
+      interval = setInterval(async () => {
+        try {
+          if (item.paypalOrderId) {
+            const token = await getPayPalAccessToken(
+              PAYPAL_CLIENT_ID,
+              PAYPAL_CLIENT_SECRET
+            );
+            const orderStatus = await getPayPalOrderStatus(
+              token,
+              item.paypalOrderId
+            );
+
+            if (orderStatus.status === "APPROVED") {
+              // Auto-capture the payment
+              const captureResult = await capturePayPalOrder(
+                token,
+                item.paypalOrderId
+              );
+
+              if (captureResult.status === "COMPLETED") {
+                const messageRef = doc(db, "chat", chatId, "messages", item.id);
+                await updateDoc(messageRef, {
+                  status: "paid",
+                  paidAt: serverTimestamp(),
+                  paypalCaptureId: captureResult.id,
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Auto-check payment error:", error);
+        }
+      }, 30000); // Check every 30 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [item.status, item.paypalOrderId, isCurrentUser]);
+
   const getPaymentTypeLabel = () => {
     if (item.paymentType === "initial") {
       const percentage = item.downpaymentPercentage || 0;
@@ -86,7 +136,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   // Send PayPal Invoice
   const handleSendInvoice = async () => {
     if (!item.recipientPayPalEmail) {
-      Alert.alert("Error", "Recipient PayPal email not found");
+      Alert.alert("Error", "Owner PayPal email not found");
       return;
     }
 
@@ -99,11 +149,11 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         PAYPAL_CLIENT_SECRET
       );
 
-      // Create PayPal invoice
-      const invoice = await createPayPalInvoice(
+      // Create PayPal order (not invoice)
+      const order = await createPayPalOrder(
         token,
-        item.recipientPayPalEmail,
         item.amount,
+        item.recipientPayPalEmail, // Owner's email as payee
         {
           itemName: getPaymentTypeLabel(),
           itemDescription: getPaymentDescription(),
@@ -114,55 +164,54 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         }
       );
 
-      // Send the invoice
-      await sendPayPalInvoice(
-        token,
-        invoice.id,
-        `Payment Request: ${getPaymentTypeLabel()}`,
-        `Hi! You have a payment request for ${getPaymentTypeLabel()} of ₱${item.amount.toFixed(
-          2
-        )} for ${
-          itemDetails?.name || "your rental"
-        }. Please complete this payment at your convenience.`
-      );
+      if (order.status === "CREATED") {
+        // Get approval URL
+        const approvalUrl = getPayPalOrderApprovalUrl(order);
 
-      // Update the message in Firestore
-      const messageRef = doc(db, "chat", chatId, "messages", item.id);
-      await updateDoc(messageRef, {
-        status: "sent",
-        paypalInvoiceId: invoice.id,
-        sentAt: serverTimestamp(),
-      });
+        if (approvalUrl) {
+          // Update the message with order ID and approval URL
+          const messageRef = doc(db, "chat", chatId, "messages", item.id);
+          await updateDoc(messageRef, {
+            status: "pending_approval",
+            paypalOrderId: order.id,
+            paypalApprovalUrl: approvalUrl,
+            sentAt: serverTimestamp(),
+          });
 
-      // Update chat last message
-      const chatRef = doc(db, "chat", chatId);
-      await updateDoc(chatRef, {
-        lastMessage: `PayPal invoice sent: ${getPaymentTypeLabel()}`,
-        lastMessageTime: serverTimestamp(),
-      });
+          // Update chat last message
+          const chatRef = doc(db, "chat", chatId);
+          await updateDoc(chatRef, {
+            lastMessage: `Payment order created: ${getPaymentTypeLabel()}`,
+            lastMessageTime: serverTimestamp(),
+          });
 
-      // Add a system message about invoice sent
-      const messagesRef = collection(db, "chat", chatId, "messages");
-      await addDoc(messagesRef, {
-        type: "statusUpdate",
-        text: `PayPal invoice sent to ${item.recipientPayPalEmail}`,
-        senderId: currentUserId,
-        createdAt: serverTimestamp(),
-        read: false,
-        status: "sent",
-      });
+          // Add a system message
+          const messagesRef = collection(db, "chat", chatId, "messages");
+          await addDoc(messagesRef, {
+            type: "statusUpdate",
+            text: `Payment order created for ${getPaymentTypeLabel()}`,
+            senderId: currentUserId,
+            createdAt: serverTimestamp(),
+            read: false,
+            status: "pending_approval",
+          });
 
-      Toast.show({
-        type: ALERT_TYPE.SUCCESS,
-        title: "Invoice Sent",
-        textBody: `PayPal invoice sent to ${item.recipientPayPalEmail}`,
-      });
+          // Open PayPal checkout
+          await Linking.openURL(approvalUrl);
+
+          Toast.show({
+            type: ALERT_TYPE.SUCCESS,
+            title: "Payment Order Created",
+            textBody: "Redirecting to PayPal for payment...",
+          });
+        }
+      }
     } catch (error) {
-      console.error("Invoice sending error:", error);
+      console.error("Order creation error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to send PayPal invoice. Please try again.",
+        textBody: "Failed to create payment order. Please try again.",
       });
     } finally {
       setLoading(false);
@@ -171,8 +220,8 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
 
   // Check payment status from PayPal
   const handleCheckPaymentStatus = async () => {
-    if (!item.paypalInvoiceId) {
-      Alert.alert("Error", "No invoice ID found");
+    if (!item.paypalOrderId) {
+      Alert.alert("Error", "No order ID found");
       return;
     }
 
@@ -184,48 +233,33 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         PAYPAL_CLIENT_SECRET
       );
 
-      const invoiceStatus = await getPayPalInvoiceStatus(
-        token,
-        item.paypalInvoiceId
-      );
+      const orderStatus = await getPayPalOrderStatus(token, item.paypalOrderId);
 
-      // Update message status based on PayPal response
-      let newStatus = item.status;
-      if (
-        invoiceStatus.status === "PAID" ||
-        invoiceStatus.status === "MARKED_AS_PAID"
-      ) {
-        newStatus = "paid";
+      if (orderStatus.status === "APPROVED") {
+        const captureResult = await capturePayPalOrder(
+          token,
+          item.paypalOrderId
+        );
 
-        // Update the message
-        const messageRef = doc(db, "chat", chatId, "messages", item.id);
-        await updateDoc(messageRef, {
-          status: "paid",
-          paidAt: serverTimestamp(),
-          transactionId: invoiceStatus.id,
-        });
+        if (captureResult.status === "COMPLETED") {
+          const messageRef = doc(db, "chat", chatId, "messages", item.id);
+          await updateDoc(messageRef, {
+            status: "paid",
+            paidAt: serverTimestamp(),
+            paypalCaptureId: captureResult.id,
+          });
 
-        // Add status message
-        const messagesRef = collection(db, "chat", chatId, "messages");
-        await addDoc(messagesRef, {
-          type: "statusUpdate",
-          text: `${getPaymentTypeLabel()} completed via PayPal`,
-          senderId: currentUserId,
-          createdAt: serverTimestamp(),
-          read: false,
-          status: "paid",
-        });
-
-        Toast.show({
-          type: ALERT_TYPE.SUCCESS,
-          title: "Payment Received",
-          textBody: "Payment has been completed!",
-        });
+          Toast.show({
+            type: ALERT_TYPE.SUCCESS,
+            title: "Payment Completed",
+            textBody: "Payment has been captured successfully!",
+          });
+        }
       } else {
         Toast.show({
           type: ALERT_TYPE.WARNING,
           title: "Payment Pending",
-          textBody: `Payment status: ${invoiceStatus.status}`,
+          textBody: `Payment status: ${orderStatus.status}`,
         });
       }
     } catch (error) {
@@ -239,12 +273,11 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       setCheckingStatus(false);
     }
   };
-
   const getStatusColor = () => {
     switch (item.status) {
       case "paid":
         return "#10B981"; // green
-      case "sent":
+      case "pending_approval":
         return "#3B82F6"; // blue
       case "failed":
         return "#EF4444"; // red
@@ -257,18 +290,17 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
     switch (item.status) {
       case "paid":
         return "Paid";
-      case "sent":
-        return "Invoice Sent";
+      case "pending_approval":
+        return "Awaiting Payment";
       case "failed":
         return "Failed";
       default:
         return "Pending";
     }
   };
-
   return (
-    <View className="flex-row justify-center mb-3">
-      <View className="bg-white rounded-2xl p-4 border border-gray-200 max-w-[85%] min-w-[280px]">
+    <View className={`flex-1 mb-3 ${isOwner ? "pl-24" : "pr-24"}`}>
+      <View className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
         {/* Header */}
         <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center">
@@ -350,18 +382,35 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
               <View className="flex-row items-center justify-center">
                 <ActivityIndicator color="white" size="small" />
                 <Text className="text-white font-pmedium ml-2">
-                  Sending Invoice...
+                  Creating Payment Order...
                 </Text>
               </View>
             ) : (
               <Text className="text-white font-pmedium text-center">
-                Send PayPal Invoice
+                Create Payment Request
               </Text>
             )}
           </TouchableOpacity>
         )}
 
-        {item.status === "sent" && isCurrentUser && (
+        {item.status === "pending" && !isOwner && (
+          <TouchableOpacity
+            onPress={async () => {
+              if (item.paypalApprovalUrl) {
+                await Linking.openURL(item.paypalApprovalUrl);
+              } else {
+                Alert.alert("Error", "Payment link not available");
+              }
+            }}
+            className="rounded-xl py-3 px-4 bg-blue-500"
+          >
+            <Text className="text-white font-pmedium text-center">
+              Pay with PayPal
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {item.status === "pending_approval" && isCurrentUser && (
           <TouchableOpacity
             onPress={handleCheckPaymentStatus}
             disabled={checkingStatus}
@@ -369,27 +418,10 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
               checkingStatus ? "bg-green-300" : "bg-green-500"
             }`}
           >
-            {checkingStatus ? (
-              <View className="flex-row items-center justify-center">
-                <ActivityIndicator color="white" size="small" />
-                <Text className="text-white font-pmedium ml-2">
-                  Checking Status...
-                </Text>
-              </View>
-            ) : (
-              <Text className="text-white font-pmedium text-center">
-                Check Payment Status
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {item.status === "sent" && !isCurrentUser && (
-          <View className="rounded-xl py-3 px-4 bg-blue-100">
-            <Text className="text-blue-700 font-pmedium text-center">
-              Invoice sent to your PayPal email
+            <Text className="text-white font-pmedium text-center">
+              Check Payment Status
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
 
         {item.status === "paid" && (
@@ -419,10 +451,11 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           )}
         </View>
 
-        {/* Transaction/Invoice ID */}
-        {(item.transactionId || item.paypalInvoiceId) && (
+        {/* Transaction/Order ID */}
+        {(item.transactionId || item.paypalOrderId || item.paypalCaptureId) && (
           <Text className="text-xs text-gray-400 mt-1">
-            ID: {item.transactionId || item.paypalInvoiceId}
+            ID:{" "}
+            {item.transactionId || item.paypalCaptureId || item.paypalOrderId}
           </Text>
         )}
       </View>
