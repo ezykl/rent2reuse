@@ -85,6 +85,8 @@ import MessageActionsModal from "@/components/chatModal/MessageActionsModal";
 import Message from "@/types/message";
 import PaymentMessage from "@/components/chatModal/PaymentMessage";
 import CustomAlert from "@/components/CustomAlert";
+import { DatabaseHelper } from "@/utils/paypalHelper";
+import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "@env";
 
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return "";
@@ -333,7 +335,6 @@ const ChatScreen = () => {
     try {
       // Check if current user (owner) has PayPal email set up
       if (!currentUserPayPalEmail || currentUserPayPalEmail.trim() === "") {
-        // Show custom alert to redirect to payment options
         setPendingPaymentType(paymentType);
         setShowPayPalAlert(true);
         return;
@@ -357,11 +358,9 @@ const ChatScreen = () => {
       } else {
         // Full payment
         if (downpaymentPercentage > 0) {
-          // Calculate remaining amount after downpayment
           const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
           amount = totalPrice - downpaymentAmount;
         } else {
-          // Full amount if no downpayment
           amount = totalPrice;
         }
       }
@@ -380,12 +379,9 @@ const ChatScreen = () => {
         totalAmount: totalPrice,
         downpaymentPercentage: downpaymentPercentage,
         status: "pending",
-        ownerPayPalEmail: currentUserPayPalEmail, // Owner's PayPal email (current user)
-        recipientId: recipientId, // The renter who will receive the payment request
-        recipientPayPalEmail: currentUserPayPalEmail, // CHANGE: Owner's email instead of recipient
-        paypalOrderId: null, // CHANGE: null instead of paypalInvoiceId
-        paypalApprovalUrl: null, // ADD: Store approval URL
-        paypalCaptureId: null, // ADD: Store capture ID when completed
+        recipientPayPalEmail: currentUserPayPalEmail,
+        recipientId: recipientId, // The renter who will make the payment
+        usdAmount: DatabaseHelper.convertToUsd(amount), // ADD this line
         createdAt: serverTimestamp(),
         read: false,
         readAt: null,
@@ -2169,16 +2165,31 @@ const ChatScreen = () => {
                       totalAmount: item.totalAmount as number,
                       downpaymentPercentage: item.downpaymentPercentage,
                       status:
-                        (item.status as "pending" | "paid" | "failed") ||
-                        "pending",
+                        (item.status as
+                          | "pending"
+                          | "pending_approval"
+                          | "paid"
+                          | "failed"
+                          | "cancelled") || "pending",
                       createdAt: item.createdAt,
+                      recipientPayPalEmail: item.recipientPayPalEmail,
+                      paypalOrderId: item.paypalOrderId,
+                      paypalApprovalUrl: item.paypalApprovalUrl,
+                      paypalCaptureId: item.paypalCaptureId,
+                      transactionId: item.transactionId,
+                      paidAt: item.paidAt,
+                      sentAt: item.sentAt,
                       confirmedByOwner: item.confirmedByOwner,
+                      paymentId: item.paymentId,
+                      usdAmount: item.usdAmount,
                     }}
                     isCurrentUser={isCurrentUser}
                     isOwner={currentUserId === chatData?.ownerId}
                     chatId={String(chatId)}
                     currentUserId={currentUserId}
                     itemDetails={chatData?.itemDetails}
+                    clientId={PAYPAL_CLIENT_ID}
+                    clientSecret={PAYPAL_CLIENT_SECRET}
                   />
                 ) : item.type === "statusUpdate" ? (
                   <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">

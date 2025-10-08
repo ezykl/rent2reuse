@@ -435,7 +435,7 @@ const Search = () => {
                   onPress={() => {
                     setActiveFilters(tempFilters);
                     setShowFilter(false);
-                    handleSearch();
+                    // handleSearch();
                   }}
                 >
                   <Text className="text-primary font-pregular">Apply</Text>

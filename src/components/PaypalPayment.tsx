@@ -57,7 +57,6 @@ setInterval(fetchExchangeRate, 30 * 60 * 1000);
 fetchExchangeRate();
 
 const DatabaseHelper = {
-
   generateTransactionId: () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 10000);

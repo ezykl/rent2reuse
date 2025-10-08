@@ -155,7 +155,7 @@ const Profile: React.FC = () => {
 
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
-          console.log("Fetched user data:", userData);
+          console.table("Fetched user data:", userData);
 
           setProfileData({
             firstname: userData.firstname || "",

@@ -39,13 +39,29 @@ export default interface Message {
     message: string;
     status: string;
   };
-  paymentType?: "initial" | "full";
-  amount?: number;
-  totalAmount?: number;
-  downpaymentPercentage?: number;
-  paypalOrderId?: string;
+
   transactionId?: string;
   paidAt?: any;
   confirmedByOwner?: boolean;
   confirmedAt?: any;
+  recipientPayPalEmail?: string;
+  paypalOrderId?: string;
+  paypalApprovalUrl?: string; 
+  paypalCaptureId?: string;
+  paymentType?: "initial" | "full";
+  amount?: number;
+  totalAmount?: number;
+  downpaymentPercentage?: number;
+
+
+  paymentId?: string;           // ADD this
+  paypalCheckoutUrl?: string;   // ADD this  
+  usdAmount?: string;           // ADD this
+
+  confirmedAmount?: string;     // ADD this
+
+  sentAt?: any;
+
+
+
 }

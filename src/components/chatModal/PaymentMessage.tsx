@@ -6,29 +6,16 @@ import {
   Image,
   Alert,
   ActivityIndicator,
-  Linking,
+  Modal,
+  SafeAreaView,
 } from "react-native";
+import { WebView } from "react-native-webview";
 import { icons, images } from "@/constant";
 import { format } from "date-fns";
-import {
-  doc,
-  updateDoc,
-  serverTimestamp,
-  addDoc,
-  collection,
-} from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
-import {
-  getPayPalAccessToken,
-  createPayPalOrder, // CHANGE: from createPayPalInvoice
-  getPayPalOrderApprovalUrl, // ADD: new function
-  capturePayPalOrder, // ADD: new function
-  getPayPalOrderStatus, // CHANGE: from getPayPalInvoiceStatus
-  PAYPAL_CLIENT_ID,
-  PAYPAL_CLIENT_SECRET,
-  DatabaseHelper,
-} from "@/utils/paypalHelper";
+import { PAYPAL_BASE_URL } from "@env";
 
 interface PaymentMessageProps {
   item: {
@@ -39,16 +26,19 @@ interface PaymentMessageProps {
     amount: number;
     totalAmount: number;
     downpaymentPercentage?: number;
-    status: "pending" | "pending_approval" | "paid" | "failed"; // REMOVE "sent"
+    status: "pending" | "pending_approval" | "paid" | "failed" | "cancelled";
     createdAt: any;
     recipientPayPalEmail?: string;
-    paypalOrderId?: string; // ADD: replace paypalInvoiceId
-    paypalApprovalUrl?: string; // ADD: new field
-    paypalCaptureId?: string; // ADD: new field
+    paypalOrderId?: string;
+    paypalApprovalUrl?: string;
+    paypalCaptureId?: string;
     transactionId?: string;
     paidAt?: any;
     sentAt?: any;
     confirmedByOwner?: boolean;
+    paymentId?: string;
+    paypalCheckoutUrl?: string;
+    usdAmount?: string;
   };
   isCurrentUser: boolean;
   isOwner: boolean;
@@ -58,7 +48,142 @@ interface PaymentMessageProps {
     name?: string;
     image?: string;
   };
+  clientId: string;
+  clientSecret: string;
 }
+
+// Exchange rate helper
+let currentRate = 56.5;
+
+async function fetchExchangeRate() {
+  try {
+    const res = await fetch(
+      "https://api.frankfurter.app/latest?amount=1&from=USD&to=PHP"
+    );
+    const data = await res.json();
+    if (data?.rates?.PHP) {
+      currentRate = data.rates.PHP;
+    }
+  } catch (err) {
+    console.log("Error fetching rate, using fallback:", err);
+  }
+}
+
+fetchExchangeRate();
+setInterval(fetchExchangeRate, 30 * 60 * 1000);
+
+const DatabaseHelper = {
+  convertToUsd: (phpAmount: number) => {
+    return (parseFloat(phpAmount.toString()) / currentRate).toFixed(2);
+  },
+  convertToPhp: (usdAmount: string | number) => {
+    return (parseFloat(usdAmount.toString()) * currentRate).toFixed(2);
+  },
+  generateTransactionId: () => {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000);
+    return `TXN-${timestamp}-${random}`;
+  },
+};
+
+// PayPal API Functions
+const getPayPalAccessToken = async (clientId: string, clientSecret: string) => {
+  try {
+    const auth = btoa(`${clientId}:${clientSecret}`);
+    const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Accept-Language": "en_US",
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      return data.access_token;
+    } else {
+      throw new Error(data.error_description || "Failed to get access token");
+    }
+  } catch (error) {
+    console.error("Error getting PayPal access token:", error);
+    throw error;
+  }
+};
+
+const createPayPalOrder = async (
+  accessToken: string,
+  phpAmount: number,
+  description: string
+) => {
+  try {
+    const usdAmount = DatabaseHelper.convertToUsd(phpAmount);
+    const orderData = {
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          amount: {
+            currency_code: "USD",
+            value: usdAmount,
+          },
+          description: description,
+        },
+      ],
+      application_context: {
+        return_url:
+          "https://www.paypal.com/checkoutnow/error?paymentId=success",
+        cancel_url: "https://www.paypal.com/checkoutnow/error?paymentId=cancel",
+        user_action: "PAY_NOW",
+      },
+    };
+
+    const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(orderData),
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      return data;
+    } else {
+      throw new Error(data.message || "Failed to create PayPal order");
+    }
+  } catch (error) {
+    console.error("Error creating PayPal order:", error);
+    throw error;
+  }
+};
+
+const capturePayPalOrder = async (accessToken: string, orderId: string) => {
+  try {
+    const response = await fetch(
+      `${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+    if (response.ok) {
+      return data;
+    } else {
+      throw new Error(data.message || "Failed to capture PayPal payment");
+    }
+  } catch (error) {
+    console.error("Error capturing PayPal payment:", error);
+    throw error;
+  }
+};
 
 const PaymentMessage: React.FC<PaymentMessageProps> = ({
   item,
@@ -67,55 +192,15 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   chatId,
   currentUserId,
   itemDetails,
+  clientId,
+  clientSecret,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(false);
-
-  // Add this useEffect to auto-check payment status periodically
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    // Only auto-check if status is pending_approval and user is the owner
-    if (item.status === "pending_approval" && isCurrentUser) {
-      interval = setInterval(async () => {
-        try {
-          if (item.paypalOrderId) {
-            const token = await getPayPalAccessToken(
-              PAYPAL_CLIENT_ID,
-              PAYPAL_CLIENT_SECRET
-            );
-            const orderStatus = await getPayPalOrderStatus(
-              token,
-              item.paypalOrderId
-            );
-
-            if (orderStatus.status === "APPROVED") {
-              // Auto-capture the payment
-              const captureResult = await capturePayPalOrder(
-                token,
-                item.paypalOrderId
-              );
-
-              if (captureResult.status === "COMPLETED") {
-                const messageRef = doc(db, "chat", chatId, "messages", item.id);
-                await updateDoc(messageRef, {
-                  status: "paid",
-                  paidAt: serverTimestamp(),
-                  paypalCaptureId: captureResult.id,
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Auto-check payment error:", error);
-        }
-      }, 30000); // Check every 30 seconds
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [item.status, item.paypalOrderId, isCurrentUser]);
+  const [showPayPalWebView, setShowPayPalWebView] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState("");
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [transactionId, setTransactionId] = useState("");
 
   const getPaymentTypeLabel = () => {
     if (item.paymentType === "initial") {
@@ -133,7 +218,6 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
     return `Full payment for renting ${itemName}`;
   };
 
-  // Send PayPal Invoice
   const handleSendInvoice = async () => {
     if (!item.recipientPayPalEmail) {
       Alert.alert("Error", "Owner PayPal email not found");
@@ -142,147 +226,145 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
 
     try {
       setLoading(true);
+      const messageRef = doc(db, "chat", chatId, "messages", item.id);
+      await updateDoc(messageRef, {
+        status: "pending_approval",
+        sentAt: serverTimestamp(),
+      });
 
-      // Get PayPal access token
-      const token = await getPayPalAccessToken(
-        PAYPAL_CLIENT_ID,
-        PAYPAL_CLIENT_SECRET
-      );
+      const chatRef = doc(db, "chat", chatId);
+      await updateDoc(chatRef, {
+        lastMessage: `Payment request created: ${getPaymentTypeLabel()}`,
+        lastMessageTime: serverTimestamp(),
+      });
 
-      // Create PayPal order (not invoice)
-      const order = await createPayPalOrder(
-        token,
-        item.amount,
-        item.recipientPayPalEmail, // Owner's email as payee
-        {
-          itemName: getPaymentTypeLabel(),
-          itemDescription: getPaymentDescription(),
-          customId: `CHAT_${chatId}_MSG_${item.id}`,
-          note: `Payment request from Rent2Reuse for ${
-            itemDetails?.name || "rental item"
-          }`,
-        }
-      );
-
-      if (order.status === "CREATED") {
-        // Get approval URL
-        const approvalUrl = getPayPalOrderApprovalUrl(order);
-
-        if (approvalUrl) {
-          // Update the message with order ID and approval URL
-          const messageRef = doc(db, "chat", chatId, "messages", item.id);
-          await updateDoc(messageRef, {
-            status: "pending_approval",
-            paypalOrderId: order.id,
-            paypalApprovalUrl: approvalUrl,
-            sentAt: serverTimestamp(),
-          });
-
-          // Update chat last message
-          const chatRef = doc(db, "chat", chatId);
-          await updateDoc(chatRef, {
-            lastMessage: `Payment order created: ${getPaymentTypeLabel()}`,
-            lastMessageTime: serverTimestamp(),
-          });
-
-          // Add a system message
-          const messagesRef = collection(db, "chat", chatId, "messages");
-          await addDoc(messagesRef, {
-            type: "statusUpdate",
-            text: `Payment order created for ${getPaymentTypeLabel()}`,
-            senderId: currentUserId,
-            createdAt: serverTimestamp(),
-            read: false,
-            status: "pending_approval",
-          });
-
-          // Open PayPal checkout
-          await Linking.openURL(approvalUrl);
-
-          Toast.show({
-            type: ALERT_TYPE.SUCCESS,
-            title: "Payment Order Created",
-            textBody: "Redirecting to PayPal for payment...",
-          });
-        }
-      }
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Payment Request Created",
+        textBody: "Payment request is now available for the renter",
+      });
     } catch (error) {
-      console.error("Order creation error:", error);
+      console.error("Payment request creation error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to create payment order. Please try again.",
+        textBody: "Failed to create payment request. Please try again.",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // Check payment status from PayPal
-  const handleCheckPaymentStatus = async () => {
-    if (!item.paypalOrderId) {
-      Alert.alert("Error", "No order ID found");
-      return;
-    }
-
+  const handlePayment = async () => {
     try {
-      setCheckingStatus(true);
+      setLoading(true);
+      const newTransactionId = DatabaseHelper.generateTransactionId();
+      setTransactionId(newTransactionId);
 
-      const token = await getPayPalAccessToken(
-        PAYPAL_CLIENT_ID,
-        PAYPAL_CLIENT_SECRET
+      // Get access token
+      const token = await getPayPalAccessToken(clientId, clientSecret);
+      setAccessToken(token);
+
+      // Create order
+      const order = await createPayPalOrder(
+        token,
+        item.amount,
+        getPaymentDescription()
       );
 
-      const orderStatus = await getPayPalOrderStatus(token, item.paypalOrderId);
+      const approvalUrl = order.links.find(
+        (link: any) => link.rel === "approve"
+      )?.href;
 
-      if (orderStatus.status === "APPROVED") {
-        const captureResult = await capturePayPalOrder(
-          token,
-          item.paypalOrderId
-        );
+      if (!approvalUrl) throw new Error("No approval URL found");
 
-        if (captureResult.status === "COMPLETED") {
-          const messageRef = doc(db, "chat", chatId, "messages", item.id);
-          await updateDoc(messageRef, {
-            status: "paid",
-            paidAt: serverTimestamp(),
-            paypalCaptureId: captureResult.id,
-          });
-
-          Toast.show({
-            type: ALERT_TYPE.SUCCESS,
-            title: "Payment Completed",
-            textBody: "Payment has been captured successfully!",
-          });
-        }
-      } else {
-        Toast.show({
-          type: ALERT_TYPE.WARNING,
-          title: "Payment Pending",
-          textBody: `Payment status: ${orderStatus.status}`,
-        });
-      }
+      setOrderId(order.id);
+      setPaymentUrl(approvalUrl);
+      setShowPayPalWebView(true);
     } catch (error) {
-      console.error("Status check error:", error);
+      console.error("Payment error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to check payment status",
+        textBody: "Failed to initiate payment. Please try again.",
       });
     } finally {
-      setCheckingStatus(false);
+      setLoading(false);
     }
   };
+
+  const handleWebViewNavigationStateChange = async (navState: any) => {
+    const { url } = navState;
+    console.log("WebView URL:", url);
+
+    if (url.includes("paymentId=success")) {
+      setShowPayPalWebView(false);
+      await capturePayment();
+    } else if (url.includes("paymentId=cancel")) {
+      setShowPayPalWebView(false);
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Cancelled",
+        textBody: "Payment was cancelled",
+      });
+    }
+  };
+
+  const capturePayment = async () => {
+    try {
+      if (!accessToken || !orderId) {
+        throw new Error("Missing access token or order ID");
+      }
+
+      setLoading(true);
+      const captureResult = await capturePayPalOrder(accessToken, orderId);
+
+      if (captureResult.status === "COMPLETED") {
+        const messageRef = doc(db, "chat", chatId, "messages", item.id);
+        await updateDoc(messageRef, {
+          status: "paid",
+          paidAt: serverTimestamp(),
+          transactionId: transactionId,
+          paypalOrderId: orderId,
+          paypalCaptureId:
+            captureResult.purchase_units[0]?.payments?.captures[0]?.id,
+        });
+
+        Toast.show({
+          type: ALERT_TYPE.SUCCESS,
+          title: "Payment Successful",
+          textBody: "Payment completed successfully!",
+        });
+      }
+    } catch (error) {
+      console.error("Payment capture error:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Payment failed. Please try again.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeWebView = () => {
+    setShowPayPalWebView(false);
+  };
+
   const getStatusColor = () => {
     switch (item.status) {
       case "paid":
-        return "#10B981"; // green
+        return "#10B981";
+      case "pending":
+        return "#F59E0B";
       case "pending_approval":
-        return "#3B82F6"; // blue
+        return "#3B82F6";
+      case "cancelled":
       case "failed":
-        return "#EF4444"; // red
+        return "#EF4444";
       default:
-        return "#F59E0B"; // orange
+        return "#F59E0B";
     }
   };
 
@@ -290,14 +372,19 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
     switch (item.status) {
       case "paid":
         return "Paid";
+      case "pending":
+        return "Pending";
       case "pending_approval":
-        return "Awaiting Payment";
+        return "Available to Pay";
+      case "cancelled":
+        return "Cancelled";
       case "failed":
         return "Failed";
       default:
         return "Pending";
     }
   };
+
   return (
     <View className={`flex-1 mb-3 ${isOwner ? "pl-24" : "pr-24"}`}>
       <View className="bg-white rounded-2xl p-4 border border-gray-200 flex-1">
@@ -369,61 +456,145 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           </View>
         )}
 
-        {/* Action Buttons */}
-        {item.status === "pending" && isCurrentUser && (
-          <TouchableOpacity
-            onPress={handleSendInvoice}
-            disabled={loading}
-            className={`rounded-xl py-3 px-4 ${
-              loading ? "bg-blue-300" : "bg-blue-500"
-            }`}
-          >
-            {loading ? (
-              <View className="flex-row items-center justify-center">
-                <ActivityIndicator color="white" size="small" />
-                <Text className="text-white font-pmedium ml-2">
-                  Creating Payment Order...
+        {/* Owner Actions - Pending Status */}
+        {item.status === "pending" && isOwner && (
+          <View className="flex-col space-y-2">
+            {/* <TouchableOpacity
+              onPress={handleSendInvoice}
+              disabled={loading}
+              className={`rounded-xl py-3 px-4 ${
+                loading ? "bg-blue-300" : "bg-blue-500"
+              }`}
+            >
+              {loading ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator color="white" size="small" />
+                  <Text className="text-white font-pmedium ml-2">
+                    Creating Payment Request...
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-white font-pmedium text-center">
+                  Create Payment Request
                 </Text>
-              </View>
-            ) : (
-              <Text className="text-white font-pmedium text-center">
-                Create Payment Request
+              )}
+            </TouchableOpacity> */}
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  "Cancel Payment Request",
+                  "Are you sure you want to cancel this payment request?",
+                  [
+                    { text: "No", style: "cancel" },
+                    {
+                      text: "Yes, Cancel",
+                      style: "destructive",
+                      onPress: async () => {
+                        const messageRef = doc(
+                          db,
+                          "chat",
+                          chatId,
+                          "messages",
+                          item.id
+                        );
+                        await updateDoc(messageRef, {
+                          status: "cancelled",
+                          cancelledAt: serverTimestamp(),
+                        });
+                        Toast.show({
+                          type: ALERT_TYPE.SUCCESS,
+                          title: "Request Cancelled",
+                          textBody: "Payment request has been cancelled",
+                        });
+                      },
+                    },
+                  ]
+                );
+              }}
+              className="rounded-xl py-2 px-4 bg-red-100 border border-red-300"
+            >
+              <Text className="text-red-700 font-pmedium text-center">
+                Cancel Request
               </Text>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
         )}
 
+        {/* Renter Actions - Pending Approval Status */}
         {item.status === "pending" && !isOwner && (
-          <TouchableOpacity
-            onPress={async () => {
-              if (item.paypalApprovalUrl) {
-                await Linking.openURL(item.paypalApprovalUrl);
-              } else {
-                Alert.alert("Error", "Payment link not available");
-              }
-            }}
-            className="rounded-xl py-3 px-4 bg-blue-500"
-          >
-            <Text className="text-white font-pmedium text-center">
-              Pay with PayPal
-            </Text>
-          </TouchableOpacity>
+          <View className="flex-col space-y-2">
+            <TouchableOpacity
+              onPress={handlePayment}
+              disabled={loading}
+              className={`rounded-xl py-3 px-4 ${
+                loading ? "bg-blue-300" : "bg-blue-500"
+              }`}
+            >
+              {loading ? (
+                <View className="flex-row items-center justify-center">
+                  <ActivityIndicator color="white" size="small" />
+                  <Text className="text-white font-pmedium ml-2">
+                    Processing...
+                  </Text>
+                </View>
+              ) : (
+                <Text className="text-white font-pmedium text-center">
+                  Pay with PayPal
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  "Cancel Payment",
+                  "Are you sure you want to cancel this payment?",
+                  [
+                    { text: "No", style: "cancel" },
+                    {
+                      text: "Yes, Cancel",
+                      style: "destructive",
+                      onPress: async () => {
+                        const messageRef = doc(
+                          db,
+                          "chat",
+                          chatId,
+                          "messages",
+                          item.id
+                        );
+                        await updateDoc(messageRef, {
+                          status: "cancelled",
+                          cancelledAt: serverTimestamp(),
+                        });
+                        Toast.show({
+                          type: ALERT_TYPE.SUCCESS,
+                          title: "Payment Cancelled",
+                          textBody: "Payment has been cancelled",
+                        });
+                      },
+                    },
+                  ]
+                );
+              }}
+              className="rounded-xl py-2 px-4 bg-red-100 border border-red-300"
+            >
+              <Text className="text-red-700 font-pmedium text-center">
+                Cancel Payment
+              </Text>
+            </TouchableOpacity> */}
+          </View>
         )}
 
-        {item.status === "pending_approval" && isCurrentUser && (
-          <TouchableOpacity
-            onPress={handleCheckPaymentStatus}
-            disabled={checkingStatus}
-            className={`rounded-xl py-3 px-4 ${
-              checkingStatus ? "bg-green-300" : "bg-green-500"
-            }`}
-          >
-            <Text className="text-white font-pmedium text-center">
-              Check Payment Status
+        {/* Cancelled Status */}
+        {item.status === "cancelled" && (
+          <View className="rounded-xl py-3 px-4 bg-gray-100">
+            <Text className="text-gray-700 font-pmedium text-center">
+              Payment Request Cancelled
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
 
+        {/* Paid Status */}
         {item.status === "paid" && (
           <View className="rounded-xl py-3 px-4 bg-green-100">
             <Text className="text-green-700 font-pmedium text-center">
@@ -431,6 +602,37 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
             </Text>
           </View>
         )}
+
+        {/* PayPal WebView Modal */}
+        <Modal visible={showPayPalWebView} animationType="slide">
+          <SafeAreaView style={{ flex: 1 }}>
+            <View className="flex-row justify-between items-center p-4 bg-white border-b border-gray-200">
+              <View>
+                <Text className="font-psemibold text-lg">Complete Payment</Text>
+                <Text className="text-xs text-gray-500 mt-1">
+                  Paying to: {item.recipientPayPalEmail}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={closeWebView}>
+                <Text className="text-blue-500 font-pmedium">Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            <WebView
+              source={{ uri: paymentUrl }}
+              onNavigationStateChange={handleWebViewNavigationStateChange}
+              startInLoadingState={true}
+              renderLoading={() => (
+                <View className="flex-1 justify-center items-center bg-gray-50">
+                  <ActivityIndicator size="large" color="#3B82F6" />
+                  <Text className="text-gray-600 mt-4">Loading PayPal...</Text>
+                </View>
+              )}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+            />
+          </SafeAreaView>
+        </Modal>
 
         {/* Timestamp */}
         <View className="flex-row items-center justify-between mt-3 pt-2 border-t border-gray-100">
@@ -451,7 +653,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           )}
         </View>
 
-        {/* Transaction/Order ID */}
+        {/* Transaction ID */}
         {(item.transactionId || item.paypalOrderId || item.paypalCaptureId) && (
           <Text className="text-xs text-gray-400 mt-1">
             ID:{" "}
