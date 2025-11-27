@@ -1141,10 +1141,11 @@ export default function ItemDetails() {
                       </Text>
                     </View>
                     <Text className="font-psemibold text-gray-900">
-                      {item?.itemMinRentDuration}
-                      {item?.itemMinRentDuration && item.itemMinRentDuration > 1
-                        ? " days"
-                        : " day"}
+                      {item?.itemMinRentDuration
+                        ? `${item.itemMinRentDuration}${
+                            item.itemMinRentDuration > 1 ? " days" : " day"
+                          }`
+                        : "1 day"}
                     </Text>
                   </View>
 
@@ -1965,7 +1966,6 @@ const RentRequestForm = ({
                   : ""
               }`}
               placeholder="Enter your message here..."
-              placeholderClassName="text-gray-400 font-pregular"
               multiline
               numberOfLines={4}
               value={message}

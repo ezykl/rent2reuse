@@ -1350,7 +1350,7 @@ const AddListing = () => {
           {/* Description */}
           <View>
             <Text className="text-secondary-400 font-pmedium mt-2">
-              Description *
+              Description/Note*
             </Text>
             <Text className="text-secondary-300 font-pregular text-xs mb-2">
               Be specific and include important details renters should know.

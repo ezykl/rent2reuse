@@ -52,14 +52,10 @@ export default interface Message {
   amount?: number;
   totalAmount?: number;
   downpaymentPercentage?: number;
-
-
   paymentId?: string;           // ADD this
   paypalCheckoutUrl?: string;   // ADD this  
   usdAmount?: string;           // ADD this
-
   confirmedAmount?: string;     // ADD this
-
   sentAt?: any;
 
 

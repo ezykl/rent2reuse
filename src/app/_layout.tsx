@@ -15,8 +15,14 @@ import { SearchTransitionProvider } from "@/context/SearchTransitionContext";
 import { NotificationProvider } from "@/context/NotificationProvider";
 import { usePushNotifications } from "@/utils/userPushNotifications";
 import { manageUserToken } from "@/utils/tokenManagement";
+import { LogBox } from "react-native";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+LogBox.ignoreLogs([
+  /MapLibre/i,
+  "{com.zykdev.r2r}[ParseStyle]: source must have tiles",
+]);
 
 function RootLayoutContent() {
   const { expoPushToken, notification } = usePushNotifications();
