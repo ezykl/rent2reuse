@@ -277,7 +277,6 @@ const AddListing = () => {
 
       const result = await response.json();
 
-
       if (Array.isArray(result)) {
         setApiPrediction(result);
       } else {
@@ -1351,7 +1350,7 @@ const AddListing = () => {
           {/* Description */}
           <View>
             <Text className="text-secondary-400 font-pmedium mt-2">
-              Description *
+              Description/Note*
             </Text>
             <Text className="text-secondary-300 font-pregular text-xs mb-2">
               Be specific and include important details renters should know.
@@ -2026,14 +2025,13 @@ const AddListing = () => {
               )}
 
               {/* Classification Results */}
-              {isLoading ? (
-                <View className="items-center justify-center py-8">
-                  <ActivityIndicator size="large" color="#5C6EF6" />
-                  <Text className="text-secondary-300 mt-4 font-pregular">
-                    Analyzing your image...
-                  </Text>
-                </View>
-              ) : (
+              {isLoading ? null : (
+                // <View className="items-center justify-center py-8">
+                //   <ActivityIndicator size="large" color="#5C6EF6" />
+                //   <Text className="text-secondary-300 mt-4 font-pregular">
+                //     Analyzing your image...
+                //   </Text>
+                // </View>
                 <>
                   {apiPrediction && apiPrediction.length > 0 ? (
                     <View className="mb-4">
@@ -2093,17 +2091,18 @@ const AddListing = () => {
               )}
             </View>
           )}
-
-          <LargeButton
-            title="Use Manual Listing"
-            handlePress={() => {
-              setUseAI(false);
-              setSelectedItem(null);
-              setShowManualModal(true);
-            }}
-            containerStyles="flex-1 bg-red-400 w-full mt-4"
-            textStyles="text-white"
-          />
+          {!imageUri && (
+            <LargeButton
+              title="Use Manual Listing"
+              handlePress={() => {
+                setUseAI(false);
+                setSelectedItem(null);
+                setShowManualModal(true);
+              }}
+              containerStyles="flex-1 bg-red-400 w-full mt-4"
+              textStyles="text-white"
+            />
+          )}
         </View>
       </ScrollView>
 

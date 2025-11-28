@@ -85,6 +85,144 @@ export const getPayPalAccessToken = async (
 };
 
 /**
+ * Create PayPal Order for checkout (UPDATED - replaces invoice creation)
+ * This creates a PayPal order that the payer can approve and complete
+ */
+export const createPayPalOrder = async (
+  accessToken: string,
+  phpAmount: number,
+  payeeEmail: string,
+  orderDetails?: {
+    itemName?: string;
+    itemDescription?: string;
+    customId?: string;
+    note?: string;
+  }
+): Promise<any> => {
+  try {
+    const usdAmount = DatabaseHelper.convertToUsd(phpAmount);
+    
+    const orderData = {
+      intent: 'CAPTURE',
+      purchase_units: [{
+        amount: {
+          currency_code: 'USD',
+          value: usdAmount
+        },
+        payee: {
+          email_address: payeeEmail, // Owner's PayPal email who receives payment
+        },
+        description: orderDetails?.itemDescription || `Payment for ${orderDetails?.itemName || 'rental'}`,
+        custom_id: orderDetails?.customId,
+      }],
+      application_context: {
+        brand_name: 'Rent2Reuse',
+        landing_page: 'NO_PREFERENCE',
+        user_action: 'PAY_NOW',
+        return_url: 'https://rent2reuse.com/success',
+        cancel_url: 'https://rent2reuse.com/cancel'
+      }
+    };
+
+    const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(orderData),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      return data;
+    } else {
+      console.error("PayPal order creation failed:", data);
+      throw new Error(data.details?.[0]?.description || "Failed to create PayPal order");
+    }
+  } catch (error) {
+    console.error("Error creating PayPal order:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get PayPal Order approval URL (UPDATED - replaces send invoice)
+ */
+export const getPayPalOrderApprovalUrl = (orderResponse: any): string | null => {
+  const approvalLink = orderResponse.links?.find(
+    (link: any) => link.rel === 'approve'
+  );
+  return approvalLink?.href || null;
+};
+
+/**
+ * Capture PayPal Order payment (NEW)
+ */
+export const capturePayPalOrder = async (
+  accessToken: string,
+  orderId: string
+): Promise<any> => {
+  try {
+    const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      return data;
+    } else {
+      console.error("PayPal order capture failed:", data);
+      throw new Error(data.details?.[0]?.description || "Failed to capture PayPal order");
+    }
+  } catch (error) {
+    console.error("Error capturing PayPal order:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get PayPal Order status (UPDATED - replaces invoice status)
+ */
+export const getPayPalOrderStatus = async (
+  accessToken: string,
+  orderId: string
+): Promise<any> => {
+  try {
+    const response = await fetch(
+      `${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (response.ok) {
+      return data;
+    } else {
+      console.error("PayPal order status failed:", data);
+      throw new Error(data.details?.[0]?.description || "Failed to get order status");
+    }
+  } catch (error) {
+    console.error("Error getting PayPal order status:", error);
+    throw error;
+  }
+};
+
+// LEGACY FUNCTIONS - Keep for backward compatibility or alternative payment methods
+
+/**
  * Send money directly to PayPal email (Payouts API)
  * This is more suitable for your use case than invoicing
  */
@@ -147,8 +285,7 @@ export const sendPayPalMoney = async (
 };
 
 /**
- * Create PayPal invoice (Alternative approach)
- * This creates an invoice that gets emailed to the recipient
+ * Create PayPal invoice (LEGACY - for backward compatibility)
  */
 export const createPayPalInvoice = async (
   accessToken: string,
@@ -248,7 +385,7 @@ export const createPayPalInvoice = async (
 };
 
 /**
- * Send PayPal invoice to recipient
+ * Send PayPal invoice to recipient (LEGACY)
  */
 export const sendPayPalInvoice = async (
   accessToken: string,
@@ -290,7 +427,7 @@ export const sendPayPalInvoice = async (
 };
 
 /**
- * Get invoice status
+ * Get invoice status (LEGACY)
  */
 export const getPayPalInvoiceStatus = async (
   accessToken: string,
@@ -321,7 +458,46 @@ export const getPayPalInvoiceStatus = async (
   }
 };
 
-// Updated types
+// Updated types for Orders API
+export interface PayPalOrderResponse {
+  id: string;
+  status: "CREATED" | "SAVED" | "APPROVED" | "VOIDED" | "COMPLETED" | "PAYER_ACTION_REQUIRED";
+  links: Array<{
+    href: string;
+    rel: string;
+    method: string;
+  }>;
+  purchase_units: Array<{
+    reference_id: string;
+    amount: {
+      currency_code: string;
+      value: string;
+    };
+    payee?: {
+      email_address: string;
+    };
+  }>;
+}
+
+export interface PayPalCaptureResponse {
+  id: string;
+  status: "COMPLETED" | "DECLINED" | "PARTIALLY_REFUNDED" | "PENDING" | "REFUNDED";
+  purchase_units: Array<{
+    reference_id: string;
+    payments: {
+      captures: Array<{
+        id: string;
+        status: string;
+        amount: {
+          currency_code: string;
+          value: string;
+        };
+      }>;
+    };
+  }>;
+}
+
+// Legacy types - kept for backward compatibility
 export interface PayPalPayoutResponse {
   batch_header: {
     payout_batch_id: string;
@@ -362,24 +538,3 @@ export interface PayPalInvoiceResponse {
     method: string;
   }>;
 }
-
-// Keep existing functions for backward compatibility
-export const createPayPalOrder = async (
-  accessToken: string,
-  phpAmount: number,
-  currency = "USD",
-  orderDetails?: {
-    description?: string;
-    customId?: string;
-    invoiceId?: string;
-  }
-): Promise<any> => {
-  // ... (existing implementation)
-};
-
-export const capturePayPalOrder = async (
-  accessToken: string,
-  orderId: string
-): Promise<any> => {
-  // ... (existing implementation)
-};

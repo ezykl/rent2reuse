@@ -1246,7 +1246,7 @@ const Tools = () => {
                             shadowRadius: 2,
                           }}
                         >
-                          <View className="bg-white/20 rounded-full p-2">
+                          <View className="rounded-full border border-white p-1">
                             <Image
                               source={icons.bigPlus}
                               className="w-4 h-4 "

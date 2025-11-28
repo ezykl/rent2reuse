@@ -9,10 +9,7 @@ const Terms = () => {
   return (
     <View className="flex-1 p-4 bg-white mt-3">
       {/* Terms Content */}
-      <ScrollView
-        className="flex-1 mb-4"
-        scrollEventThrottle={16} 
-      >
+      <ScrollView className="flex-1 mb-4" scrollEventThrottle={16}>
         <Image
           source={images.logo}
           className="w-full h-[32px] mb-4"
@@ -100,11 +97,11 @@ const Terms = () => {
           7. Payments and Transactions
         </Text>
         <Text className="font-pregular text-lg text-gray-700 leading-7 mb-4">
-          All payments processed through{" "}
-          <Text className="italic">Rent2Reuse</Text> are handled securely.{" "}
-          <Text className="italic">Rent2Reuse</Text> is not liable for payment
-          gateway failures or unauthorized transactions caused by user
-          negligence.
+          Actual payment processing does not occur within the app. Instead,{" "}
+          <Text className="italic">Rent2Reuse</Text> provides a guided payment
+          flow using third-party services such as PayPal. The app only retrieves
+          transaction details and is not liable for payment gateway issues or
+          unauthorized transactions caused by user negligence.
         </Text>
 
         <Text className="font-semibold text-xl text-gray-900 mb-2">

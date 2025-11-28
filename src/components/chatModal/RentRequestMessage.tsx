@@ -176,7 +176,7 @@ const RentRequestMessage = ({
   };
 
   return (
-    <View className={`flex- mb-3 ${isSender ? "pl-8" : "pr-8"}`}>
+    <View className={`flex- mb-3 ${isSender ? "pl-24" : "pr-24"}`}>
       <View
         className={`p-4 shadow-sm flex-1 ${
           isSender

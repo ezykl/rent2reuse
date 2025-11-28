@@ -403,7 +403,7 @@ const Home = () => {
 
                       {/* Complete Profile Button */}
                       <TouchableOpacity
-                        onPress={() => router.push("/tabs/profile")}
+                        onPress={() => router.push("profile")}
                         className="bg-yellow-600 py-3 rounded-lg"
                       >
                         <Text className="text-white text-center font-pbold">

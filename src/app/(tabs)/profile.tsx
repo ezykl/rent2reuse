@@ -1055,7 +1055,7 @@ const Profile: React.FC = () => {
             />
           }
         >
-          {!isProfileComplete && isLoading && (
+          {!isProfileComplete && !isLoading && (
             <View className=" mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
               <TouchableOpacity
                 onPress={() => setShowFullDetails(!showFullDetails)}
@@ -1185,7 +1185,7 @@ const Profile: React.FC = () => {
 
                   {/* Badges Row */}
                   <View className="flex-row mt-3 space-x-2">
-                    {completionPercentage === 100 && (
+                    {completionPercentage === 100 ? (
                       <View className="flex-row items-center bg-blue-50 px-2 py-1 rounded-full">
                         <Image
                           source={icons.verified}
@@ -1194,6 +1194,17 @@ const Profile: React.FC = () => {
                         />
                         <Text className="text-xs font-pmedium text-blue-600 ml-1">
                           Verified
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="flex-row items-center bg-gray-50 px-2 py-1 rounded-full">
+                        <Image
+                          source={icons.unverified}
+                          className="w-4 h-4"
+                          resizeMode="contain"
+                        />
+                        <Text className="text-xs font-pmedium text-gray-600 ml-1">
+                          Incomplete
                         </Text>
                       </View>
                     )}
@@ -1278,33 +1289,53 @@ const Profile: React.FC = () => {
                 </View>
               </View>
 
-              <View className="flex-row items-center">
-                <Image
-                  source={icons.call}
-                  className="w-5 h-5 mr-3"
-                  tintColor="#6B7280"
-                />
-                <View>
-                  <Text className="text-gray-500 text-sm">Phone</Text>
-                  <Text className="text-gray-800 font-pmedium">
-                    {profileData?.contactNumber || "Not set"}
-                  </Text>
+              <TouchableOpacity
+                className="flex-row justify-between items-center"
+                onPress={() => setActiveModal("contact")}
+              >
+                <View className="flex-row justify-center items-center">
+                  <Image
+                    source={icons.call}
+                    className="w-5 h-5 mr-3"
+                    tintColor="#6B7280"
+                  />
+                  <View>
+                    <Text className="text-gray-500 text-sm">Phone</Text>
+                    <Text className="text-gray-800 font-pmedium">
+                      {profileData?.contactNumber || "Not set"}
+                    </Text>
+                  </View>
                 </View>
-              </View>
+                <Image
+                  source={icons.arrowRight}
+                  className="w-5 h-5"
+                  tintColor="#9CA3AF"
+                />
+              </TouchableOpacity>
 
-              <View className="flex-row items-center">
-                <Image
-                  source={icons.location}
-                  className="w-5 h-5 mr-3"
-                  tintColor="#6B7280"
-                />
-                <View>
-                  <Text className="text-gray-500 text-sm">Location</Text>
-                  <Text className="text-gray-800 font-pmedium pr-4">
-                    {profileData?.location?.address || "Not set"}
-                  </Text>
+              <TouchableOpacity
+                className="flex-row justify-between items-center"
+                onPress={() => setActiveModal("location")}
+              >
+                <View className="flex-row justify-center items-center">
+                  <Image
+                    source={icons.location}
+                    className="w-5 h-5 mr-3"
+                    tintColor="#6B7280"
+                  />
+                  <View>
+                    <Text className="text-gray-500 text-sm">Location</Text>
+                    <Text className="text-gray-800 font-pmedium pr-4">
+                      {profileData?.location?.address || "Not set"}
+                    </Text>
+                  </View>
                 </View>
-              </View>
+                <Image
+                  source={icons.arrowRight}
+                  className="w-5 h-5"
+                  tintColor="#9CA3AF"
+                />
+              </TouchableOpacity>
             </View>
           </View>
 

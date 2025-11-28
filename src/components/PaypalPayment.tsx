@@ -57,7 +57,6 @@ setInterval(fetchExchangeRate, 30 * 60 * 1000);
 fetchExchangeRate();
 
 const DatabaseHelper = {
-
   generateTransactionId: () => {
     const timestamp = Date.now();
     const random = Math.floor(Math.random() * 10000);
@@ -123,7 +122,7 @@ export const getPayPalAccessToken = async (
 // Function to create payment order
 export const createPayPalOrder = async (
   accessToken: string,
-  phpAmount: number, // This is now PHP amount
+  phpAmount: number,
   currency = "USD",
   orderDetails?: {
     description?: string;
@@ -371,13 +370,14 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       const approvalUrl = order.links.find(
         (link: PayPalOrderLink) => link.rel === "approve"
       )?.href;
-      if (!approvalUrl) throw new Error("No approval URL found");
+      // if (!approvalUrl) throw new Error("No approval URL found");
 
       setOrderId(order.id);
       setPaymentUrl(approvalUrl);
       setShowWebView(true);
     } catch (error) {
-      console.error("Payment error:", error);
+      // console.error("Payment error:", error);
+      setLoading(false);
       onPaymentError(error);
     } finally {
       setLoading(false);
@@ -396,13 +396,20 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
     navState: WebViewNavigationState
   ): Promise<void> => {
     const { url } = navState;
-    console.log("WebView URL:", url);
 
     // Check if user completed payment (success)
     if (url.includes("paymentId=success")) {
       console.log("Payment success detected!");
+      setLoading(true);
       setShowWebView(false);
-      await capturePayment();
+      try {
+        setIsLoading(true);
+        setLoading(true);
+        await capturePayment();
+      } finally {
+        setLoading(false);
+        setIsLoading(false);
+      }
     }
     // Check if user cancelled payment
     else if (url.includes("paymentId=cancel")) {
@@ -420,8 +427,16 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       (url.includes("success") || url.includes("approved"))
     ) {
       console.log("PayPal success pattern detected!");
+      setLoading(true);
       setShowWebView(false);
-      await capturePayment();
+      try {
+        setIsLoading(true);
+        setLoading(true);
+        await capturePayment();
+      } finally {
+        setLoading(false);
+        setIsLoading(false);
+      }
     }
   };
 
