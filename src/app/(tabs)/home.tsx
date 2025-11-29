@@ -330,13 +330,13 @@ const Home = () => {
 
               {/* Profile Completion Alert */}
               {!isProfileComplete && (
-                <View className=" mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <TouchableOpacity
+                  className=" mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl"
+                  onPress={() => setShowFullDetails(!showFullDetails)}
+                >
                   {/* Progress Header with Toggle */}
 
-                  <TouchableOpacity
-                    onPress={() => setShowFullDetails(!showFullDetails)}
-                    className="flex-row items-center justify-between mb-3"
-                  >
+                  <View className="flex-row items-center justify-between mb-3">
                     <View className="flex-row items-center flex-1">
                       <Imagex source={icons.danger} className="w-5 h-5 mr-2" />
                       <Text className="text-yellow-800 font-pbold flex-1">
@@ -356,7 +356,7 @@ const Home = () => {
                         tintColor="#92400E"
                       />
                     </View>
-                  </TouchableOpacity>
+                  </View>
 
                   {/* Progress Bar */}
                   <View className="bg-yellow-200 rounded-full h-2 mb-3">
@@ -412,7 +412,7 @@ const Home = () => {
                       </TouchableOpacity>
                     </>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Announcements Carousel */}
