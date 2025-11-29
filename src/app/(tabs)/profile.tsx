@@ -1382,9 +1382,9 @@ const Profile: React.FC = () => {
                     {activeModal === "location" && "Set Your Location"}
                     {activeModal === "emailVerification" && "Verify Email"}
                     {activeModal === "idVerification" && "Verify ID"}
-                    {activeModal === "birthday" && "Add Birth Date"}
-                    {activeModal === "contact" && "Add Contact #"}
-                    {activeModal === "profileImage" && "Add Profile Picture"}
+                    {activeModal === "birthday" && "Birth Date"}
+                    {activeModal === "contact" && "Contact Number"}
+                    {activeModal === "profileImage" && "Profile Picture"}
                   </Text>
                   <View style={{ width: 50 }} />
                 </View>
