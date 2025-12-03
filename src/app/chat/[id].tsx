@@ -158,7 +158,6 @@ const ChatScreen = () => {
 
   const [showMessageActions, setShowMessageActions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-  const [canSendMessage, setCanSendMessage] = useState(false);
   const flatListRef = useRef<FlatList<Message>>(null);
   const insets = useSafeAreaInsets();
   const [uploadingMessages, setUploadingMessages] = useState<
@@ -1100,6 +1099,7 @@ const ChatScreen = () => {
 
     initializeChat();
   }, [chatId, currentUserId]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date());
@@ -1122,23 +1122,6 @@ const ChatScreen = () => {
           status: data.status,
           itemDetails: data.itemDetails,
         });
-
-        const isOwner = currentUserId === data.ownerId;
-        const hasOwnerResponded = data.hasOwnerResponded || false;
-
-        if (data.status === "cancelled" || data.status === "declined") {
-          setCanSendMessage(false);
-          return;
-        }
-
-        const canSend =
-          isOwner ||
-          data.status === "accepted" ||
-          (hasOwnerResponded &&
-            data.status !== "declined" &&
-            data.status !== "cancelled");
-
-        setCanSendMessage(canSend);
       }
     });
 
@@ -1372,91 +1355,145 @@ const ChatScreen = () => {
     updateRentalStatus("completed", "Item returned and rental completed");
   };
 
-  const actionItems: ActionMenuItem[] = [
-    // Add conditional status progression actions based on current status and user role
-    ...(chatData?.status === "accepted" && currentUserId === chatData?.ownerId
-      ? [
-          {
-            id: "payment",
-            icon: icons.check,
-            label: "Confirm Payment",
-            action: handlePaymentConfirmed,
+  // DELETE the old actionItems const and replace with this function:
+  const getAvailableActions = (): ActionMenuItem[] => {
+    if (!chatData || !currentUserId) return [];
+
+    const isOwner = currentUserId === chatData.ownerId;
+    const status = chatData.status;
+    const actions: ActionMenuItem[] = [];
+
+    // OWNER ACTIONS
+    if (isOwner) {
+      switch (status) {
+        case "pending":
+          // Owner can send requests link while pending
+          actions.push({
+            id: "view_requests",
+            icon: icons.arrowDown,
+            label: "View Requests",
+            action: handleViewRequests,
+            bgColor: "#FFF3E0",
+            iconColor: "#FF9800",
+          });
+          break;
+
+        case "accepted":
+          // After accepting, owner can request payment
+          if (
+            chatData.itemDetails?.downpaymentPercentage &&
+            chatData.itemDetails.downpaymentPercentage > 0
+          ) {
+            actions.push({
+              id: "initial_payment",
+              icon: icons.card,
+              label: "Request Initial Payment",
+              action: handleInitialPayment,
+              bgColor: "#FFF3E0",
+              iconColor: "#FF9800",
+            });
+          }
+
+          actions.push({
+            id: "full_payment",
+            icon: icons.card,
+            label: "Request Full Payment",
+            action: handleFullPayment,
             bgColor: "#E8F5E8",
             iconColor: "#4CAF50",
-          },
-        ]
-      : []),
-    ...(chatData?.status === "paid" && currentUserId === chatData?.ownerId
-      ? [
-          {
-            id: "pickup",
+          });
+
+          // Agreement option
+          actions.push({
+            id: "agreement",
+            icon: icons.arrowDown,
+            label: "Agreement",
+            action: handleSendAgreement,
+            bgColor: "#E8EAF6",
+            iconColor: "#3F51B5",
+          });
+          break;
+
+        case "paid":
+          // After payment, owner confirms pickup
+          actions.push({
+            id: "confirm_pickup",
             icon: icons.handshake,
             label: "Item Picked Up",
             action: handleItemPickedUp,
             bgColor: "#E3F2FD",
             iconColor: "#2196F3",
-          },
-        ]
-      : []),
-    ...(chatData?.status === "pickedup" && currentUserId === chatData?.ownerId
-      ? [
-          {
-            id: "return",
+          });
+          break;
+
+        case "pickedup":
+          // After pickup, owner confirms return
+          actions.push({
+            id: "confirm_return",
             icon: icons.refresh,
             label: "Item Returned",
             action: handleItemReturned,
             bgColor: "#F3E5F5",
             iconColor: "#9C27B0",
-          },
-        ]
-      : []),
+          });
+          break;
 
-    // ADD THESE PAYMENT BUTTONS - Only show if current user is owner
-    ...(currentUserId === chatData?.ownerId
-      ? [
-          // Initial Payment button - only show if downpayment percentage > 0
-          ...(chatData?.itemDetails?.downpaymentPercentage &&
-          chatData.itemDetails.downpaymentPercentage > 0
-            ? [
-                {
-                  id: "initial_payment",
-                  icon: icons.card, // Make sure you have a wallet icon
-                  label: "Request Initial Payment",
-                  action: handleInitialPayment,
-                  bgColor: "#FFF3E0",
-                  iconColor: "#FF9800",
-                },
-              ]
-            : []),
-          // Full Payment button - always available for owners
-          {
-            id: "full_payment",
-            icon: icons.card, // Make sure you have a credit card icon
-            label: "Request Full Payment",
-            action: handleFullPayment,
-            bgColor: "#E8F5E8",
-            iconColor: "#4CAF50",
-          },
-        ]
-      : []),
+        case "completed":
+          // Maybe add verdict option
+          actions.push({
+            id: "verdict",
+            icon: icons.arrowDown,
+            label: "Send Verdict",
+            action: handleSendVerdict,
+            bgColor: "#E0F2F1",
+            iconColor: "#009688",
+          });
+          break;
+      }
+    }
+    // RENTER ACTIONS
+    else {
+      switch (status) {
+        case "pending":
+          // Renter can view their sent requests
+          actions.push({
+            id: "view_requests",
+            icon: icons.arrowDown,
+            label: "View Requests",
+            action: handleViewRequests,
+            bgColor: "#FFF3E0",
+            iconColor: "#FF9800",
+          });
+          break;
 
-    {
-      id: "2",
-      icon: icons.arrowDown,
-      label: "Agreement",
-      action: handleSendAgreement,
-      bgColor: "#E8EAF6",
-      iconColor: "#3F51B5",
-    },
-    {
-      id: "3",
-      icon: icons.arrowDown,
-      label: "Requests",
-      action: handleViewRequests,
-      bgColor: "#FFF3E0",
-      iconColor: "#FF9800",
-    },
-  ];
+        case "accepted":
+          // Renter can view agreement after acceptance
+          actions.push({
+            id: "agreement",
+            icon: icons.arrowDown,
+            label: "View Agreement",
+            action: handleSendAgreement,
+            bgColor: "#E8EAF6",
+            iconColor: "#3F51B5",
+          });
+          break;
+
+        case "completed":
+          // Renter can send verdict after completion
+          actions.push({
+            id: "verdict",
+            icon: icons.arrowDown,
+            label: "Send Verdict",
+            action: handleSendVerdict,
+            bgColor: "#E0F2F1",
+            iconColor: "#009688",
+          });
+          break;
+      }
+    }
+
+    return actions;
+  };
 
   const handleAcceptRequest = async (requestId?: string) => {
     if (!requestId) {
@@ -2356,115 +2393,89 @@ const ChatScreen = () => {
           </View>
         )}
         {/* Message Input */}
-        <View className="flex-row px-2 pb-2  gap-2 ">
-          {!canSendMessage ? (
-            // Show appropriate message based on status and user role
-            (() => {
-              if (chatData?.status === "cancelled") {
-                return null;
-              }
-
-              if (chatData?.status === "declined") {
-                return null;
-              }
-
-              // For pending status without owner response
-              const isOwner = currentUserId === chatData?.ownerId;
-              if (!isOwner && chatData?.status === "pending") {
-                return (
-                  <View className="flex-1 bg-white rounded-full py-3 px-4">
-                    <Text className="text-gray-500 text-center">
-                      Waiting for owner to respond to your request...
-                    </Text>
-                  </View>
-                );
-              }
-
-              return null;
-            })()
-          ) : (
-            <View className="flex-1 flex-row items-end gap-2 p-2 bg-white rounded-3xl ">
-              {editingMessageId && (
-                <View className="items-end  justify-end">
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditingMessageId(null);
-                      setEditText("");
-                    }}
-                    className="w-10 h-10 bg-red-500 rounded-full items-center justify-center"
-                  >
-                    <Image
-                      source={icons.close}
-                      className="w-6 h-6"
-                      tintColor="#ffffff"
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
-              {!editingMessageId && (
+        <View className="flex-row px-2 pb-2 gap-2">
+          <View className="flex-1 flex-row items-end gap-2 p-2 bg-white rounded-3xl">
+            {editingMessageId && (
+              <View className="items-end justify-end">
                 <TouchableOpacity
-                  onPress={() => setShowActionMenu(true)}
-                  className="w-10 h-10 bg-blue-500 rounded-full items-center justify-center"
+                  onPress={() => {
+                    setEditingMessageId(null);
+                    setEditText("");
+                  }}
+                  className="w-10 h-10 bg-red-500 rounded-full items-center justify-center"
                 >
                   <Image
-                    source={icons.bigPlus}
-                    className="w-4 h-4"
+                    source={icons.close}
+                    className="w-6 h-6"
                     tintColor="#ffffff"
                   />
                 </TouchableOpacity>
-              )}
+              </View>
+            )}
 
-              <TextInput
-                value={editingMessageId ? editText : newMessage}
-                onChangeText={editingMessageId ? setEditText : setNewMessage}
-                placeholder={
-                  editingMessageId ? "Edit message..." : "Type a message..."
+            {!editingMessageId && getAvailableActions().length > 0 && (
+              <TouchableOpacity
+                onPress={() => setShowActionMenu(true)}
+                className="w-10 h-10 bg-blue-500 rounded-full items-center justify-center"
+              >
+                <Image
+                  source={icons.bigPlus}
+                  className="w-4 h-4"
+                  tintColor="#ffffff"
+                />
+              </TouchableOpacity>
+            )}
+
+            <TextInput
+              value={editingMessageId ? editText : newMessage}
+              onChangeText={editingMessageId ? setEditText : setNewMessage}
+              placeholder={
+                editingMessageId ? "Edit message..." : "Type a message..."
+              }
+              multiline
+              className="flex-1 min-h-8 max-h-24"
+              style={{ textAlignVertical: "top" }}
+            />
+
+            {newMessage.trim() || (editingMessageId && editText.trim()) ? (
+              <TouchableOpacity
+                onPress={editingMessageId ? handleEditSubmit : sendMessage}
+                className="w-10 h-10 bg-primary rounded-full items-center justify-center"
+                disabled={
+                  editingMessageId ? !editText.trim() : !newMessage.trim()
                 }
-                multiline
-                className="flex-1 min-h-8 max-h-24"
-                style={{ textAlignVertical: "top" }}
-              />
-
-              {newMessage.trim() || (editingMessageId && editText.trim()) ? (
+              >
+                <Image
+                  source={editingMessageId ? icons.check : icons.plane}
+                  className="w-4 h-4"
+                  tintColor="white"
+                />
+              </TouchableOpacity>
+            ) : (
+              <View className="flex-row">
                 <TouchableOpacity
-                  onPress={editingMessageId ? handleEditSubmit : sendMessage}
-                  className="w-10 h-10 bg-primary rounded-full items-center justify-center"
-                  disabled={
-                    editingMessageId ? !editText.trim() : !newMessage.trim()
-                  }
+                  onPress={() => setShowCamera(true)}
+                  className="w-10 h-10 items-center justify-center"
                 >
                   <Image
-                    source={editingMessageId ? icons.check : icons.plane}
-                    className="w-4 h-4"
-                    tintColor="white"
+                    source={icons.camera}
+                    className="w-5 h-5"
+                    tintColor="#9CA3AF"
                   />
                 </TouchableOpacity>
-              ) : (
-                <View className="flex-row ">
-                  <TouchableOpacity
-                    onPress={() => setShowCamera(true)}
-                    className="w-10 h-10  items-center justify-center"
-                  >
-                    <Image
-                      source={icons.camera}
-                      className="w-5 h-5"
-                      tintColor="#9CA3AF"
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={pickImage}
-                    className="w-10 h-10  items-center justify-center"
-                  >
-                    <Image
-                      source={icons.gallery}
-                      className="w-5 h-5"
-                      tintColor="#9CA3AF"
-                    />
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
+                <TouchableOpacity
+                  onPress={pickImage}
+                  className="w-10 h-10 items-center justify-center"
+                >
+                  <Image
+                    source={icons.gallery}
+                    className="w-5 h-5"
+                    tintColor="#9CA3AF"
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
         <MessageActionsModal
           visible={showMessageActions}
@@ -2489,8 +2500,9 @@ const ChatScreen = () => {
         <ActionMenu
           visible={showActionMenu}
           onClose={() => setShowActionMenu(false)}
-          items={actionItems}
+          items={getAvailableActions()}
         />
+
         <ChatDetailsModal
           visible={showDetailsModal}
           onClose={() => setShowDetailsModal(false)}
