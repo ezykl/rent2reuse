@@ -232,7 +232,7 @@ const Tools = () => {
             requestsRef,
             where("itemId", "==", doc.id),
             // where("status", "in", ["pending", "approved"])
-            where("status", "==", "pedning")
+            where("status", "==", "pending")
           );
           const requestsSnap = await getDocs(requestsQuery);
           totalIncomingRequests += requestsSnap.size;
