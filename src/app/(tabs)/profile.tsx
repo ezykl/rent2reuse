@@ -886,7 +886,7 @@ const Profile: React.FC = () => {
             <>
               <TouchableOpacity
                 onPress={() => router.push("/payment-options")}
-                className="flex-row items-center py-4 border-t border-gray-200 "
+                className="flex-row items-center py-4"
                 disabled={!isProfileComplete}
               >
                 <Image
@@ -1279,7 +1279,7 @@ const Profile: React.FC = () => {
                 className="flex-row justify-between items-center border-t border-gray-200 pt-2"
                 onPress={() => setActiveModal("location")}
               >
-                <View className="flex-row justify-center items-center w-[90%]">
+                <View className="flex-row justify-start items-center w-min-[80%] w-[90%]  border border-white">
                   <Image
                     source={icons.location}
                     className="w-5 h-5 mr-3"

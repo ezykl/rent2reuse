@@ -22,7 +22,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { icons, images } from "@/constant";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
-import { getToolCategory, TOOL_CATEGORIES } from "@/constant/tool-categories";
+import { TOOL_CATEGORIES } from "@/constant/tool-categories";
+import {
+  getToolCategory,
+  isToolProhibited,
+  getCategoryStatus,
+} from "@/constant/tool-categories";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 import { R2R_MODEL } from "@/constant/api";
 import { useLoader } from "@/context/LoaderContext";
@@ -377,6 +382,45 @@ const AddListing = () => {
     </View>
   );
 
+  const isItemProhibited = (itemName: string, category?: string): boolean => {
+    // Check 1: Exact item name match in tool-categories
+    const categoryStatus = getCategoryStatus(itemName);
+    if (categoryStatus === "prohibited") {
+      console.log(`❌ Prohibited by exact match: ${itemName}`);
+      return true;
+    }
+
+    // Check 2: Use keyword-based checker
+    const keywordCheck = isProhibited(itemName);
+    if (keywordCheck.prohibited) {
+      console.log(
+        `❌ Prohibited by keyword: ${itemName} (matched: ${keywordCheck.matchedKeywords})`
+      );
+      return true;
+    }
+
+    // Check 3: If category is provided, check if it's in prohibited categories
+    if (category) {
+      const isProhibitedCategory =
+        category.toLowerCase() === "prohibited" ||
+        category.toLowerCase() === "unknown";
+      if (isProhibitedCategory) {
+        console.log(`❌ Prohibited by category: ${category}`);
+        return true;
+      }
+
+      // Also check if category itself is prohibited
+      const categoryKeywordCheck = isProhibited(category);
+      if (categoryKeywordCheck.prohibited) {
+        console.log(`❌ Prohibited category: ${category}`);
+        return true;
+      }
+    }
+
+    console.log(`✓ Item allowed: ${itemName}`);
+    return false;
+  };
+
   interface PredictionItem {
     label?: string;
     category?: string;
@@ -387,28 +431,23 @@ const AddListing = () => {
   }
 
   const renderResultItem = (item: PredictionItem, index: number) => {
-    // Handle different result formats (API vs local model)
     const label = item.label || item["Predicted Item"] || "";
     const category = item.category || item["Category"] || "";
     const confidence = item.probability
       ? `${(item.probability * 100).toFixed(1)}%`
       : item["Confidence"] || "";
 
-    const isProhibited =
-      category?.toLowerCase() === "prohibited" ||
-      label?.toLowerCase() === "unknown";
-    const isUnknow = label?.toLowerCase() === "unknown";
+    // USE THE NEW INTEGRATED CHECKER
+    const isProhibitedItem = isItemProhibited(label, category);
 
     return (
       <TouchableOpacity
         key={index}
         className={`flex-row items-center justify-between bg-white p-4 rounded-xl mb-2 shadow-sm border ${
-          isProhibited || isUnknow
-            ? "border-red-200 bg-red-50"
-            : "border-gray-100"
+          isProhibitedItem ? "border-red-200 bg-red-50" : "border-gray-100"
         }`}
         onPress={() => {
-          if (isProhibited) {
+          if (isProhibitedItem) {
             Toast.show({
               type: ALERT_TYPE.WARNING,
               title: "Prohibited Item",
@@ -431,12 +470,12 @@ const AddListing = () => {
         <View className="flex-row items-center flex-1">
           <View
             className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
-              isProhibited || isUnknow ? "bg-red-200" : "bg-primary/10"
+              isProhibitedItem ? "bg-red-200" : "bg-primary/10"
             }`}
           >
             <Text
               className={`font-psemibold ${
-                isProhibited || isUnknow ? "text-red-600" : "text-primary"
+                isProhibitedItem ? "text-red-600" : "text-primary"
               }`}
             >
               {index + 1}
@@ -445,7 +484,7 @@ const AddListing = () => {
           <View className="flex-1">
             <Text
               className={`text-lg font-psemibold ${
-                isProhibited || isUnknow ? "text-red-600" : "text-secondary-400"
+                isProhibitedItem ? "text-red-600" : "text-secondary-400"
               }`}
             >
               {label}
@@ -453,9 +492,7 @@ const AddListing = () => {
             {category ? (
               <Text
                 className={`text-sm font-pregular ${
-                  isProhibited || isUnknow
-                    ? "text-red-500"
-                    : "text-secondary-300"
+                  isProhibitedItem ? "text-red-500" : "text-secondary-300"
                 }`}
               >
                 {category}
@@ -465,13 +502,28 @@ const AddListing = () => {
         </View>
         <Text
           className={`font-pregular ml-2 ${
-            isProhibited || isUnknow ? "text-red-500" : "text-secondary-300"
+            isProhibitedItem ? "text-red-500" : "text-secondary-300"
           }`}
         >
           {confidence}
         </Text>
       </TouchableOpacity>
     );
+  };
+  const extractActualContent = (description: string): string => {
+    const lines = description.split("\n");
+    const contentLines = lines.filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+
+      const isTemplateLabel =
+        /^(Brand|Model|Type|Features|Specifications|Included|Additional Notes|Power|Capacity|Voltage|Battery|Speed|Safety):\s*$/i.test(
+          trimmed
+        );
+      return !isTemplateLabel;
+    });
+
+    return contentLines.join(" ").trim();
   };
 
   interface ManualListingModalProps {
@@ -593,18 +645,20 @@ const AddListing = () => {
 
       let isValid = true;
 
-      // Check product title
-      const titleCheck = isProhibited(formData.title);
-      if (titleCheck.prohibited) {
-        newErrors.title = `Product title contains prohibited item about ${titleCheck.category}`; // (matched: ${titleCheck.matchedKeywords?.join(", ")})
+      // Check product title using BOTH systems
+      if (isItemProhibited(formData.title)) {
+        newErrors.title = `Product title contains prohibited item`;
         isValid = false;
       }
 
-      // Check description
-      const descCheck = isProhibited(formData.description);
-      if (descCheck.prohibited) {
-        newErrors.description = `Description contains prohibited content about ${descCheck.category}`; // (matched: ${descCheck.matchedKeywords?.join(", ")})
-        isValid = false;
+      // Extract and check description content
+      const actualContent = extractActualContent(formData.description);
+      if (actualContent.length > 5) {
+        const descCheck = isProhibited(actualContent);
+        if (descCheck.prohibited) {
+          newErrors.description = `Description contains prohibited content: ${descCheck.category}`;
+          isValid = false;
+        }
       }
 
       setErrors(newErrors);

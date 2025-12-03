@@ -479,7 +479,9 @@ const Home = () => {
 
               <Category />
               <Text className="text-2xl text-secondary-400 font-psemibold mt-10 mb-2">
-                Recently Added
+                {recentItems.length === 0
+                  ? "No Items on the Market"
+                  : "Recently Added"}
               </Text>
             </>
           )}

@@ -19,10 +19,7 @@ import { LogBox } from "react-native";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-LogBox.ignoreLogs([
-  /MapLibre/i,
-  "{com.zykdev.r2r}[ParseStyle]: source must have tiles",
-]);
+LogBox.ignoreLogs(["MapLibre warning", "[Mbgl]", "source must have tiles"]);
 
 function RootLayoutContent() {
   const { expoPushToken, notification } = usePushNotifications();

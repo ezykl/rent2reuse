@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ItemCard from "@/components/ItemCard";
 import { useLocation } from "@/hooks/useLocation";
 import LottieView from "lottie-react-native";
+import { useAuth } from "@/context/AuthContext";
 
 interface UserProfile {
   id: string;
@@ -49,6 +50,7 @@ interface UserProfile {
 
 export default function UserProfile() {
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width } = Dimensions.get("window");
   const { isLoading, setIsLoading } = useLoader();
@@ -211,17 +213,32 @@ export default function UserProfile() {
           <Text className="text-xl font-pbold text-gray-800">User Details</Text>
         </View>
         <View className="flex-row items-center">
-          {/* Report button */}
-          <TouchableOpacity
-            onPress={() => router.push(`/report/${userProfile?.id}`)}
-            className="mr-3"
-          >
-            <Image
-              source={icons.report}
-              className="w-6 h-6"
-              tintColor="#EF4444"
-            />
-          </TouchableOpacity>
+          {/* Edit/Report button */}
+          {user?.uid === id ? (
+            // Edit button for own profile
+            <TouchableOpacity
+              onPress={() => router.push("/profile")}
+              className="mr-3"
+            >
+              <Image
+                source={icons.edit} // Make sure you have this icon
+                className="w-6 h-6"
+                tintColor="#3B82F6"
+              />
+            </TouchableOpacity>
+          ) : (
+            // Report button for other users
+            <TouchableOpacity
+              onPress={() => router.push(`/report/${userProfile?.id}`)}
+              className="mr-3"
+            >
+              <Image
+                source={icons.report}
+                className="w-6 h-6"
+                tintColor="#EF4444"
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
