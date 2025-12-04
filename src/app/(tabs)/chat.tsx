@@ -243,7 +243,7 @@ const ChatList = () => {
 
       setAllUsers(usersData);
     } catch (error) {
-      console.error("Error loading users:", error);
+      console.log("Error loading users:", error);
       Alert.alert("Error", "Failed to load users for search");
     }
   };
@@ -306,7 +306,7 @@ const ChatList = () => {
 
       return unsubscribeChats;
     } catch (error) {
-      console.error("Error setting up chat query:", error);
+      console.log("Error setting up chat query:", error);
       setLoading(false);
     }
   };
@@ -571,7 +571,7 @@ const ChatList = () => {
         textBody: "Selected conversations deleted successfully",
       });
     } catch (error) {
-      console.error("Error deleting chats:", error);
+      console.log("Error deleting chats:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

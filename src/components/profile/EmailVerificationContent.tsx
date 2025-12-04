@@ -120,7 +120,7 @@ export const EmailVerificationContent = ({
         }
       }
     } catch (error) {
-      console.error("Error checking verification status:", error);
+      console.log("Error checking verification status:", error);
       Toast.Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

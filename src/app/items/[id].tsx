@@ -190,7 +190,7 @@ export default function ItemDetails() {
         setUserPlan(planData);
       }
     } catch (error) {
-      console.error("Error fetching user plan:", error);
+      console.log("Error fetching user plan:", error);
     } finally {
     }
   };
@@ -301,7 +301,7 @@ export default function ItemDetails() {
         }
       }
     } catch (error) {
-      console.error("Error getting location:", error);
+      console.log("Error getting location:", error);
     } finally {
       setIsLocationLoading(false); // Stop loading
     }
@@ -322,7 +322,7 @@ export default function ItemDetails() {
       }
       return null;
     } catch (error) {
-      console.error("Error fetching user rating:", error);
+      console.log("Error fetching user rating:", error);
       return null;
     }
   };
@@ -397,7 +397,7 @@ export default function ItemDetails() {
           }
         }
       } catch (error) {
-        console.error("Error fetching item:", error);
+        console.log("Error fetching item:", error);
         Alert.alert("Error", "Failed to load item details");
       } finally {
         setIsLocalLoad(false);
@@ -436,7 +436,7 @@ export default function ItemDetails() {
         setExistingRequestData(null);
       }
     } catch (error) {
-      console.error("Error checking request:", error);
+      console.log("Error checking request:", error);
     }
   };
 
@@ -481,7 +481,7 @@ export default function ItemDetails() {
             },
       };
     } catch (error) {
-      console.error("Error checking requests:", error);
+      console.log("Error checking requests:", error);
       return { hasActiveRequests: false, request: null };
     }
   };
@@ -528,7 +528,7 @@ export default function ItemDetails() {
       // Show the form instead of creating request
       setShowRequestForm(true);
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -687,7 +687,7 @@ export default function ItemDetails() {
             createdAt: serverTimestamp(),
           });
         } catch (error) {
-          console.error("Error creating welcome notification:", error);
+          console.log("Error creating welcome notification:", error);
         }
         // await createNotification(auth.currentUser.uid, "REPORT_ISSUE", {
         //   reportReason: reportData.reason,
@@ -703,7 +703,7 @@ export default function ItemDetails() {
       setShowRequestForm(false);
       router.push({ pathname: "/tools", params: { tab: "outgoing" } });
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

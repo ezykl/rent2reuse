@@ -239,7 +239,7 @@ const AddListing = () => {
               });
             }
           } catch (err) {
-            console.error("Classification Error:", err);
+            console.log("Classification Error:", err);
             Toast.show({
               type: ALERT_TYPE.DANGER,
               title: "Error",
@@ -250,7 +250,7 @@ const AddListing = () => {
           }
         }
       } catch (error) {
-        console.error("Camera Error:", error);
+        console.log("Camera Error:", error);
         Alert.alert("Error", "Failed to capture image");
       }
     }
@@ -332,7 +332,7 @@ const AddListing = () => {
         });
       }
     } catch (err) {
-      console.error("Classification Error:", err);
+      console.log("Classification Error:", err);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -622,7 +622,7 @@ const AddListing = () => {
             }));
           }
         } catch (error) {
-          console.error("Error fetching location:", error);
+          console.log("Error fetching location:", error);
         }
       };
 
@@ -862,7 +862,7 @@ const AddListing = () => {
         }
         setCurrentStep(2);
       } catch (error) {
-        console.error("Error calculating price suggestions:", error);
+        console.log("Error calculating price suggestions:", error);
         if (useAI) {
           setShowNoMarketData(true);
         }
@@ -897,7 +897,7 @@ const AddListing = () => {
         handleImageChange(newImages);
         setShowCamera(false);
       } catch (error) {
-        console.error("Camera Error:", error);
+        console.log("Camera Error:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -950,7 +950,7 @@ const AddListing = () => {
           setImages((prev) => [...prev, result.assets[0].uri]);
         }
       } catch (error) {
-        console.error("Error picking image:", error);
+        console.log("Error picking image:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -1071,7 +1071,7 @@ const AddListing = () => {
         onClose();
         router.push("/(tabs)/tools");
       } catch (error) {
-        console.error("Error creating listing:", error);
+        console.log("Error creating listing:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",

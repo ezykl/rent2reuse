@@ -35,7 +35,7 @@ export const createNotification = async (
       data,
     });
   } catch (error) {
-    console.error("Error creating notification:", error);
+    console.log("Error creating notification:", error);
     throw error;
   }
 };
@@ -109,7 +109,7 @@ export const getUserNotifications = async (userId: string) => {
         } as FirestoreNotification)
     );
   } catch (error) {
-    console.error("Error fetching notifications:", error);
+    console.log("Error fetching notifications:", error);
     return [];
   }
 };
@@ -128,7 +128,7 @@ export const markNotificationAsRead = async (
       isRead: true,
     });
   } catch (error) {
-    console.error("Error marking notification as read:", error);
+    console.log("Error marking notification as read:", error);
     throw error;
   }
 };
@@ -144,7 +144,7 @@ export const deleteNotification = async (
     );
     await deleteDoc(notificationRef);
   } catch (error) {
-    console.error("Error deleting notification:", error);
+    console.log("Error deleting notification:", error);
     throw error;
   }
 };
@@ -176,7 +176,7 @@ export const deleteNotification = async (
 //       },
 //     });
 //   } catch (error) {
-//     console.error("Error creating rent request notification:", error);
+//     console.log("Error creating rent request notification:", error);
 //     throw error;
 //   }
 // };
@@ -198,7 +198,7 @@ export const deleteNotification = async (
 //     const snapshot = await getDocs(q);
 //     return snapshot.size;
 //   } catch (error) {
-//     console.error("Error counting new requests:", error);
+//     console.log("Error counting new requests:", error);
 //     return 0;
 //   }
 // };

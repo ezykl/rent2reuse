@@ -53,7 +53,7 @@ export default function AnnouncementDetails() {
 
         setAnnouncements(fetchedAnnouncements);
       } catch (error) {
-        console.error("Error fetching announcements:", error);
+        console.log("Error fetching announcements:", error);
       } finally {
         setIsLoading(false);
       }

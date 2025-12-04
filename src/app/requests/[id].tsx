@@ -556,7 +556,7 @@ const ViewRequests = () => {
       );
       setFilteredRequests(initialSorted);
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -619,7 +619,7 @@ const ViewRequests = () => {
         textBody: `Request ${newStatus} successfully!`,
       });
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

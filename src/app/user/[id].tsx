@@ -87,7 +87,7 @@ export default function UserProfile() {
         })) as Item[];
         setUserItems(items);
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.log("Error fetching user data:", error);
       } finally {
         setIsLoading(false);
       }
@@ -133,7 +133,7 @@ export default function UserProfile() {
 
       return "recently";
     } catch (error) {
-      console.error("Error formatting Firestore date:", error);
+      console.log("Error formatting Firestore date:", error);
       return "recently";
     }
   };

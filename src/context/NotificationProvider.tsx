@@ -88,7 +88,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         )
       );
     } catch (error) {
-      console.error("Error marking notification as read:", error);
+      console.log("Error marking notification as read:", error);
     }
   };
 
@@ -104,7 +104,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         prev.map((notification) => ({ ...notification, isRead: true }))
       );
     } catch (error) {
-      console.error("Error marking all notifications as read:", error);
+      console.log("Error marking all notifications as read:", error);
     }
   };
 
@@ -120,7 +120,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         prev.filter((notification) => notification.isRead)
       );
     } catch (error) {
-      console.error("Error deleting all notifications:", error);
+      console.log("Error deleting all notifications:", error);
     }
   };
 
@@ -141,7 +141,7 @@ export const NotificationProvider = ({ children }: { children: ReactNode }) => {
         prev.filter((notification) => notification.id !== notificationId)
       );
     } catch (error) {
-      console.error("Error deleting notification:", error);
+      console.log("Error deleting notification:", error);
     }
   };
 

@@ -9,14 +9,14 @@ interface RequestedItemCardProps {
     itemPrice: number;
     images?: string[];
     requestCount: number;
-    newRequestCount: number; // Add this for unread/new requests
+    newRequestCount: number;
     requests: {
       userId: string;
       userName: string;
       status: string;
       startDate: string;
       endDate: string;
-      isNew?: boolean; // Add this to track new requests
+      isNew?: boolean;
     }[];
   };
   onViewRequests: (id: string) => void;

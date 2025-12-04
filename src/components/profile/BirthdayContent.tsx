@@ -40,7 +40,7 @@ export const BirthdayContent = ({ onSave, onClose }: BirthdayContentProps) => {
     try {
       await onSave(date.toISOString());
     } catch (error) {
-      console.error("Error saving birthday:", error);
+      console.log("Error saving birthday:", error);
       setWarning("Failed to save birthday. Please try again.");
     } finally {
       setLoading(false);

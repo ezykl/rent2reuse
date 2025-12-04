@@ -60,7 +60,7 @@ const SearchCamera: React.FC<SearchCameraProps> = ({
         onClose();
       }
     } catch (error) {
-      console.error("Error taking picture:", error);
+      console.log("Error taking picture:", error);
       Alert.alert("Error", "Failed to take picture. Please try again.");
     } finally {
       setIsCapturing(false);
@@ -80,7 +80,7 @@ const SearchCamera: React.FC<SearchCameraProps> = ({
         onClose();
       }
     } catch (error) {
-      console.error("Error selecting from gallery:", error);
+      console.log("Error selecting from gallery:", error);
       Alert.alert("Error", "Failed to select image. Please try again.");
     }
   };
@@ -124,9 +124,9 @@ const SearchCamera: React.FC<SearchCameraProps> = ({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.container}>
-        <CameraView 
-          ref={cameraRef} 
-          style={[styles.camera, { width, height }]} 
+        <CameraView
+          ref={cameraRef}
+          style={[styles.camera, { width, height }]}
           facing={facing}
         >
           {/* Header with close button */}

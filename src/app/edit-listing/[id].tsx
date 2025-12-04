@@ -226,7 +226,7 @@ const EditListing = () => {
         setInitialFormData(initialData);
       }
     } catch (error) {
-      console.error("Error fetching listing:", error);
+      console.log("Error fetching listing:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -517,14 +517,14 @@ const EditListing = () => {
 
           console.log(`Successfully updated chat: ${chatId}`);
         } catch (error) {
-          console.error(`Error updating chat ${chatId}:`, error);
+          console.log(`Error updating chat ${chatId}:`, error);
         }
       });
 
       await Promise.allSettled(chatUpdatePromises);
       console.log("All related chats processed");
     } catch (error) {
-      console.error("Error updating related chats:", error);
+      console.log("Error updating related chats:", error);
     }
   };
 
@@ -574,7 +574,7 @@ const EditListing = () => {
       await batch.commit();
       console.log("All related rent requests updated");
     } catch (error) {
-      console.error("Error updating related rent requests:", error);
+      console.log("Error updating related rent requests:", error);
     }
   };
 
@@ -804,7 +804,7 @@ const EditListing = () => {
 
       router.back();
     } catch (error) {
-      console.error("Error updating listing:", error);
+      console.log("Error updating listing:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -892,7 +892,7 @@ const EditListing = () => {
         setTimeout(() => uploadImageInBackground(photo.uri, newIndex), 100);
       }
     } catch (error) {
-      console.error("Camera capture error:", error);
+      console.log("Camera capture error:", error);
       setIsSubmitting(false);
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -946,7 +946,7 @@ const EditListing = () => {
         textBody: "Image uploaded successfully",
       });
     } catch (error) {
-      console.error("Background upload error:", error);
+      console.log("Background upload error:", error);
 
       // Keep local URI but mark as failed
       setImageStates((prev) =>
@@ -1048,7 +1048,7 @@ const EditListing = () => {
 
       return downloadURL;
     } catch (error) {
-      console.error("Upload error:", error);
+      console.log("Upload error:", error);
       throw new Error("Failed to upload image");
     }
   };

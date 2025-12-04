@@ -63,7 +63,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         await removeUserToken(currentUser.uid, expoPushToken.data);
       }
     } catch (error) {
-      console.error("Error during logout:", error);
+      console.log("Error during logout:", error);
     }
   };
 
@@ -111,7 +111,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(null); // fallback to basic user if no profile data
           }
         } catch (error) {
-          console.error("Failed to fetch Firestore user data:", error);
+          console.log("Failed to fetch Firestore user data:", error);
           setUser(currentUser); // fallback to auth-only
         }
       } else {
@@ -173,11 +173,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           },
           (error) => {
-            console.error("Error in session listener:", error);
+            console.log("Error in session listener:", error);
           }
         );
       } catch (error) {
-        console.error("Error setting up session listener:", error);
+        console.log("Error setting up session listener:", error);
       }
     };
 

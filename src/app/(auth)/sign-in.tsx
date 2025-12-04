@@ -194,7 +194,7 @@ const SignIn = () => {
       });
       return false;
     } catch (error) {
-      // console.error("Error checking account status:", error);
+      // console.log("Error checking account status:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Verification Failed",
@@ -256,7 +256,7 @@ const SignIn = () => {
 
         router.replace("/home");
       } catch (error) {
-        // console.error("Error handling session conflict:", error);
+        // console.log("Error handling session conflict:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Login Failed",
@@ -305,7 +305,7 @@ const SignIn = () => {
         router.replace("/home");
       }
     } catch (error) {
-      console.error("Error completing sign in:", error);
+      console.log("Error completing sign in:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Login Failed",

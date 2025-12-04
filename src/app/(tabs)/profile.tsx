@@ -136,7 +136,7 @@ const Profile: React.FC = () => {
         // Force refresh profile completion status
         await refreshStatus();
       } catch (error) {
-        console.error("Error checking auth:", error);
+        console.log("Error checking auth:", error);
       }
     };
 
@@ -189,7 +189,7 @@ const Profile: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Error fetching profile data:", error);
+        console.log("Error fetching profile data:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -241,7 +241,7 @@ const Profile: React.FC = () => {
         }
       },
       (error) => {
-        console.error("Error in profile snapshot:", error);
+        console.log("Error in profile snapshot:", error);
       }
     );
 
@@ -262,7 +262,7 @@ const Profile: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error("Error ensuring profile exists:", error);
+      console.log("Error ensuring profile exists:", error);
     }
   };
 
@@ -280,7 +280,7 @@ const Profile: React.FC = () => {
       });
       router.replace("/(auth)/sign-in");
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.log("Error signing out:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -401,9 +401,9 @@ const Profile: React.FC = () => {
       await refreshStatus();
       setActiveModal(null);
     } catch (error) {
-      console.error("Error updating profile image:", error);
+      console.log("Error updating profile image:", error);
       if (error instanceof Error) {
-        console.error("Error details:", (error as any).code, error.message);
+        console.log("Error details:", (error as any).code, error.message);
       }
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -503,7 +503,7 @@ const Profile: React.FC = () => {
 
       setActiveModal(null);
     } catch (error) {
-      console.error("Error updating ID verification:", error);
+      console.log("Error updating ID verification:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -537,7 +537,7 @@ const Profile: React.FC = () => {
 
       return "recently";
     } catch (error) {
-      console.error("Error formatting Firestore date:", error);
+      console.log("Error formatting Firestore date:", error);
       return "recently";
     }
   };
@@ -548,7 +548,7 @@ const Profile: React.FC = () => {
       await refreshStatus();
       setRefreshFlag((prev) => prev + 1);
     } catch (error) {
-      console.error("Refresh error:", error);
+      console.log("Refresh error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -759,7 +759,7 @@ const Profile: React.FC = () => {
         textBody: "You can now start renting and listing items!",
       });
     } catch (error) {
-      console.error("Error claiming free plan:", error);
+      console.log("Error claiming free plan:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

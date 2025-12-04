@@ -50,6 +50,7 @@ interface PaymentMessageProps {
   };
   clientId: string;
   clientSecret: string;
+  onCancelPayment?: (messageId: string) => void;
 }
 
 // Exchange rate helper
@@ -108,7 +109,7 @@ const getPayPalAccessToken = async (clientId: string, clientSecret: string) => {
       throw new Error(data.error_description || "Failed to get access token");
     }
   } catch (error) {
-    console.error("Error getting PayPal access token:", error);
+    console.log("Error getting PayPal access token:", error);
     throw error;
   }
 };
@@ -155,7 +156,7 @@ const createPayPalOrder = async (
       throw new Error(data.message || "Failed to create PayPal order");
     }
   } catch (error) {
-    console.error("Error creating PayPal order:", error);
+    console.log("Error creating PayPal order:", error);
     throw error;
   }
 };
@@ -180,7 +181,7 @@ const capturePayPalOrder = async (accessToken: string, orderId: string) => {
       throw new Error(data.message || "Failed to capture PayPal payment");
     }
   } catch (error) {
-    console.error("Error capturing PayPal payment:", error);
+    console.log("Error capturing PayPal payment:", error);
     throw error;
   }
 };
@@ -244,7 +245,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         textBody: "Payment request is now available for the renter",
       });
     } catch (error) {
-      console.error("Payment request creation error:", error);
+      console.log("Payment request creation error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -282,7 +283,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       setPaymentUrl(approvalUrl);
       setShowPayPalWebView(true);
     } catch (error) {
-      console.error("Payment error:", error);
+      console.log("Payment error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -326,9 +327,31 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           paidAt: serverTimestamp(),
           transactionId: transactionId,
           paypalOrderId: orderId,
-          paypalCaptureId:
-            captureResult.purchase_units[0]?.payments?.captures[0]?.id,
         });
+
+        // ✅ UPDATE CHAT STATUS BASED ON PAYMENT TYPE
+        const chatRef = doc(db, "chat", chatId);
+
+        if (item.paymentType === "initial") {
+          // ✅ If there's an initial payment, mark as initial_payment_paid
+          // This allows renter to submit conditional assessment before pickup
+          await updateDoc(chatRef, {
+            status: "initial_payment_paid", // ✅ NEW STATUS
+            initialPaymentStatus: "completed",
+            lastMessage: "Initial payment confirmed",
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          // Full payment - move to pickedup
+          await updateDoc(chatRef, {
+            status: "pickedup",
+            fullPaymentStatus: "completed",
+            lastMessage: "Full payment confirmed",
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
 
         Toast.show({
           type: ALERT_TYPE.SUCCESS,
@@ -337,7 +360,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         });
       }
     } catch (error) {
-      console.error("Payment capture error:", error);
+      console.log("Payment capture error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -659,6 +682,55 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
             ID:{" "}
             {item.transactionId || item.paypalCaptureId || item.paypalOrderId}
           </Text>
+        )}
+
+        {/* Cancel Button for Owner (only if pending) */}
+        {item.status === "pending" && !isCurrentUser && isOwner && (
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                "Cancel Payment Request",
+                "Are you sure you want to cancel this payment request?",
+                [
+                  { text: "No", style: "cancel" },
+                  {
+                    text: "Yes, Cancel",
+                    style: "destructive",
+                    onPress: async () => {
+                      const messageRef = doc(
+                        db,
+                        "chat",
+                        chatId,
+                        "messages",
+                        item.id
+                      );
+                      await updateDoc(messageRef, {
+                        status: "cancelled",
+                        cancelledAt: serverTimestamp(),
+                      });
+                      Toast.show({
+                        type: ALERT_TYPE.SUCCESS,
+                        title: "Request Cancelled",
+                        textBody: "Payment request has been cancelled",
+                      });
+                    },
+                  },
+                ]
+              );
+            }}
+            className="bg-red-100 rounded-lg py-2 mt-3"
+          >
+            <View className="flex-row items-center justify-center">
+              <Image
+                source={icons.close}
+                className="w-4 h-4 mr-2"
+                tintColor="#DC2626"
+              />
+              <Text className="text-red-600 font-psemibold text-sm">
+                Cancel Request
+              </Text>
+            </View>
+          </TouchableOpacity>
         )}
       </View>
     </View>

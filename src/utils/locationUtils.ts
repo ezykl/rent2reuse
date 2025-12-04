@@ -41,7 +41,7 @@ export class LocationPermissionManager {
       }
       return isEnabled;
     } catch (error) {
-      console.error("Error checking location services:", error);
+      console.log("Error checking location services:", error);
       return false;
     }
   }
@@ -64,7 +64,7 @@ export class LocationPermissionManager {
 
       return true;
     } catch (error) {
-      console.error("Error requesting location permissions:", error);
+      console.log("Error requesting location permissions:", error);
       return false;
     }
   }
@@ -112,7 +112,7 @@ export class LocationService {
         timestamp: location.timestamp,
       };
     } catch (error: any) {
-      console.error("Location error:", error);
+      console.log("Location error:", error);
       if (showErrorAlert) {
         LocationService.handleLocationError(error);
       }
@@ -161,7 +161,7 @@ export class LocationService {
 
       return true;
     } catch (error) {
-      console.error("Error starting location watch:", error);
+      console.log("Error starting location watch:", error);
       if (onError) onError(error);
       return false;
     }
@@ -325,7 +325,7 @@ export class NavigationHelper {
         await Linking.openURL(url);
       }
     } catch (error) {
-      console.error("Error opening Google Maps:", error);
+      console.log("Error opening Google Maps:", error);
       Alert.alert("Error", "Unable to open Google Maps");
     }
   }
@@ -347,7 +347,7 @@ export class NavigationHelper {
         await Linking.openURL(url);
       }
     } catch (error) {
-      console.error("Error opening directions:", error);
+      console.log("Error opening directions:", error);
       Alert.alert("Error", "Unable to open directions");
     }
   }

@@ -114,7 +114,7 @@ export const getPayPalAccessToken = async (
       throw new Error(data.error_description || "Failed to get access token");
     }
   } catch (error) {
-    console.error("Error getting PayPal access token:", error);
+    console.log("Error getting PayPal access token:", error);
     throw error;
   }
 };
@@ -170,7 +170,7 @@ export const createPayPalOrder = async (
       throw new Error(data.message || "Failed to create PayPal order");
     }
   } catch (error) {
-    console.error("Error creating PayPal order:", error);
+    console.log("Error creating PayPal order:", error);
     throw error;
   }
 };
@@ -200,7 +200,7 @@ export const capturePayPalOrder = async (
       throw new Error(data.message || "Failed to capture PayPal payment");
     }
   } catch (error) {
-    console.error("Error capturing PayPal payment:", error);
+    console.log("Error capturing PayPal payment:", error);
     throw error;
   }
 };
@@ -231,7 +231,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
 }) => {
   useEffect(() => {
     if (!plan?.planType || !plan?.duration) {
-      console.error("Missing required plan fields:", plan);
+      console.log("Missing required plan fields:", plan);
     }
   }, [plan]);
 
@@ -286,7 +286,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
         createdAt: serverTimestamp(),
       });
     } catch (error) {
-      console.error("Error creating welcome notification:", error);
+      console.log("Error creating welcome notification:", error);
     }
   };
 
@@ -307,7 +307,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       const normalizedDuration = duration.toLowerCase().trim();
       return DURATION_MAP[normalizedDuration as keyof typeof DURATION_MAP] || 0;
     } catch (error) {
-      console.error(
+      console.log(
         "Error parsing duration:",
         error,
         "Duration value:",
@@ -376,7 +376,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       setPaymentUrl(approvalUrl);
       setShowWebView(true);
     } catch (error) {
-      // console.error("Payment error:", error);
+      // console.log("Payment error:", error);
       setLoading(false);
       onPaymentError(error);
     } finally {
@@ -481,7 +481,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
         });
       }
     } catch (error) {
-      console.error("Payment capture error:", error);
+      console.log("Payment capture error:", error);
       onPaymentError(error);
     } finally {
       setLoading(false);
@@ -539,7 +539,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
 
         Alert.alert("Success", "Receipt saved successfully!");
       } catch (error) {
-        console.error("Error saving receipt:", error);
+        console.log("Error saving receipt:", error);
         Alert.alert("Error", "Failed to save receipt");
       }
     };

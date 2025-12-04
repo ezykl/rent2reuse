@@ -99,7 +99,7 @@ const Home = () => {
       // Refresh items using the exposed refreshItems function
       await refreshItems();
     } catch (error) {
-      console.error("Error refreshing:", error);
+      console.log("Error refreshing:", error);
     } finally {
       setRefreshing(false);
       setIsFetchingAnnouncement(false);
@@ -141,7 +141,7 @@ const Home = () => {
                 });
                 console.log("Current location:", location);
               } catch (error) {
-                console.error("Error getting location:", error);
+                console.log("Error getting location:", error);
               }
             } else {
               console.log("Location permission denied");
@@ -152,7 +152,7 @@ const Home = () => {
           console.log("Location services are disabled on the device");
         }
       } catch (error) {
-        console.error("Error checking location settings:", error);
+        console.log("Error checking location settings:", error);
       }
     };
 
@@ -447,7 +447,7 @@ const Home = () => {
                               refreshing ? Date.now() : ""
                             }`}
                             onError={(error) => {
-                              console.error("Image loading error:", error);
+                              console.log("Image loading error:", error);
                             }}
                           />
                         ) : (

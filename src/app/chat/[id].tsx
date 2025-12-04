@@ -23,10 +23,15 @@ import {
   Dimensions,
 } from "react-native";
 import * as MediaLibrary from "expo-media-library";
+import RatingMessage from "@/components/chatModal/RatingMessage";
+import ConditionalAssessmentMessage from "@/components/chatModal/ConditionalAssessmentMessage";
 import * as FileSystem from "expo-file-system";
 import { useMemo } from "react";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
+import OwnerConfirmationMessage from "@/components/chatModal/OwnerConfirmationMessage";
+import { PickupAssessmentData } from "@/components/chatModal/PickupAssessmentModal";
+
 import {
   collection,
   addDoc,
@@ -83,10 +88,21 @@ import RentRequestMessage from "@/components/chatModal/RentRequestMessage";
 import ActionMenu from "@/components/chatModal/ActionMenu";
 import MessageActionsModal from "@/components/chatModal/MessageActionsModal";
 import Message from "@/types/message";
+
+type MessageType =
+  | Message["type"]
+  | "conditionalAssessment"
+  | "ownerConfirmation"
+  | "rentRequest"
+  | "payment"
+  | "statusUpdate"
+  | "image"
+  | "message";
 import PaymentMessage from "@/components/chatModal/PaymentMessage";
 import CustomAlert from "@/components/CustomAlert";
 import { DatabaseHelper } from "@/utils/paypalHelper";
 import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "@env";
+import PickupAssessmentModal from "@/components/chatModal/PickupAssessmentModal";
 
 const formatTimestamp = (timestamp: any): string => {
   if (!timestamp) return "";
@@ -141,6 +157,14 @@ const ChatScreen = () => {
     firstname: "",
     lastname: "",
   });
+
+  const [showPickupAssessmentModal, setShowPickupAssessmentModal] =
+    useState(false);
+  const [pickupAssessmentData, setPickupAssessmentData] =
+    useState<PickupAssessmentData | null>(null);
+
+  const [assessmentSaved, setAssessmentSaved] = useState(false);
+
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [recipientImage, setRecipientImage] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -204,6 +228,14 @@ const ChatScreen = () => {
       endDate?: any;
       pickupTime?: number;
     };
+    initialPaymentSent?: boolean;
+    fullPaymentSent?: boolean;
+    initialPaymentStatus?: "pending" | "completed";
+    fullPaymentStatus?: "pending" | "completed";
+    ownerRatingSubmitted?: boolean;
+    renterRatingSubmitted?: boolean;
+    ownerRatedAt?: any;
+    renterRatedAt?: any;
   } | null>(null);
 
   const [showCamera, setShowCamera] = useState(false);
@@ -230,7 +262,7 @@ const ChatScreen = () => {
           setCurrentUserPayPalEmail(currentUserData.paypalEmail || "");
         }
       } catch (error) {
-        console.error("Error fetching current user PayPal email:", error);
+        console.log("Error fetching current user PayPal email:", error);
         setCurrentUserPayPalEmail("");
       } finally {
         setIsCheckingPayPal(false);
@@ -255,7 +287,7 @@ const ChatScreen = () => {
         }
       },
       (error) => {
-        console.error("Error listening to current user PayPal updates:", error);
+        console.log("Error listening to current user PayPal updates:", error);
       }
     );
 
@@ -282,6 +314,89 @@ const ChatScreen = () => {
       </View>
     );
   }
+
+  const handlePickupAssessmentSubmit = async (
+    assessmentData: PickupAssessmentData // ✅ Use the correct aligned type
+  ) => {
+    try {
+      setIsLoading(true);
+
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+
+      // ✅ Create assessment message with aligned data
+      const assessmentMessage = await addDoc(messagesRef, {
+        type: "conditionalAssessment",
+        assessmentType: "pickup",
+        assessment: {
+          overallCondition: assessmentData.overallCondition,
+          scratches: assessmentData.scratches,
+          dents: assessmentData.dents,
+          stains: assessmentData.stains,
+          tears: assessmentData.tears,
+          functioningIssues: assessmentData.functioningIssues,
+          otherDamage: assessmentData.otherDamage,
+          notes: assessmentData.notes,
+          photos: assessmentData.photos,
+          submittedAt: serverTimestamp(),
+        },
+        status: "submitted", // ✅ Changed from pending
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      // ✅ Update chat status
+      const chatRef = doc(db, "chat", String(chatId));
+      await updateDoc(chatRef, {
+        renterPickupAssessmentSubmitted: true,
+        renterPickupAssessmentMessageId: assessmentMessage.id,
+        renterPickupAssessmentData: {
+          overallCondition: assessmentData.overallCondition,
+          scratches: assessmentData.scratches,
+          dents: assessmentData.dents,
+          stains: assessmentData.stains,
+          tears: assessmentData.tears,
+          functioningIssues: assessmentData.functioningIssues,
+          otherDamage: assessmentData.otherDamage,
+          notes: assessmentData.notes,
+          photoCount: assessmentData.photos.length,
+          photoUrls: assessmentData.photos,
+          submittedAt: serverTimestamp(),
+        },
+        status: "assessment_submitted",
+        lastMessage: "Renter submitted pickup inspection",
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add status message
+      await addDoc(messagesRef, {
+        type: "statusUpdate",
+        text: "Renter completed pickup inspection with photos",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      setShowPickupAssessmentModal(false);
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Assessment Submitted",
+        textBody: "Waiting for owner to confirm receipt",
+      });
+    } catch (error) {
+      console.log("Error submitting pickup assessment:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to submit assessment",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleImagePress = (selectedImageUrl: string) => {
     const imageMessages = messages.filter(
       (msg) => msg.type === "image" && msg.imageUrl && !msg.isDeleted
@@ -379,8 +494,8 @@ const ChatScreen = () => {
         downpaymentPercentage: downpaymentPercentage,
         status: "pending",
         recipientPayPalEmail: currentUserPayPalEmail,
-        recipientId: recipientId, // The renter who will make the payment
-        usdAmount: DatabaseHelper.convertToUsd(amount), // ADD this line
+        recipientId: recipientId,
+        usdAmount: DatabaseHelper.convertToUsd(amount),
         createdAt: serverTimestamp(),
         read: false,
         readAt: null,
@@ -390,7 +505,6 @@ const ChatScreen = () => {
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       await addDoc(messagesRef, paymentMessageData);
 
-      // Update chat document
       const chatRef = doc(db, "chat", String(chatId));
       const updateData = {
         lastMessage: `Payment request: ${
@@ -399,6 +513,15 @@ const ChatScreen = () => {
         lastMessageTime: serverTimestamp(),
         lastSender: currentUserId,
         [`unreadCounts.${recipientId}`]: increment(1),
+
+        ...(paymentType === "initial" && {
+          initialPaymentSent: true,
+          initialPaymentStatus: "pending",
+        }),
+        ...(paymentType === "full" && {
+          fullPaymentSent: true,
+          fullPaymentStatus: "pending",
+        }),
       };
 
       await updateDoc(chatRef, updateData);
@@ -411,7 +534,7 @@ const ChatScreen = () => {
         } payment request sent successfully`,
       });
     } catch (error) {
-      console.error("Error sending payment message:", error);
+      console.log("Error sending payment message:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -431,16 +554,29 @@ const ChatScreen = () => {
   };
 
   const handleInitialPayment = () => {
+    if (!chatData?.itemDetails) {
+      Alert.alert("Error", "Item details not found");
+      return;
+    }
+
+    const downpaymentPercentage =
+      chatData.itemDetails.downpaymentPercentage || 0;
+    const totalPrice = chatData.itemDetails.totalPrice || 0;
+    const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
+
     Alert.alert(
-      "Send Initial Payment Request",
-      `Send an initial payment request to the renter?`,
+      "Request Initial Payment",
+      `Request ₱${downpaymentAmount.toLocaleString()} (${downpaymentPercentage}% down payment)?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Send", onPress: () => sendPaymentMessage("initial") },
+        {
+          text: "Send Request",
+          style: "default",
+          onPress: () => sendPaymentMessage("initial"),
+        },
       ]
     );
   };
-
   const handleMessageDelete = async (messageId: string) => {
     if (!selectedMessage) return;
 
@@ -538,7 +674,7 @@ const ChatScreen = () => {
               } deleted successfully`,
             });
           } catch (error) {
-            console.error("Error deleting message:", error);
+            console.log("Error deleting message:", error);
             Toast.show({
               type: ALERT_TYPE.DANGER,
               title: "Error",
@@ -551,14 +687,247 @@ const ChatScreen = () => {
   };
 
   const handleFullPayment = () => {
+    if (!chatData?.itemDetails) {
+      Alert.alert("Error", "Item details not found");
+      return;
+    }
+
+    const downpaymentPercentage =
+      chatData.itemDetails.downpaymentPercentage || 0;
+    const totalPrice = chatData.itemDetails.totalPrice || 0;
+    const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
+    const remainingAmount = totalPrice - downpaymentAmount;
+
     Alert.alert(
-      "Send Full Payment Request",
-      `Send a full payment request to the renter?`,
+      "Request Full Payment",
+      `Request remaining payment of ₱${remainingAmount.toLocaleString()}?`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Send", onPress: () => sendPaymentMessage("full") },
+        {
+          text: "Send Request",
+          style: "default",
+          onPress: () => sendPaymentMessage("full"),
+        },
       ]
     );
+  };
+
+  const getNextStepMessage = (): string => {
+    const status = chatData?.status;
+    const isOwner = currentUserId === chatData?.ownerId;
+
+    if (status === "pending") {
+      return "";
+    }
+
+    if (isOwner) {
+      switch (status) {
+        case "accepted":
+          return "💰 Request initial payment if applicable...";
+        case "initial_payment_paid":
+          return "⏳ Waiting for renter to verify item condition...";
+        case "assessment_submitted":
+          return "✅ Confirm that renter has received the item";
+        case "pickedup":
+          return "📦 Request final payment and inspect returned item";
+        case "completed":
+          return "⭐ Send your verdict/review about the renter";
+        default:
+          return "";
+      }
+    } else {
+      switch (status) {
+        case "accepted":
+          return "📋 Prepare for payment and verify item condition on pickup...";
+        case "initial_payment_paid":
+          return "📦 Verify item condition (photos required) - Required before pickup";
+        case "assessment_submitted":
+          return "⏳ Waiting for owner to confirm item receipt...";
+        case "pickedup":
+          return "🔄 Prepare item for return by the end date";
+        case "completed":
+          return "⭐ Send your verdict/review about the owner";
+        default:
+          return "";
+      }
+    }
+  };
+
+  // In [id].tsx - Add this new handler
+
+  const handleItemReceived = async () => {
+    try {
+      setIsLoading(true);
+
+      const chatRef = doc(db, "chat", String(chatId));
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+
+      // ✅ Change status to pickedup when owner confirms receipt
+      await updateDoc(chatRef, {
+        status: "pickedup",
+        itemReceivedAt: serverTimestamp(),
+        lastMessage: "Owner confirmed item received",
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Add status message
+      await addDoc(messagesRef, {
+        type: "statusUpdate",
+        text: "Owner confirmed that item was received",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+        status: "pickedup",
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Confirmed",
+        textBody: "Item receipt confirmed",
+      });
+    } catch (error) {
+      console.log("Error confirming item receipt:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to confirm receipt",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Add this for renter to prepare return
+  const handlePrepareReturn = async () => {
+    Alert.alert("Prepare Return", "Are you ready to return the item?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Preparing Return",
+        style: "default",
+        onPress: async () => {
+          try {
+            setIsLoading(true);
+
+            const messagesRef = collection(
+              db,
+              "chat",
+              String(chatId),
+              "messages"
+            );
+
+            // Add status message
+            await addDoc(messagesRef, {
+              type: "statusUpdate",
+              text: "Renter is preparing item for return",
+              senderId: currentUserId,
+              createdAt: serverTimestamp(),
+              read: false,
+            });
+
+            Toast.show({
+              type: ALERT_TYPE.SUCCESS,
+              title: "Return Prepared",
+              textBody: "Item return has been initiated",
+            });
+          } catch (error) {
+            console.log("Error preparing return:", error);
+            Toast.show({
+              type: ALERT_TYPE.DANGER,
+              title: "Error",
+              textBody: "Failed to prepare return",
+            });
+          } finally {
+            setIsLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSubmitAssessment = async (
+    assessmentType: "pickup" | "return",
+    assessmentData: any
+  ) => {
+    try {
+      setIsLoading(true);
+
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+
+      // ✅ Add assessment message to chat
+      await addDoc(messagesRef, {
+        type: "conditionalAssessment",
+        assessmentType: assessmentType,
+        assessment: assessmentData, // Save the entire assessment data
+        status: "pending", // ✅ Pending owner confirmation
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      const chatRef = doc(db, "chat", String(chatId));
+
+      if (assessmentType === "pickup") {
+        // ✅ Update chat with assessment data
+        await updateDoc(chatRef, {
+          renterPickupAssessmentSubmitted: true,
+          renterPickupAssessmentData: assessmentData,
+          lastMessage: "Renter submitted pickup assessment",
+          lastMessageTime: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        // Add status message
+        await addDoc(messagesRef, {
+          type: "statusUpdate",
+          text: "Renter submitted item condition assessment",
+          senderId: currentUserId,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+
+        Toast.show({
+          type: ALERT_TYPE.SUCCESS,
+          title: "Assessment Submitted",
+          textBody: "Waiting for owner to review",
+        });
+      } else if (assessmentType === "return") {
+        // Similar logic for return assessment
+        await updateDoc(chatRef, {
+          renterReturnAssessmentSubmitted: true,
+          renterReturnAssessmentData: assessmentData,
+          lastMessage: "Renter submitted return assessment",
+          lastMessageTime: serverTimestamp(),
+          status: "completed",
+          updatedAt: serverTimestamp(),
+        });
+
+        await addDoc(messagesRef, {
+          type: "statusUpdate",
+          text: "Renter submitted return condition assessment",
+          senderId: currentUserId,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+
+        Toast.show({
+          type: ALERT_TYPE.SUCCESS,
+          title: "Return Assessment Submitted",
+          textBody: "Rental completed successfully",
+        });
+      }
+
+      setShowPickupAssessmentModal(false);
+    } catch (error) {
+      console.log("Error submitting assessment:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to submit assessment",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveImage = async () => {
@@ -659,7 +1028,7 @@ const ChatScreen = () => {
           : "Image saved to gallery",
       });
     } catch (error) {
-      console.error("Error saving image:", error);
+      console.log("Error saving image:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -696,7 +1065,7 @@ const ChatScreen = () => {
         try {
           await uploadAndSendImage(result.assets[0], uploadId);
         } catch (error) {
-          console.error("Error uploading image:", error);
+          console.log("Error uploading image:", error);
           // Remove from uploading state on error
           setUploadingMessages((prev) =>
             prev.filter((msg) => msg.id !== uploadId)
@@ -709,7 +1078,7 @@ const ChatScreen = () => {
         }
       }
     } catch (error) {
-      console.error("Error picking image:", error);
+      console.log("Error picking image:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -826,7 +1195,7 @@ const ChatScreen = () => {
 
       await updateDoc(chatRef, updateData);
     } catch (error) {
-      console.error("Error sending image message:", error);
+      console.log("Error sending image message:", error);
       throw error;
     }
   };
@@ -885,7 +1254,7 @@ const ChatScreen = () => {
       // Remove from uploading state after successful upload
       setUploadingMessages((prev) => prev.filter((msg) => msg.id !== uploadId));
     } catch (error) {
-      console.error("Error uploading image:", error);
+      console.log("Error uploading image:", error);
       throw error; // Re-throw so pickImage can handle it
     }
   };
@@ -1092,7 +1461,7 @@ const ChatScreen = () => {
 
         setLoading(false);
       } catch (error: any) {
-        console.error("Error initializing chat:", error);
+        console.log("Error initializing chat:", error);
         setLoading(false);
       }
     };
@@ -1194,7 +1563,7 @@ const ChatScreen = () => {
 
       await updateDoc(chatRef, updateData);
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.log("Error sending message:", error);
       Alert.alert("Error", "Failed to send message");
       setNewMessage(messageText);
     }
@@ -1234,7 +1603,7 @@ const ChatScreen = () => {
           await batch.commit();
         }
       } catch (error) {
-        console.error("Error marking messages as read:", error);
+        console.log("Error marking messages as read:", error);
       }
     };
 
@@ -1258,7 +1627,7 @@ const ChatScreen = () => {
   const memoizedHandleDecline = useCallback(
     async (requestId: string) => {
       if (!requestId) {
-        console.error("No requestId provided for decline");
+        console.log("No requestId provided for decline");
         return;
       }
       await handleDeclineRequest(requestId);
@@ -1269,7 +1638,7 @@ const ChatScreen = () => {
   const memoizedHandleAccept = useCallback(
     async (requestId: string) => {
       if (!requestId) {
-        console.error("No requestId provided for accept");
+        console.log("No requestId provided for accept");
         return;
       }
       await handleAcceptRequest(requestId);
@@ -1280,7 +1649,7 @@ const ChatScreen = () => {
   const memoizedHandleCancel = useCallback(
     async (requestId: string) => {
       if (!requestId) {
-        console.error("No requestId provided for cancel");
+        console.log("No requestId provided for cancel");
         return;
       }
       await handleCancelRequest(requestId);
@@ -1293,7 +1662,24 @@ const ChatScreen = () => {
   };
 
   const handleSendAgreement = () => {
-    router.push("/agreement-form");
+    if (!chatData) {
+      Alert.alert("Error", "Chat data not available");
+      return;
+    }
+
+    // Navigate with agreement data as params
+    const agreementData = {
+      chatId: String(chatId),
+      isOwner: currentUserId === chatData.ownerId,
+      itemDetails: chatData.itemDetails,
+    };
+
+    router.push({
+      pathname: "/agreement-form", // ✅ Make sure this route exists
+      params: {
+        data: JSON.stringify(agreementData),
+      },
+    });
   };
 
   const handleViewRequests = () => {
@@ -1333,7 +1719,7 @@ const ChatScreen = () => {
         textBody: `Status updated to ${newStatus}`,
       });
     } catch (error) {
-      console.error("Error updating status:", error);
+      console.log("Error updating status:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -1343,8 +1729,55 @@ const ChatScreen = () => {
   };
 
   // 3. Add these handler functions for status progression:
-  const handlePaymentConfirmed = () => {
-    updateRentalStatus("paid", "Payment confirmed by owner");
+  const handlePaymentConfirmed = async (paymentType: "initial" | "full") => {
+    try {
+      const chatRef = doc(db, "chat", String(chatId));
+
+      const updateData = {
+        status: "paid",
+        lastMessage: `${
+          paymentType === "initial" ? "Initial" : "Full"
+        } payment confirmed`,
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        // ✅ MARK PAYMENT STATUS AS COMPLETED
+        ...(paymentType === "initial" && {
+          initialPaymentStatus: "completed",
+        }),
+        ...(paymentType === "full" && {
+          fullPaymentStatus: "completed",
+        }),
+      };
+
+      await updateDoc(chatRef, updateData);
+
+      // Add status message
+      await addDoc(collection(db, "chat", String(chatId), "messages"), {
+        type: "statusUpdate",
+        text: `${
+          paymentType === "initial" ? "Initial" : "Full"
+        } payment confirmed`,
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+        status: "paid",
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Payment Confirmed",
+        textBody: `${
+          paymentType === "initial" ? "Initial" : "Full"
+        } payment has been confirmed`,
+      });
+    } catch (error) {
+      console.log("Error confirming payment:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to confirm payment",
+      });
+    }
   };
 
   const handleItemPickedUp = () => {
@@ -1355,7 +1788,42 @@ const ChatScreen = () => {
     updateRentalStatus("completed", "Item returned and rental completed");
   };
 
-  // DELETE the old actionItems const and replace with this function:
+  const handleInitiatePickupAssessment = () => {
+    // Create an initial assessment message to start the inspection
+    addDoc(collection(db, "chat", String(chatId), "messages"), {
+      type: "conditionalAssessment",
+      assessmentType: "pickup",
+      status: "pending",
+      senderId: currentUserId,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+
+    Toast.show({
+      type: ALERT_TYPE.INFO,
+      title: "Assessment Started",
+      textBody: "Please inspect the item and complete the assessment",
+    });
+  };
+
+  const handleInitiateReturnAssessment = () => {
+    // Create an initial assessment message for return inspection
+    addDoc(collection(db, "chat", String(chatId), "messages"), {
+      type: "conditionalAssessment",
+      assessmentType: "return",
+      status: "pending",
+      senderId: currentUserId,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+
+    Toast.show({
+      type: ALERT_TYPE.INFO,
+      title: "Assessment Started",
+      textBody: "Please inspect the returned item and complete the assessment",
+    });
+  };
+
   const getAvailableActions = (): ActionMenuItem[] => {
     if (!chatData || !currentUserId) return [];
 
@@ -1363,26 +1831,29 @@ const ChatScreen = () => {
     const status = chatData.status;
     const actions: ActionMenuItem[] = [];
 
+    // ✅ HIDE ALL ACTIONS ON "pending" STATUS
+    if (status === "pending") {
+      return []; // No actions available
+    }
+
     // OWNER ACTIONS
     if (isOwner) {
       switch (status) {
-        case "pending":
-          // Owner can send requests link while pending
-          actions.push({
-            id: "view_requests",
-            icon: icons.arrowDown,
-            label: "View Requests",
-            action: handleViewRequests,
-            bgColor: "#FFF3E0",
-            iconColor: "#FF9800",
-          });
-          break;
-
         case "accepted":
-          // After accepting, owner can request payment
+          // ✅ Check if there's a pending initial payment request
+          const hasPendingInitialPayment = messages.some(
+            (msg) =>
+              msg.type === "payment" &&
+              msg.paymentType === "initial" &&
+              msg.status === "pending"
+          );
+
+          // ✅ Only show if there's a downpayment required AND no pending request
           if (
             chatData.itemDetails?.downpaymentPercentage &&
-            chatData.itemDetails.downpaymentPercentage > 0
+            chatData.itemDetails.downpaymentPercentage > 0 &&
+            !chatData.initialPaymentSent &&
+            !hasPendingInitialPayment
           ) {
             actions.push({
               id: "initial_payment",
@@ -1393,101 +1864,228 @@ const ChatScreen = () => {
               iconColor: "#FF9800",
             });
           }
-
-          actions.push({
-            id: "full_payment",
-            icon: icons.card,
-            label: "Request Full Payment",
-            action: handleFullPayment,
-            bgColor: "#E8F5E8",
-            iconColor: "#4CAF50",
-          });
-
-          // Agreement option
-          actions.push({
-            id: "agreement",
-            icon: icons.arrowDown,
-            label: "Agreement",
-            action: handleSendAgreement,
-            bgColor: "#E8EAF6",
-            iconColor: "#3F51B5",
-          });
+          // ✅ If pending payment exists, show info instead
+          else if (hasPendingInitialPayment) {
+            actions.push({
+              id: "initial_payment_pending",
+              icon: icons.clock,
+              label: "Initial Payment Pending",
+              action: () => {
+                Alert.alert(
+                  "Payment Pending",
+                  "An initial payment request has already been sent. Waiting for renter's response..."
+                );
+              },
+              bgColor: "#FEF3C7",
+              iconColor: "#F59E0B",
+            });
+          }
+          // ✅ If NO downpayment, owner can skip to assessment waiting
+          else {
+            actions.push({
+              id: "awaiting_assessment",
+              icon: icons.box,
+              label: "Awaiting Renter Assessment",
+              action: () => {
+                Alert.alert(
+                  "Assessment Pending",
+                  "Waiting for renter to verify item condition..."
+                );
+              },
+              bgColor: "#E3F2FD",
+              iconColor: "#2196F3",
+            });
+          }
           break;
 
-        case "paid":
-          // After payment, owner confirms pickup
+        case "initial_payment_paid":
+          // ✅ Owner: Waiting for renter's conditional assessment
           actions.push({
-            id: "confirm_pickup",
-            icon: icons.handshake,
-            label: "Item Picked Up",
-            action: handleItemPickedUp,
+            id: "awaiting_assessment",
+            icon: icons.box,
+            label: "Awaiting Renter Assessment",
+            action: () => {
+              Alert.alert(
+                "Assessment Pending",
+                "Waiting for renter to verify item condition..."
+              );
+            },
             bgColor: "#E3F2FD",
             iconColor: "#2196F3",
           });
           break;
 
-        case "pickedup":
-          // After pickup, owner confirms return
+        case "assessment_submitted":
+          // ✅ Owner: Confirm item received
           actions.push({
-            id: "confirm_return",
-            icon: icons.refresh,
-            label: "Item Returned",
-            action: handleItemReturned,
-            bgColor: "#F3E5F5",
-            iconColor: "#9C27B0",
+            id: "item_received",
+            icon: icons.check,
+            label: "Confirm Item Received",
+            action: handleItemReceived,
+            bgColor: "#E8F5E9",
+            iconColor: "#4CAF50",
+          });
+          break;
+
+        case "pickedup":
+          // ✅ Check for pending full payment
+          const hasPendingFullPayment = messages.some(
+            (msg) =>
+              msg.type === "payment" &&
+              msg.paymentType === "full" &&
+              msg.status === "pending"
+          );
+
+          // ✅ Only show full payment if no pending request
+          if (!chatData.fullPaymentSent && !hasPendingFullPayment) {
+            actions.push({
+              id: "full_payment",
+              icon: icons.card,
+              label: "Request Full Payment",
+              action: handleFullPayment,
+              bgColor: "#FFF3E0",
+              iconColor: "#FF9800",
+            });
+          }
+          // ✅ If pending payment exists, show info instead
+          else if (hasPendingFullPayment) {
+            actions.push({
+              id: "full_payment_pending",
+              icon: icons.clock,
+              label: "Full Payment Pending",
+              action: () => {
+                Alert.alert(
+                  "Payment Pending",
+                  "A full payment request has already been sent. Waiting for renter's response..."
+                );
+              },
+              bgColor: "#FEF3C7",
+              iconColor: "#F59E0B",
+            });
+          }
+
+          // Always show return inspection
+          actions.push({
+            id: "return_inspection",
+            icon: icons.box,
+            label: "Inspect Returned Item",
+            action: handleInitiateReturnAssessment,
+            bgColor: "#E8F5E9",
+            iconColor: "#4CAF50",
           });
           break;
 
         case "completed":
-          // Maybe add verdict option
-          actions.push({
-            id: "verdict",
-            icon: icons.arrowDown,
-            label: "Send Verdict",
-            action: handleSendVerdict,
-            bgColor: "#E0F2F1",
-            iconColor: "#009688",
-          });
+          // ✅ Check if owner has submitted rating
+          if (!chatData.ownerRatingSubmitted) {
+            actions.push({
+              id: "leave_rating",
+              icon: icons.star,
+              label: "Leave Rating",
+              action: handleInitiateRating,
+              bgColor: "#FEF3C7",
+              iconColor: "#F59E0B",
+            });
+          } else {
+            actions.push({
+              id: "rating_submitted",
+              icon: icons.check,
+              label: "Rating Submitted",
+              action: () => {
+                Alert.alert(
+                  "Rating Submitted",
+                  "You have already submitted your rating for this rental"
+                );
+              },
+              bgColor: "#D1FAE5",
+              iconColor: "#10B981",
+            });
+          }
           break;
       }
     }
     // RENTER ACTIONS
     else {
       switch (status) {
-        case "pending":
-          // Renter can view their sent requests
+        case "accepted":
+          // ✅ Always show assessment on accepted (even if no downpayment)
           actions.push({
-            id: "view_requests",
-            icon: icons.arrowDown,
-            label: "View Requests",
-            action: handleViewRequests,
-            bgColor: "#FFF3E0",
-            iconColor: "#FF9800",
+            id: "pickup_assessment",
+            icon: icons.box,
+            label: "Verify Item Condition",
+            action: () => setShowPickupAssessmentModal(true),
+            bgColor: "#E3F2FD",
+            iconColor: "#2196F3",
           });
           break;
 
-        case "accepted":
-          // Renter can view agreement after acceptance
+        case "initial_payment_paid":
+          // ✅ Renter: MUST submit conditional assessment if initial payment paid
           actions.push({
-            id: "agreement",
-            icon: icons.arrowDown,
-            label: "View Agreement",
-            action: handleSendAgreement,
-            bgColor: "#E8EAF6",
-            iconColor: "#3F51B5",
+            id: "pickup_assessment",
+            icon: icons.box,
+            label: "Verify Item Condition (Required)",
+            action: () => setShowPickupAssessmentModal(true),
+            bgColor: "#FED7AA", // Orange = Required
+            iconColor: "#D97706",
+          });
+          break;
+
+        case "assessment_submitted":
+          // ✅ Renter: Waiting for owner to confirm receipt
+          actions.push({
+            id: "awaiting_confirmation",
+            icon: icons.clock,
+            label: "Awaiting Owner Confirmation",
+            action: () => {
+              Alert.alert(
+                "Waiting",
+                "Waiting for owner to confirm item receipt..."
+              );
+            },
+            bgColor: "#FEF3C7",
+            iconColor: "#F59E0B",
+          });
+          break;
+
+        case "pickedup":
+          // ✅ Renter: Prepare return
+          actions.push({
+            id: "prepare_return",
+            icon: icons.refresh,
+            label: "Prepare Item Return",
+            action: handlePrepareReturn,
+            bgColor: "#F3E5F5",
+            iconColor: "#9C27B0",
           });
           break;
 
         case "completed":
-          // Renter can send verdict after completion
-          actions.push({
-            id: "verdict",
-            icon: icons.arrowDown,
-            label: "Send Verdict",
-            action: handleSendVerdict,
-            bgColor: "#E0F2F1",
-            iconColor: "#009688",
-          });
+          // ✅ Check if renter has submitted rating
+          if (!chatData.renterRatingSubmitted) {
+            actions.push({
+              id: "leave_rating",
+              icon: icons.star,
+              label: "Leave Rating",
+              action: handleInitiateRating,
+              bgColor: "#FEF3C7",
+              iconColor: "#F59E0B",
+            });
+          } else {
+            actions.push({
+              id: "rating_submitted",
+              icon: icons.check,
+              label: "Rating Submitted",
+              action: () => {
+                Alert.alert(
+                  "Rating Submitted",
+                  "You have already submitted your rating for this rental"
+                );
+              },
+              bgColor: "#D1FAE5",
+              iconColor: "#10B981",
+            });
+          }
           break;
       }
     }
@@ -1495,17 +2093,311 @@ const ChatScreen = () => {
     return actions;
   };
 
+  const handleInitiateRating = () => {
+    // Create an initial rating message to start the rating process
+    addDoc(collection(db, "chat", String(chatId), "messages"), {
+      type: "rating",
+      status: "pending",
+      senderId: currentUserId,
+      createdAt: serverTimestamp(),
+      read: false,
+    });
+
+    Toast.show({
+      type: ALERT_TYPE.INFO,
+      title: "Rating Started",
+      textBody: "Please share your rating for this rental",
+    });
+  };
+
+  const handleSubmitRating = async (ratingData: any) => {
+    try {
+      setIsLoading(true);
+
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const isOwner = currentUserId === chatData?.ownerId;
+
+      // ✅ Add rating message to chat
+      await addDoc(messagesRef, {
+        type: "rating",
+        rating: ratingData.rating,
+        review: ratingData.review,
+        categories: ratingData.categories,
+        status: "submitted",
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      const chatRef = doc(db, "chat", String(chatId));
+
+      // ✅ Update chat with rating data
+      const updateData = {
+        lastMessage: `${isOwner ? "Owner" : "Renter"} submitted a rating`,
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...(isOwner && {
+          ownerRatingSubmitted: true,
+          ownerRating: ratingData.rating,
+          ownerReview: ratingData.review,
+          ownerCategories: ratingData.categories,
+          ownerRatedAt: serverTimestamp(),
+        }),
+        ...(!isOwner && {
+          renterRatingSubmitted: true,
+          renterRating: ratingData.rating,
+          renterReview: ratingData.review,
+          renterCategories: ratingData.categories,
+          renterRatedAt: serverTimestamp(),
+        }),
+      };
+
+      await updateDoc(chatRef, updateData);
+
+      // Add status message
+      await addDoc(messagesRef, {
+        type: "statusUpdate",
+        text: `${isOwner ? "Owner" : "Renter"} submitted a rating (${
+          ratingData.rating
+        }⭐)`,
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Rating Submitted",
+        textBody: "Thank you for your feedback!",
+      });
+    } catch (error) {
+      console.log("Error submitting rating:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to submit rating",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAcceptRequest = async (requestId?: string) => {
     if (!requestId) {
-      console.error("No requestId provided");
+      console.log("No requestId provided");
       return;
     }
 
     try {
       setIsLoading(true);
 
-      // 1. Get the accepted request details first
+      // Get the rent request details
       const acceptedRequestRef = doc(db, "rentRequests", requestId);
+      const acceptedRequestSnap = await getDoc(acceptedRequestRef);
+
+      if (!acceptedRequestSnap.exists()) {
+        throw new Error("Request not found");
+      }
+
+      const acceptedRequestData = acceptedRequestSnap.data();
+      const recipientId = chatData?.requesterId; // The renter
+
+      // ✅ FILTER OUT UNDEFINED VALUES
+      const rentRequestDetails = {
+        startDate: acceptedRequestData.startDate,
+        endDate: acceptedRequestData.endDate,
+        rentalDays: acceptedRequestData.rentalDays,
+        pickupTime: acceptedRequestData.pickupTime,
+        ...(acceptedRequestData.itemLocation && {
+          itemLocation: acceptedRequestData.itemLocation,
+        }),
+        ...(acceptedRequestData.itemId && {
+          itemId: acceptedRequestData.itemId,
+        }),
+        ...(acceptedRequestData.itemName && {
+          itemName: acceptedRequestData.itemName,
+        }),
+        ...(acceptedRequestData.totalPrice && {
+          totalPrice: acceptedRequestData.totalPrice,
+        }),
+      };
+
+      // 1. Create confirmation message instead of accepting directly
+      const confirmationMessageData = {
+        type: "ownerConfirmation",
+        senderId: currentUserId,
+        confirmationRequestId: requestId,
+        itemDetails: {
+          name: acceptedRequestData.itemName,
+          image: acceptedRequestData.itemImage,
+          price: acceptedRequestData.totalPrice,
+          downpaymentPercentage: acceptedRequestData.downpaymentPercentage || 0,
+        },
+        rentRequestDetails: rentRequestDetails, // ✅ USE FILTERED DATA
+        status: "pending", // pending until renter confirms
+        createdAt: serverTimestamp(),
+        read: false,
+        readAt: null,
+      };
+
+      // 2. Add confirmation message to chat
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      await addDoc(messagesRef, confirmationMessageData);
+
+      // 3. Update chat last message
+      const chatRef = doc(db, "chat", String(chatId));
+      await updateDoc(chatRef, {
+        lastMessage: "Owner sent confirmation request",
+        lastMessageTime: serverTimestamp(),
+        lastSender: currentUserId,
+        [`unreadCounts.${recipientId}`]: increment(1),
+      });
+
+      // 4. Create in-app notification for renter
+      if (recipientId) {
+        await createInAppNotification(recipientId, {
+          type: "OWNER_CONFIRMATION_REQUESTED",
+          title: "Confirm Rental",
+          message: `${recipientName.firstname} confirmed your request. Please confirm to proceed.`,
+          data: {
+            route: "/chat",
+            params: { id: String(chatId), requestId: requestId },
+          },
+        });
+      }
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Confirmation Sent",
+        textBody: "Confirmation request sent to renter",
+      });
+    } catch (error) {
+      console.log("Error sending confirmation:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to send confirmation request",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRenterConfirmation = async (
+    confirmationRequestId: string,
+    confirmed: boolean
+  ) => {
+    if (!confirmationRequestId) {
+      console.log("No confirmation request ID provided");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      if (!confirmed) {
+        // RENTER DECLINED CONFIRMATION - Simple decline without extra logic
+        const messagesRef = collection(db, "chat", String(chatId), "messages");
+
+        // Find and update the confirmation message
+        const confirmationQuery = query(
+          messagesRef,
+          where("type", "==", "ownerConfirmation"),
+          where("confirmationRequestId", "==", confirmationRequestId)
+        );
+
+        const confirmationMessages = await getDocs(confirmationQuery);
+
+        if (!confirmationMessages.empty) {
+          await updateDoc(confirmationMessages.docs[0].ref, {
+            status: "declined",
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        // Update chat status to declined
+        const chatRef = doc(db, "chat", String(chatId));
+        await updateDoc(chatRef, {
+          status: "declined",
+          lastMessage: "Renter declined confirmation",
+          lastMessageTime: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        // Add status message
+        await addDoc(messagesRef, {
+          type: "statusUpdate",
+          text: "Renter declined confirmation",
+          senderId: currentUserId,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+
+        // ============================================
+        // DELETE FROM RENT REQUESTS (like cancel logic)
+        // ============================================
+        try {
+          const requestRef = doc(db, "rentRequests", confirmationRequestId);
+          const requestSnap = await getDoc(requestRef);
+
+          if (requestSnap.exists()) {
+            await deleteDoc(requestRef);
+            console.log(
+              "Successfully deleted from rentRequests collection on decline"
+            );
+          }
+        } catch (deleteError) {
+          console.log(
+            "Error deleting from rentRequests on decline:",
+            deleteError
+          );
+          // Don't fail the whole operation
+        }
+
+        // ============================================
+        // UPDATE USER'S PLAN (rent usage) - like cancel
+        // ============================================
+        try {
+          if (auth.currentUser) {
+            const userRef = doc(db, "users", auth.currentUser.uid);
+            const userDoc = await getDoc(userRef);
+
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              const currentPlan = userData.currentPlan;
+
+              if (currentPlan && typeof currentPlan.rentUsed === "number") {
+                const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+
+                await updateDoc(userRef, {
+                  "currentPlan.rentUsed": newRentUsed,
+                  "currentPlan.updatedAt": new Date(),
+                });
+
+                console.log(
+                  `Updated user plan on decline: rentUsed decreased to ${newRentUsed}`
+                );
+              }
+            }
+          }
+        } catch (planError) {
+          console.log("Error updating user plan on decline:", planError);
+          // Don't fail the whole operation
+        }
+
+        Toast.show({
+          type: ALERT_TYPE.INFO,
+          title: "Declined",
+          textBody: "Confirmation declined",
+        });
+        return;
+      }
+
+      // ============================================
+      // RENTER CONFIRMED - Execute acceptance logic
+      // ============================================
+
+      const acceptedRequestRef = doc(db, "rentRequests", confirmationRequestId);
       const acceptedRequestSnap = await getDoc(acceptedRequestRef);
 
       if (!acceptedRequestSnap.exists()) {
@@ -1516,7 +2408,7 @@ const ChatScreen = () => {
       const itemId = acceptedRequestData.itemId;
       const acceptedRequesterId = acceptedRequestData.requesterId;
 
-      // 2. Create the first batch for the accepted request
+      // 1. Create the first batch for the accepted request
       const acceptedBatch = writeBatch(db);
 
       // Update the accepted rent request
@@ -1524,6 +2416,8 @@ const ChatScreen = () => {
         status: "accepted",
         acceptedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        confirmedByRenter: true,
+        renterConfirmedAt: serverTimestamp(),
       });
 
       // Update item status
@@ -1539,117 +2433,198 @@ const ChatScreen = () => {
       const currentChatRef = doc(db, "chat", String(chatId));
       acceptedBatch.update(currentChatRef, {
         status: "accepted",
-        lastMessage: "Request accepted by owner",
+        lastMessage: "Rental confirmed by both parties",
         lastMessageTime: serverTimestamp(),
         hasOwnerResponded: true,
+        hasRenterConfirmed: true,
+        updatedAt: serverTimestamp(),
       });
 
-      // Update rent request messages in current chat
-      const currentChatMessagesRef = collection(
-        db,
-        "chat",
-        String(chatId),
-        "messages"
-      );
-      const currentChatRentRequestQuery = query(
-        currentChatMessagesRef,
-        where("type", "==", "rentRequest")
+      // Update confirmation message to accepted
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const confirmationQuery = query(
+        messagesRef,
+        where("type", "==", "ownerConfirmation"),
+        where("confirmationRequestId", "==", confirmationRequestId)
       );
 
-      const currentChatRentRequestMessages = await getDocs(
-        currentChatRentRequestQuery
-      );
+      const confirmationMessages = await getDocs(confirmationQuery);
 
-      if (!currentChatRentRequestMessages.empty) {
-        const messageDoc = currentChatRentRequestMessages.docs[0];
-        acceptedBatch.update(messageDoc.ref, {
+      if (!confirmationMessages.empty) {
+        acceptedBatch.update(confirmationMessages.docs[0].ref, {
           status: "accepted",
           updatedAt: serverTimestamp(),
+          renterConfirmedAt: serverTimestamp(),
         });
       }
 
       await acceptedBatch.commit();
 
-      // 3. Add status update message to current chat
-      await addDoc(currentChatMessagesRef, {
+      // 2. Add status update message
+      await addDoc(messagesRef, {
         type: "statusUpdate",
-        text: "Request accepted by owner",
+        text: "Rental confirmed by renter",
         senderId: currentUserId,
         createdAt: serverTimestamp(),
         read: false,
         status: "accepted",
       });
 
-      // 4. Handle other pending requests (decline them)
-      const otherPendingRequestsQuery = query(
-        collection(db, "rentRequests"),
+      // ========================================================
+      // 3. HANDLE OTHER PENDING CONFIRMATIONS FOR SAME ITEM
+      // ========================================================
+      // Get all OTHER chats with pending confirmations for same item
+      const allChatsRef = collection(db, "chat");
+      const otherChatsQuery = query(
+        allChatsRef,
         where("itemId", "==", itemId),
-        where("status", "==", "pending"),
-        where("chatId", "!=", String(chatId))
+        where("status", "==", "pending")
       );
 
-      const otherPendingRequestsSnap = await getDocs(otherPendingRequestsQuery);
+      const otherChatsSnap = await getDocs(otherChatsQuery);
 
-      // Process other requests in parallel with proper error handling
-      const declinePromises = otherPendingRequestsSnap.docs.map(
-        async (requestDoc) => {
+      const declineOtherConfirmationsPromises = otherChatsSnap.docs.map(
+        async (otherChatDoc) => {
+          if (otherChatDoc.id === String(chatId)) return; // Skip current chat
+
           try {
-            const requestData = requestDoc.data();
-            const otherChatId = requestData.chatId;
-            const otherRequesterId = requestData.requesterId;
+            const otherChatData = otherChatDoc.data();
+            const otherChatId = otherChatDoc.id;
+            const otherOwnerId = otherChatData.ownerId;
+            const otherRequesterId = otherChatData.requesterId;
 
-            // Create a separate batch for each other request
+            // Get all confirmation messages in that chat
+            const otherMessagesRef = collection(
+              db,
+              "chat",
+              otherChatId,
+              "messages"
+            );
+            const otherConfirmationQuery = query(
+              otherMessagesRef,
+              where("type", "==", "ownerConfirmation"),
+              where("status", "==", "pending")
+            );
+
+            const otherConfirmations = await getDocs(otherConfirmationQuery);
+
+            // Decline all pending confirmations
             const declineBatch = writeBatch(db);
 
-            // 1. Decline the rent request
-            declineBatch.update(requestDoc.ref, {
-              status: "declined",
-              updatedAt: serverTimestamp(),
+            otherConfirmations.docs.forEach((confirmMsg) => {
+              declineBatch.update(confirmMsg.ref, {
+                status: "declined",
+                declinedReason: "Item was rented to another user",
+                updatedAt: serverTimestamp(),
+              });
             });
 
-            // 2. Update the other chat status
+            // Update the OTHER chat to declined
             const otherChatRef = doc(db, "chat", otherChatId);
             declineBatch.update(otherChatRef, {
               status: "declined",
               lastMessage: "This item has been rented to another user",
               lastMessageTime: serverTimestamp(),
               hasOwnerResponded: true,
+              updatedAt: serverTimestamp(),
             });
 
-            // Commit the decline batch
             await declineBatch.commit();
 
-            // 3. Handle messages in the other chat separately
-            const otherChatMessagesRef = collection(
-              db,
-              "chat",
-              otherChatId,
-              "messages"
-            );
+            // Add status message to other chat
+            await addDoc(otherMessagesRef, {
+              type: "statusUpdate",
+              text: "This item has been rented to another user",
+              senderId: currentUserId,
+              createdAt: serverTimestamp(),
+              read: false,
+              status: "declined",
+            });
 
-            // Update rent request messages
-            const otherRentRequestQuery = query(
-              otherChatMessagesRef,
-              where("type", "==", "rentRequest")
-            );
+            // Send notification to other renter
+            try {
+              await createInAppNotification(otherRequesterId, {
+                type: "CONFIRMATION_DECLINED",
+                title: "Item No Longer Available",
+                message: `${acceptedRequestData.itemName} has been rented to another user`,
+                data: {
+                  route: "/chat",
+                  params: { id: otherChatId },
+                },
+              });
+            } catch (notificationError) {
+              console.log("Error notifying other renter:", notificationError);
+            }
 
-            const otherRentRequestMessages = await getDocs(
-              otherRentRequestQuery
-            );
+            // Send notification to other owner
+            try {
+              await createInAppNotification(otherOwnerId, {
+                type: "CONFIRMATION_DECLINED",
+                title: "Item Rented",
+                message: `Your confirmation for ${acceptedRequestData.itemName} was declined as the item was rented to another user`,
+                data: {
+                  route: "/chat",
+                  params: { id: otherChatId },
+                },
+              });
+            } catch (notificationError) {
+              console.log("Error notifying other owner:", notificationError);
+            }
+          } catch (error) {
+            console.log("Error declining other confirmation:", error);
+            // Don't fail the whole operation for this error
+          }
+        }
+      );
 
-            if (!otherRentRequestMessages.empty) {
-              const messageBatch = writeBatch(db);
+      await Promise.allSettled(declineOtherConfirmationsPromises);
 
-              otherRentRequestMessages.docs.forEach((msgDoc) => {
-                messageBatch.update(msgDoc.ref, {
-                  status: "declined",
-                  updatedAt: serverTimestamp(),
-                });
+      // 4. Handle other pending RENT REQUESTS for same item
+      try {
+        const otherPendingRequestsQuery = query(
+          collection(db, "rentRequests"),
+          where("itemId", "==", itemId),
+          where("status", "==", "pending")
+        );
+
+        const otherPendingRequestsSnap = await getDocs(
+          otherPendingRequestsQuery
+        );
+
+        const declinePromises = otherPendingRequestsSnap.docs.map(
+          async (requestDoc) => {
+            try {
+              const requestData = requestDoc.data();
+              const otherChatId = requestData.chatId;
+              const otherRequesterId = requestData.requesterId;
+
+              const declineBatch = writeBatch(db);
+
+              declineBatch.update(requestDoc.ref, {
+                status: "declined",
+                updatedAt: serverTimestamp(),
               });
 
-              // Add status update message
-              const statusMessageRef = doc(otherChatMessagesRef);
-              messageBatch.set(statusMessageRef, {
+              const otherChatRef = doc(db, "chat", otherChatId);
+              declineBatch.update(otherChatRef, {
+                status: "declined",
+                lastMessage: "This item has been rented to another user",
+                lastMessageTime: serverTimestamp(),
+                hasOwnerResponded: true,
+                updatedAt: serverTimestamp(),
+              });
+
+              await declineBatch.commit();
+
+              const otherChatMessagesRef = collection(
+                db,
+                "chat",
+                otherChatId,
+                "messages"
+              );
+
+              // Add status message
+              await addDoc(otherChatMessagesRef, {
                 type: "statusUpdate",
                 text: "This item has been rented to another user",
                 senderId: currentUserId,
@@ -1658,83 +2633,88 @@ const ChatScreen = () => {
                 status: "declined",
               });
 
-              await messageBatch.commit();
+              try {
+                await createInAppNotification(otherRequesterId, {
+                  type: "RENT_REQUEST_DECLINED",
+                  title: "Item No Longer Available",
+                  message: `${acceptedRequestData.itemName} has been rented to another user`,
+                  data: {
+                    route: "/chat",
+                    params: { id: otherChatId },
+                  },
+                });
+              } catch (notificationError) {
+                console.log(
+                  "Error sending decline notification:",
+                  notificationError
+                );
+              }
+            } catch (error) {
+              console.log(`Error declining request:`, error);
             }
-
-            // 4. Create notification for declined user
-            await createInAppNotification(otherRequesterId, {
-              type: "RENT_REQUEST_DECLINED",
-              title: "Item No Longer Available",
-              message: `${acceptedRequestData.itemName} has been rented to another user`,
-              data: {
-                route: "/chat",
-                params: { id: otherChatId },
-              },
-            });
-
-            console.log(
-              `Successfully declined request for chat: ${otherChatId}`
-            );
-          } catch (error) {
-            console.error(
-              `Error declining request for chat ${requestDoc.data().chatId}:`,
-              error
-            );
-            // Don't throw here, just log the error so other declines can continue
           }
-        }
-      );
+        );
 
-      // Wait for all decline operations to complete
-      const declineResults = await Promise.allSettled(declinePromises);
-
-      // Log any failures but don't stop the process
-      declineResults.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(`Failed to decline request ${index}:`, result.reason);
-        }
-      });
+        await Promise.allSettled(declinePromises);
+      } catch (error) {
+        console.log("Error handling other pending requests:", error);
+        // Don't fail the whole operation
+      }
 
       // 5. Create rental document
-      const rentalData = {
-        rentalId: `rental_${Date.now()}_${Math.random()
-          .toString(36)
-          .substring(7)}`,
-        status: "active",
-        rentRequestId: requestId,
-        chatId: String(chatId),
-        itemId: itemId,
-        ownerId: currentUserId,
-        renterId: acceptedRequesterId,
-        itemName: acceptedRequestData.itemName,
-        totalAmount: acceptedRequestData.totalPrice || 0,
-        startDate: acceptedRequestData.startDate,
-        endDate: acceptedRequestData.endDate,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      try {
+        const rentalData = {
+          rentalId: `rental_${Date.now()}_${Math.random()
+            .toString(36)
+            .substring(7)}`,
+          status: "active",
+          rentRequestId: confirmationRequestId,
+          chatId: String(chatId),
+          itemId: itemId,
+          ownerId: chatData?.ownerId,
+          renterId: acceptedRequesterId,
+          itemName: acceptedRequestData.itemName,
+          totalAmount: acceptedRequestData.totalPrice || 0,
+          startDate: acceptedRequestData.startDate,
+          endDate: acceptedRequestData.endDate,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
 
-      const rentalRef = doc(collection(db, "rentals"));
-      await setDoc(rentalRef, rentalData);
+        const rentalRef = doc(collection(db, "rentals"));
+        await setDoc(rentalRef, rentalData);
+      } catch (rentalError) {
+        console.log("Error creating rental document:", rentalError);
+        // Don't fail the whole operation
+      }
 
-      // 6. Create notification for accepted user
-      await createInAppNotification(acceptedRequesterId, {
-        type: "RENT_REQUEST_ACCEPTED",
-        title: "Request Accepted!",
-        message: `Your rental request for ${acceptedRequestData.itemName} has been accepted`,
-        data: {
-          route: "/chat",
-          params: { id: String(chatId) },
-        },
-      });
+      // 6. Create notification for owner
+      try {
+        await createInAppNotification(chatData?.ownerId || "", {
+          type: "RENT_REQUEST_CONFIRMED",
+          title: "Request Confirmed!",
+          message: `Your rental request for ${acceptedRequestData.itemName} has been confirmed`,
+          data: {
+            route: "/chat",
+            params: { id: String(chatId) },
+          },
+        });
+      } catch (notificationError) {
+        console.log("Error notifying owner:", notificationError);
+      }
 
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
-        title: "Success!",
-        textBody: "Request accepted successfully!",
+        title: "Confirmed!",
+        textBody: "Rental confirmed successfully!",
       });
     } catch (error) {
-      console.log("Error accepting request:", error);
+      console.log("Error confirming rental:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to confirm rental",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -1743,9 +2723,9 @@ const ChatScreen = () => {
   const RENTAL_STATUS = {
     PENDING: "pending",
     ACCEPTED: "accepted",
-    PAID: "paid",
-    PICKED_UP: "pickedup",
-    ACTIVE: "active",
+    INITIAL_PAYMENT_PAID: "initial_payment_paid",
+    ASSESSMENT_SUBMITTED: "assessment_submitted",
+    PICKEDUP: "pickedup",
     COMPLETED: "completed",
     DECLINED: "declined",
     CANCELLED: "cancelled",
@@ -1780,7 +2760,7 @@ const ChatScreen = () => {
 
   const handleDeclineRequest = async (requestId?: string) => {
     if (!requestId) {
-      console.error("No requestId provided for decline");
+      console.log("No requestId provided for decline");
       return;
     }
 
@@ -1899,10 +2879,7 @@ const ChatScreen = () => {
             });
           }
         } catch (notificationError) {
-          console.error(
-            "Error sending decline notification:",
-            notificationError
-          );
+          console.log("Error sending decline notification:", notificationError);
           // Don't fail the whole operation for notification errors
         }
       }
@@ -1919,9 +2896,73 @@ const ChatScreen = () => {
     }
   };
 
+  const handleCancelPaymentRequest = async (paymentMessageId: string) => {
+    try {
+      Alert.alert(
+        "Cancel Payment Request",
+        "Are you sure you want to cancel this payment request? The renter will be able to send a new request.",
+        [
+          { text: "No", style: "cancel" },
+          {
+            text: "Yes, Cancel",
+            style: "destructive",
+            onPress: async () => {
+              try {
+                setIsLoading(true);
+
+                const messageRef = doc(
+                  db,
+                  "chat",
+                  String(chatId),
+                  "messages",
+                  paymentMessageId
+                );
+
+                // Update payment message status to cancelled
+                await updateDoc(messageRef, {
+                  status: "cancelled",
+                  cancelledAt: serverTimestamp(),
+                });
+
+                // Add status message
+                await addDoc(
+                  collection(db, "chat", String(chatId), "messages"),
+                  {
+                    type: "statusUpdate",
+                    text: "Payment request cancelled by owner",
+                    senderId: currentUserId,
+                    createdAt: serverTimestamp(),
+                    read: false,
+                  }
+                );
+
+                Toast.show({
+                  type: ALERT_TYPE.SUCCESS,
+                  title: "Cancelled",
+                  textBody: "Payment request cancelled",
+                });
+              } catch (error) {
+                console.log("Error cancelling payment request:", error);
+                Toast.show({
+                  type: ALERT_TYPE.DANGER,
+                  title: "Error",
+                  textBody: "Failed to cancel payment request",
+                });
+              } finally {
+                setIsLoading(false);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.log("Error in handleCancelPaymentRequest:", error);
+    }
+  };
+
   const handleCancelRequest = async (requestId?: string) => {
     if (!requestId) {
-      console.error("No requestId provided for cancel");
+      console.log("No requestId provided for cancel");
       return;
     }
 
@@ -2001,7 +3042,7 @@ const ChatScreen = () => {
           );
         }
       } catch (deleteError) {
-        console.error("Error deleting from rentRequests:", deleteError);
+        console.log("Error deleting from rentRequests:", deleteError);
         // Don't fail the whole operation for this error
       }
 
@@ -2030,7 +3071,7 @@ const ChatScreen = () => {
           }
         }
       } catch (planError) {
-        console.error("Error updating user plan:", planError);
+        console.log("Error updating user plan:", planError);
         // Don't fail the whole operation for plan update errors
       }
 
@@ -2051,7 +3092,7 @@ const ChatScreen = () => {
           },
         });
       } catch (notificationError) {
-        console.error("Error creating cancel notification:", notificationError);
+        console.log("Error creating cancel notification:", notificationError);
         // Don't fail the whole operation for notification errors
       }
 
@@ -2061,7 +3102,7 @@ const ChatScreen = () => {
         textBody: "Request cancelled successfully",
       });
     } catch (error: any) {
-      console.error("Error cancelling request:", error);
+      console.log("Error cancelling request:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -2118,12 +3159,49 @@ const ChatScreen = () => {
         onShowDetails={() => setShowDetailsModal(true)} // Add this line
       />
 
+      {chatData?.status &&
+        chatData.status !== "declined" &&
+        chatData.status !== "cancelled" &&
+        chatData.status !== "pending" && ( // ✅ Hide on pending
+          <View className="bg-blue-50 px-4 py-3 m-2 rounded-xl">
+            <Text className="text-center text-sm text-blue-700 font-pmedium">
+              {getNextStepMessage()}
+            </Text>
+          </View>
+        )}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 70}
         className="flex-1"
         style={{ flex: 1 }}
       >
+        {showScrollToBottom && (
+          <View className="absolute z-20 bottom-20 right-4">
+            <TouchableOpacity
+              onPress={() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+                setShowScrollToBottom(false);
+              }}
+              className="w-12 h-12 bg-primary rounded-full items-center justify-center shadow-lg"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: {
+                  width: 0,
+                  height: 2,
+                },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+                elevation: 5,
+              }}
+            >
+              <Image
+                source={icons.arrowDown}
+                className="w-6 h-6"
+                tintColor="white"
+              />
+            </TouchableOpacity>
+          </View>
+        )}
         <FlatList
           ref={flatListRef}
           data={messages}
@@ -2181,7 +3259,43 @@ const ChatScreen = () => {
                 )}
                 {showTimestamp && <TimeIndicator timestamp={item.createdAt} />}
 
-                {item.type === "rentRequest" ? (
+                {item.type === "conditionalAssessment" ? (
+                  <ConditionalAssessmentMessage
+                    item={item}
+                    isCurrentUser={isCurrentUser}
+                    onSubmit={(assessmentData) => {
+                      const assessmentType = (item.assessmentType ||
+                        "pickup") as "pickup" | "return";
+                      handleSubmitAssessment(assessmentType, assessmentData);
+                    }}
+                    isLoading={loading}
+                    chatId={String(chatId)}
+                    assessmentType={
+                      (item.assessmentType || "pickup") as "pickup" | "return"
+                    }
+                    isOwner={currentUserId === chatData?.ownerId} // ✅ ADD THIS
+                  />
+                ) : item.type === "ownerConfirmation" ? (
+                  <OwnerConfirmationMessage
+                    item={item}
+                    isCurrentUser={isCurrentUser}
+                    onConfirm={() =>
+                      handleRenterConfirmation(
+                        item.confirmationRequestId!,
+                        true
+                      )
+                    }
+                    onDecline={() =>
+                      handleRenterConfirmation(
+                        item.confirmationRequestId!,
+                        false
+                      )
+                    }
+                    isLoading={loading}
+                    chatId={String(chatId)}
+                    rentRequestDetails={item.rentRequestDetails}
+                  />
+                ) : item.type === "rentRequest" ? (
                   <RentRequestMessage
                     item={item}
                     isOwner={currentUserId === chatData?.ownerId}
@@ -2189,6 +3303,16 @@ const ChatScreen = () => {
                     onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
                     chatData={chatData}
                     chatId={String(chatId)}
+                    messages={messages}
+                  />
+                ) : item.type === "rating" ? (
+                  <RatingMessage
+                    item={item}
+                    isCurrentUser={isCurrentUser}
+                    onSubmitRating={handleSubmitRating}
+                    isLoading={loading}
+                    chatId={String(chatId)}
+                    isOwner={currentUserId === chatData?.ownerId}
                   />
                 ) : item.type === "payment" ? (
                   // Type guard to ensure item has all required payment properties
@@ -2227,6 +3351,7 @@ const ChatScreen = () => {
                     itemDetails={chatData?.itemDetails}
                     clientId={PAYPAL_CLIENT_ID}
                     clientSecret={PAYPAL_CLIENT_SECRET}
+                    onCancelPayment={handleCancelPaymentRequest} // ✅ ADD THIS
                   />
                 ) : item.type === "statusUpdate" ? (
                   <View className="bg-gray-100 rounded-full py-2 px-4 self-center mb-3">
@@ -2365,118 +3490,111 @@ const ChatScreen = () => {
           )}
         />
 
-        {showScrollToBottom && (
-          <View className="absolute bottom-20 right-4">
-            <TouchableOpacity
-              onPress={() => {
-                flatListRef.current?.scrollToEnd({ animated: true });
-                setShowScrollToBottom(false);
-              }}
-              className="w-12 h-12 bg-primary rounded-full items-center justify-center shadow-lg"
-              style={{
-                shadowColor: "#000",
-                shadowOffset: {
-                  width: 0,
-                  height: 2,
-                },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-                elevation: 5,
-              }}
-            >
-              <Image
-                source={icons.arrowDown}
-                className="w-6 h-6"
-                tintColor="white"
-              />
-            </TouchableOpacity>
+        {/* Message Input */}
+        {chatData?.status !== "declined" &&
+          chatData?.status !== "cancelled" && (
+            <View className="flex-row px-2 pb-2 gap-2">
+              <View className="flex-1 flex-row items-end gap-2 p-2 bg-white rounded-3xl">
+                {editingMessageId && (
+                  <View className="items-end justify-end">
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditingMessageId(null);
+                        setEditText("");
+                      }}
+                      className="w-10 h-10 bg-red-500 rounded-full items-center justify-center"
+                    >
+                      <Image
+                        source={icons.close}
+                        className="w-6 h-6"
+                        tintColor="#ffffff"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {!editingMessageId && getAvailableActions().length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setShowActionMenu(true)}
+                    className="w-10 h-10 bg-blue-500 rounded-full items-center justify-center"
+                  >
+                    <Image
+                      source={icons.bigPlus}
+                      className="w-4 h-4"
+                      tintColor="#ffffff"
+                    />
+                  </TouchableOpacity>
+                )}
+
+                <TextInput
+                  value={editingMessageId ? editText : newMessage}
+                  onChangeText={editingMessageId ? setEditText : setNewMessage}
+                  placeholder={
+                    editingMessageId ? "Edit message..." : "Type a message..."
+                  }
+                  multiline
+                  className="flex-1 min-h-8 max-h-24"
+                  style={{ textAlignVertical: "top" }}
+                />
+
+                {newMessage.trim() || (editingMessageId && editText.trim()) ? (
+                  <TouchableOpacity
+                    onPress={editingMessageId ? handleEditSubmit : sendMessage}
+                    className="w-10 h-10 bg-primary rounded-full items-center justify-center"
+                    disabled={
+                      editingMessageId ? !editText.trim() : !newMessage.trim()
+                    }
+                  >
+                    <Image
+                      source={editingMessageId ? icons.check : icons.plane}
+                      className="w-4 h-4"
+                      tintColor="white"
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <View className="flex-row">
+                    <TouchableOpacity
+                      onPress={() => setShowCamera(true)}
+                      className="w-10 h-10 items-center justify-center"
+                    >
+                      <Image
+                        source={icons.camera}
+                        className="w-5 h-5"
+                        tintColor="#9CA3AF"
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={pickImage}
+                      className="w-10 h-10 items-center justify-center"
+                    >
+                      <Image
+                        source={icons.gallery}
+                        className="w-5 h-5"
+                        tintColor="#9CA3AF"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+
+        {/* Show unavailable message if chat is declined or cancelled */}
+        {(chatData?.status === "declined" ||
+          chatData?.status === "cancelled") && (
+          <View className="flex-row px-4 py-4 bg-red-50 border-t border-red-200">
+            <Image
+              source={icons.close}
+              className="w-5 h-5 mr-3"
+              tintColor="#DC2626"
+            />
+            <Text className="flex-1 text-red-700 font-pmedium text-sm">
+              This chat is{" "}
+              {chatData?.status === "declined" ? "declined" : "cancelled"} and
+              is no longer available
+            </Text>
           </View>
         )}
-        {/* Message Input */}
-        <View className="flex-row px-2 pb-2 gap-2">
-          <View className="flex-1 flex-row items-end gap-2 p-2 bg-white rounded-3xl">
-            {editingMessageId && (
-              <View className="items-end justify-end">
-                <TouchableOpacity
-                  onPress={() => {
-                    setEditingMessageId(null);
-                    setEditText("");
-                  }}
-                  className="w-10 h-10 bg-red-500 rounded-full items-center justify-center"
-                >
-                  <Image
-                    source={icons.close}
-                    className="w-6 h-6"
-                    tintColor="#ffffff"
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {!editingMessageId && getAvailableActions().length > 0 && (
-              <TouchableOpacity
-                onPress={() => setShowActionMenu(true)}
-                className="w-10 h-10 bg-blue-500 rounded-full items-center justify-center"
-              >
-                <Image
-                  source={icons.bigPlus}
-                  className="w-4 h-4"
-                  tintColor="#ffffff"
-                />
-              </TouchableOpacity>
-            )}
-
-            <TextInput
-              value={editingMessageId ? editText : newMessage}
-              onChangeText={editingMessageId ? setEditText : setNewMessage}
-              placeholder={
-                editingMessageId ? "Edit message..." : "Type a message..."
-              }
-              multiline
-              className="flex-1 min-h-8 max-h-24"
-              style={{ textAlignVertical: "top" }}
-            />
-
-            {newMessage.trim() || (editingMessageId && editText.trim()) ? (
-              <TouchableOpacity
-                onPress={editingMessageId ? handleEditSubmit : sendMessage}
-                className="w-10 h-10 bg-primary rounded-full items-center justify-center"
-                disabled={
-                  editingMessageId ? !editText.trim() : !newMessage.trim()
-                }
-              >
-                <Image
-                  source={editingMessageId ? icons.check : icons.plane}
-                  className="w-4 h-4"
-                  tintColor="white"
-                />
-              </TouchableOpacity>
-            ) : (
-              <View className="flex-row">
-                <TouchableOpacity
-                  onPress={() => setShowCamera(true)}
-                  className="w-10 h-10 items-center justify-center"
-                >
-                  <Image
-                    source={icons.camera}
-                    className="w-5 h-5"
-                    tintColor="#9CA3AF"
-                  />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={pickImage}
-                  className="w-10 h-10 items-center justify-center"
-                >
-                  <Image
-                    source={icons.gallery}
-                    className="w-5 h-5"
-                    tintColor="#9CA3AF"
-                  />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
         <MessageActionsModal
           visible={showMessageActions}
           message={selectedMessage}
@@ -2502,7 +3620,6 @@ const ChatScreen = () => {
           onClose={() => setShowActionMenu(false)}
           items={getAvailableActions()}
         />
-
         <ChatDetailsModal
           visible={showDetailsModal}
           onClose={() => setShowDetailsModal(false)}
@@ -2552,7 +3669,7 @@ const ChatScreen = () => {
                     uploadId
                   );
                 } catch (error) {
-                  console.error("Error sending photo:", error);
+                  console.log("Error sending photo:", error);
                   // Remove from uploading state on error
                   setUploadingMessages((prev) =>
                     prev.filter((msg) => msg.id !== uploadId)
@@ -2568,7 +3685,6 @@ const ChatScreen = () => {
             />
           </Modal>
         )}
-
         <CustomAlert
           visible={showPayPalAlert}
           title="PayPal Setup Required"
@@ -2586,6 +3702,14 @@ const ChatScreen = () => {
             },
           ]}
           onClose={() => setShowPayPalAlert(false)}
+        />
+        <PickupAssessmentModal
+          visible={showPickupAssessmentModal}
+          itemName={chatData?.itemDetails?.name || "Item"}
+          onClose={() => setShowPickupAssessmentModal(false)}
+          onSubmit={handlePickupAssessmentSubmit}
+          initialData={pickupAssessmentData || undefined}
+          chatId={String(chatId)}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

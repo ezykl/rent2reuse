@@ -38,7 +38,7 @@ export const useUserLimits = () => {
         return planData;
       }
     } catch (error) {
-      console.error("Error fetching user limits:", error);
+      console.log("Error fetching user limits:", error);
     }
     return null;
   };
@@ -60,7 +60,7 @@ export const useUserLimits = () => {
       setCanList(newListUsed < listLimit);
       return true;
     } catch (error) {
-      console.error("Error updating list usage:", error);
+      console.log("Error updating list usage:", error);
       return false;
     }
   };

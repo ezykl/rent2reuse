@@ -158,7 +158,7 @@ const Tools = () => {
         },
       });
     } catch (error) {
-      console.error("Error editing request:", error);
+      console.log("Error editing request:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -275,7 +275,7 @@ const Tools = () => {
       setIncomingRequestsCount(totalIncomingRequests);
       setMyListings(listings);
     } catch (error) {
-      console.error("❌ Error fetching listings:", error);
+      console.log("❌ Error fetching listings:", error);
     } finally {
       setIsLoading(false);
     }
@@ -293,7 +293,7 @@ const Tools = () => {
         setUserPlan(planData);
       }
     } catch (error) {
-      console.error("Error fetching user plan:", error);
+      console.log("Error fetching user plan:", error);
     } finally {
       setIsPlanLoading(false);
     }
@@ -336,7 +336,7 @@ const Tools = () => {
       console.log("Processed requests:", requests);
       setRentRequests((prev) => [...requests]);
     } catch (error) {
-      console.error("Error fetching sent requests:", error);
+      console.log("Error fetching sent requests:", error);
     } finally {
       setIsRequestsLoading(false);
     }
@@ -368,7 +368,7 @@ const Tools = () => {
           fetchSentRequests(), // Add this
         ]);
       } catch (error) {
-        console.error("Error refreshing data:", error);
+        console.log("Error refreshing data:", error);
       } finally {
         setRefreshing(false);
         setIsDataReady(true);
@@ -475,7 +475,7 @@ const Tools = () => {
                 }
               }
             } catch (error) {
-              console.error("Error in deletion process:", error);
+              console.log("Error in deletion process:", error);
               Toast.show({
                 type: ALERT_TYPE.DANGER,
                 title: "Error",
@@ -596,7 +596,7 @@ const Tools = () => {
                 fetchSentRequests();
               }
             } catch (error) {
-              console.error("Error cancelling request:", error);
+              console.log("Error cancelling request:", error);
               Toast.show({
                 type: ALERT_TYPE.DANGER,
                 title: "Error",

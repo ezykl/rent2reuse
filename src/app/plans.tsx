@@ -131,7 +131,7 @@ const PlansScreen: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Error fetching profile data:", error);
+        console.log("Error fetching profile data:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -179,7 +179,7 @@ const PlansScreen: React.FC = () => {
         }
       },
       (error) => {
-        console.error("Error in profile snapshot:", error);
+        console.log("Error in profile snapshot:", error);
       }
     );
 
@@ -200,7 +200,7 @@ const PlansScreen: React.FC = () => {
           setSubscriptionDetails(subDoc.data() as SubscriptionDetails);
         }
       } catch (error) {
-        console.error("Error fetching subscription details:", error);
+        console.log("Error fetching subscription details:", error);
       }
     };
 
@@ -224,7 +224,7 @@ const PlansScreen: React.FC = () => {
       const normalizedDuration = duration.toLowerCase().trim();
       return DURATION_MAP[normalizedDuration as keyof typeof DURATION_MAP] || 0;
     } catch (error) {
-      console.error(
+      console.log(
         "Error parsing duration:",
         error,
         "Duration value:",
@@ -331,7 +331,7 @@ const PlansScreen: React.FC = () => {
       // REMOVED: setShowPaymentModal(false) - Modal stays open
       // REMOVED: Success toast - No automatic toast
     } catch (error) {
-      console.error("Error processing payment:", error);
+      console.log("Error processing payment:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -342,7 +342,7 @@ const PlansScreen: React.FC = () => {
   };
 
   const handlePaymentError = (error: unknown) => {
-    console.error("Payment error:", error);
+    console.log("Payment error:", error);
     Toast.show({
       type: ALERT_TYPE.DANGER,
       title: "Error",
@@ -435,7 +435,7 @@ const PlansScreen: React.FC = () => {
         textBody: "Receipt has been saved to your photo gallery!",
       });
     } catch (error) {
-      console.error("Error saving receipt:", error);
+      console.log("Error saving receipt:", error);
       Alert.alert(
         "Save Failed",
         "Could not save receipt to gallery. Please check permissions and try again."
@@ -457,7 +457,7 @@ const PlansScreen: React.FC = () => {
         message: "Payment Receipt - Subscription Activated",
       });
     } catch (error) {
-      console.error("Error sharing receipt:", error);
+      console.log("Error sharing receipt:", error);
       Alert.alert("Error", "Failed to share receipt. Please try again.");
     }
   };
@@ -507,7 +507,7 @@ const PlansScreen: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error("Refresh error:", error);
+      console.log("Refresh error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -523,7 +523,7 @@ const PlansScreen: React.FC = () => {
     try {
       return format(timestamp.toDate(), "MMMM dd, yyyy");
     } catch (error) {
-      console.error("Error formatting date:", error);
+      console.log("Error formatting date:", error);
       return "Invalid Date";
     }
   };
@@ -533,7 +533,7 @@ const PlansScreen: React.FC = () => {
       console.log("Receipt ref current:", receiptRef.current);
 
       if (!receiptRef.current) {
-        console.error("Receipt ref is null");
+        console.log("Receipt ref is null");
         return;
       }
 
@@ -549,7 +549,7 @@ const PlansScreen: React.FC = () => {
       const fileInfo = await FileSystem.getInfoAsync(uri);
       console.log("File info:", fileInfo);
     } catch (error) {
-      console.error("Debug capture error:", error);
+      console.log("Debug capture error:", error);
     }
   };
 

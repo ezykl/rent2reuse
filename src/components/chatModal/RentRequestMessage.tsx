@@ -15,6 +15,7 @@ const RentRequestMessage = ({
   onCancel,
   chatData,
   chatId,
+  messages, // Add messages prop
 }: {
   item: Message;
   isOwner: boolean;
@@ -23,9 +24,11 @@ const RentRequestMessage = ({
   onCancel?: () => void;
   chatData?: any;
   chatId: string;
+  messages?: any; // Define messages prop type
 }) => {
   const [currentStatus, setCurrentStatus] = useState<string>("pending");
   const [rentRequestData, setRentRequestData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false); // Loading state for button
   const isSender = item.senderId === auth.currentUser?.uid;
   const { minutesToTime } = useTimeConverter();
 
@@ -115,6 +118,14 @@ const RentRequestMessage = ({
     if (date instanceof Date) return format(date, "MMM d, yyyy");
     return "Date unavailable";
   };
+
+  // Check if there's a pending owner confirmation message
+  const hasPendingConfirmation = messages?.some(
+    (msg: any) =>
+      msg.type === "ownerConfirmation" &&
+      msg.status === "pending" &&
+      msg.confirmationRequestId === item.rentRequestId
+  );
 
   if (!rentRequestData) {
     return (
@@ -296,10 +307,29 @@ const RentRequestMessage = ({
                   <>
                     <TouchableOpacity
                       onPress={onAccept}
-                      className="flex-1 bg-primary py-3 rounded-xl"
+                      disabled={
+                        isLoading ||
+                        hasPendingConfirmation ||
+                        effectiveStatus !== "pending"
+                      }
+                      className={`flex-1 rounded-lg py-3 items-center justify-center ${
+                        isLoading ||
+                        hasPendingConfirmation ||
+                        effectiveStatus !== "pending"
+                          ? "bg-gray-300"
+                          : "bg-green-500"
+                      }`}
                     >
-                      <Text className="text-white font-pbold text-center">
-                        ACCEPT
+                      <Text
+                        className={`font-psemibold ${
+                          isLoading || hasPendingConfirmation
+                            ? "text-gray-600"
+                            : "text-white"
+                        }`}
+                      >
+                        {hasPendingConfirmation
+                          ? "Confirmation Sent"
+                          : "Accept"}
                       </Text>
                     </TouchableOpacity>
                   </>
@@ -312,14 +342,28 @@ const RentRequestMessage = ({
                 )}
               </View>
             ) : (
+              // ✅ RENTER SECTION - UPDATED
               <View className="mt-4">
                 {!isRequestExpired(rentRequestData.startDate) ? (
                   <TouchableOpacity
                     onPress={onCancel}
-                    className="py-3 rounded-xl bg-red-400"
+                    disabled={hasPendingConfirmation || isLoading} // ✅ ADD DISABLED STATE
+                    className={`py-3 rounded-xl ${
+                      hasPendingConfirmation || isLoading
+                        ? "bg-gray-300" // ✅ GREY OUT WHEN DISABLED
+                        : "bg-red-400"
+                    }`}
                   >
-                    <Text className="font-pbold text-center text-white">
-                      CANCEL REQUEST
+                    <Text
+                      className={`font-pbold text-center ${
+                        hasPendingConfirmation || isLoading
+                          ? "text-gray-600" // ✅ GREY TEXT
+                          : "text-white"
+                      }`}
+                    >
+                      {hasPendingConfirmation
+                        ? "Waiting for Confirmation"
+                        : "CANCEL REQUEST"}
                     </Text>
                   </TouchableOpacity>
                 ) : (

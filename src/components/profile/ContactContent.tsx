@@ -44,7 +44,7 @@ export const ContactContent = ({ onSave, loading }: ContactContentProps) => {
         setIsEditing(true);
       }
     } catch (error) {
-      console.error("Error fetching contact:", error);
+      console.log("Error fetching contact:", error);
     }
   };
 
@@ -89,7 +89,7 @@ export const ContactContent = ({ onSave, loading }: ContactContentProps) => {
 
       Keyboard.dismiss();
     } catch (error: any) {
-      console.error("Error saving contact:", error);
+      console.log("Error saving contact:", error);
     } finally {
       setIsLoading(false);
     }

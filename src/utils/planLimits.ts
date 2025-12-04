@@ -77,7 +77,7 @@ export const checkAndUpdateLimits = async (
 
     return { success: true, message: "Operation successful" };
   } catch (error) {
-    console.error("Error checking limits:", error);
+    console.log("Error checking limits:", error);
     return {
       success: false,
       message: "Failed to check usage limits. Please try again.",

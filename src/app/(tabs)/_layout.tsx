@@ -143,7 +143,7 @@ const TabsLayout = () => {
         params: { openCamera: "true" },
       });
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

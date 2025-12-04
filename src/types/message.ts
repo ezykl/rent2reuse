@@ -1,12 +1,23 @@
+import { AssessmentData } from "../components/chatModal/ConditionalAssessmentMessage";
+
 type MessageType =
   | "message"
   | "rentRequest"
   | "statusUpdate"
   | "image"
   | "paymentRequest"
+  | "ownerConfirmation"
+  | "itemUnavailable"
+  | "conditionalAssessment"
+  | "rating"
   | "payment";
 
 export default interface Message {
+  rating(rating: any): import("react").ReactNode;
+
+  assessmentType?: "pickup" | "return";
+  assessment?: AssessmentData;
+  
   isDeleted?: boolean;
   deletedAt?: any;
   isEdited?: boolean;
@@ -24,20 +35,14 @@ export default interface Message {
   imageWidth?: number;
   imageHeight?: number;
   rentRequestDetails?: {
-    itemId: string;
-    itemName: string;
-    itemImage: string;
-    totalPrice: number;
-    startDate: any;
-    endDate: any;
-    rentalDays: number;
-    ownerId: string;
-    ownerName: string;
-    requesterId: string;
-    requesterName: string;
-    pickupTime: number;
-    message: string;
-    status: string;
+    startDate?: any;
+    endDate?: any;
+    rentalDays?: number;
+    pickupTime?: number;
+    itemLocation?: string | { address?: string };
+    itemId?: string;
+    itemName?: string;
+    totalPrice?: number;
   };
 
   transactionId?: string;
@@ -46,18 +51,28 @@ export default interface Message {
   confirmedAt?: any;
   recipientPayPalEmail?: string;
   paypalOrderId?: string;
-  paypalApprovalUrl?: string; 
+  paypalApprovalUrl?: string;
   paypalCaptureId?: string;
   paymentType?: "initial" | "full";
   amount?: number;
   totalAmount?: number;
   downpaymentPercentage?: number;
-  paymentId?: string;           // ADD this
-  paypalCheckoutUrl?: string;   // ADD this  
-  usdAmount?: string;           // ADD this
-  confirmedAmount?: string;     // ADD this
+  paymentId?: string;
+  paypalCheckoutUrl?: string;
+  usdAmount?: string;
+  confirmedAmount?: string;
   sentAt?: any;
 
-
+  confirmationRequestId?: string;
+  itemDetails?: {
+    name?: string;
+    price?: number;
+    image?: string;
+    downpaymentPercentage?: number;
+    startDate?: any;
+    endDate?: any;
+    rentalDays?: number;
+    pickupTime?: number;
+  };
 
 }

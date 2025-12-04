@@ -145,7 +145,7 @@ const NotificationCard = ({
         year: now.getFullYear() !== date.getFullYear() ? "numeric" : undefined,
       });
     } catch (error) {
-      console.error("Error formatting date:", error);
+      console.log("Error formatting date:", error);
       return "Date error";
     }
   };

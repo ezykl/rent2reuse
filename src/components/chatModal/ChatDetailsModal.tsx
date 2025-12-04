@@ -145,7 +145,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
 
       return "recently";
     } catch (error) {
-      console.error("Error formatting Firestore date:", error);
+      console.log("Error formatting Firestore date:", error);
       return "recently";
     }
   };
@@ -169,7 +169,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
           });
         }
       } catch (error) {
-        console.error("Error fetching current user data:", error);
+        console.log("Error fetching current user data:", error);
       }
     };
 
