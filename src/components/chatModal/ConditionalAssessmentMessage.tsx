@@ -133,14 +133,27 @@ const ConditionalAssessmentMessage: React.FC<
       return;
     }
 
+    // ✅ Validate damageFound is set
+    if (assessment.damageFound === undefined) {
+      Alert.alert(
+        "Error",
+        "Please indicate if there are any issues with the item"
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await onSubmit(assessment);
+      // ✅ ENSURE damageFound is included in submission
+      await onSubmit({
+        ...assessment,
+        damageFound: assessment.damageFound, // ✅ Make sure this is included
+      });
       setShowAssessmentForm(false);
       setAssessment({
         overallCondition: "good",
+        damageFound: false, // ✅ Reset this
         scratches: false,
-        damageFound: false,
         dents: false,
         stains: false,
         tears: false,
@@ -312,32 +325,205 @@ const ConditionalAssessmentMessage: React.FC<
           )}
 
           {showAssessmentForm && (
-            <View className="flex-row gap-2 mt-4">
-              <TouchableOpacity
-                onPress={() => setShowAssessmentForm(false)}
-                className="flex-1 bg-gray-200 rounded-lg py-3"
-              >
-                <Text className="text-gray-700 font-psemibold text-center">
-                  Cancel
-                </Text>
-              </TouchableOpacity>
+            <ScrollView className="max-h-96 bg-gray-50 rounded-lg p-4 mb-4">
+              {/* Overall Condition Selection */}
+              <Text className="text-sm font-pbold text-gray-900 mb-3">
+                Overall Condition
+              </Text>
+              <View className="gap-2 mb-4">
+                {(["excellent", "good", "fair", "poor"] as const).map(
+                  (condition) => {
+                    const colors = getConditionColor(condition);
+                    const isSelected =
+                      assessment.overallCondition === condition;
 
-              <TouchableOpacity
-                onPress={handleSubmitAssessment}
-                disabled={submitting}
-                className={`flex-1 rounded-lg py-3 items-center justify-center ${
-                  submitting ? "bg-gray-300" : "bg-green-500"
-                }`}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text className="text-white font-psemibold">
-                    Submit Assessment
-                  </Text>
+                    return (
+                      <TouchableOpacity
+                        key={condition}
+                        onPress={() =>
+                          setAssessment({
+                            ...assessment,
+                            overallCondition: condition,
+                          })
+                        }
+                        className={`p-3 rounded-lg border-2 ${
+                          isSelected
+                            ? `${colors.bg} border-${colors.text}`
+                            : "bg-white border-gray-200"
+                        }`}
+                      >
+                        <Text
+                          className={`font-psemibold ${
+                            isSelected ? colors.text : "text-gray-700"
+                          }`}
+                        >
+                          {colors.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }
                 )}
-              </TouchableOpacity>
-            </View>
+              </View>
+
+              {/* ✅ NEW: Damage Toggle */}
+              <Text className="text-sm font-pbold text-gray-900 mb-3">
+                🔍 Visible Damage
+              </Text>
+              <View className="gap-2 mb-4">
+                <TouchableOpacity
+                  onPress={() => {
+                    setAssessment({
+                      ...assessment,
+                      damageFound: false,
+                      scratches: false,
+                      dents: false,
+                      stains: false,
+                      tears: false,
+                      functioningIssues: false,
+                      otherDamage: "",
+                    });
+                  }}
+                  className={`p-4 rounded-lg border-2 flex-row items-center ${
+                    !assessment.damageFound
+                      ? "border-green-500 bg-green-50"
+                      : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <View
+                    className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                      !assessment.damageFound
+                        ? "bg-green-500 border-green-500"
+                        : "border-gray-300"
+                    }`}
+                  >
+                    {!assessment.damageFound && (
+                      <Text className="text-white font-pbold">✓</Text>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      className={`font-psemibold text-base ${
+                        !assessment.damageFound
+                          ? "text-green-700"
+                          : "text-gray-700"
+                      }`}
+                    >
+                      0️⃣ No Issues Found
+                    </Text>
+                    <Text className="text-xs text-gray-600">
+                      Item is in perfect condition
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() =>
+                    setAssessment({
+                      ...assessment,
+                      damageFound: true,
+                    })
+                  }
+                  className={`p-4 rounded-lg border-2 flex-row items-center ${
+                    assessment.damageFound
+                      ? "border-orange-500 bg-orange-50"
+                      : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <View
+                    className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                      assessment.damageFound
+                        ? "bg-orange-500 border-orange-500"
+                        : "border-gray-300"
+                    }`}
+                  >
+                    {assessment.damageFound && (
+                      <Text className="text-white font-pbold">✓</Text>
+                    )}
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      className={`font-psemibold text-base ${
+                        assessment.damageFound
+                          ? "text-orange-700"
+                          : "text-gray-700"
+                      }`}
+                    >
+                      ⚠️ Issues Found
+                    </Text>
+                    <Text className="text-xs text-gray-600">
+                      Describe the damage below
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {/* ✅ CONDITIONAL: Only show damage checklist if damage was found */}
+              {assessment.damageFound && (
+                <View>
+                  <Text className="text-sm font-pbold text-gray-900 mb-3">
+                    Damage Details
+                  </Text>
+                  <View className="gap-2 mb-4">
+                    {[
+                      { key: "scratches", label: "Scratches" },
+                      { key: "dents", label: "Dents" },
+                      { key: "stains", label: "Stains" },
+                      { key: "tears", label: "Tears" },
+                      {
+                        key: "functioningIssues",
+                        label: "Functioning Issues",
+                      },
+                    ].map(({ key, label }) => (
+                      <TouchableOpacity
+                        key={key}
+                        onPress={() =>
+                          setAssessment({
+                            ...assessment,
+                            [key]: !assessment[key as keyof AssessmentData],
+                          })
+                        }
+                        className={`flex-row items-center p-3 rounded-lg border ${
+                          assessment[key as keyof AssessmentData]
+                            ? "bg-red-50 border-red-300"
+                            : "bg-white border-gray-200"
+                        }`}
+                      >
+                        <View
+                          className={`w-5 h-5 rounded border-2 mr-3 items-center justify-center ${
+                            assessment[key as keyof AssessmentData]
+                              ? "bg-red-500 border-red-500"
+                              : "border-gray-300"
+                          }`}
+                        >
+                          {assessment[key as keyof AssessmentData] && (
+                            <Text className="text-white font-pbold">✓</Text>
+                          )}
+                        </View>
+                        <Text className="text-gray-900 font-pmedium">
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Notes */}
+              <Text className="text-sm font-pbold text-gray-900 mb-2">
+                Additional Notes
+              </Text>
+              <View className="bg-white rounded-lg p-3 border border-gray-200">
+                <Text
+                  className="text-gray-700 text-sm"
+                  numberOfLines={2}
+                  onPress={() => {
+                    // This would normally open a text input
+                  }}
+                >
+                  {assessment.notes || "Tap to add notes..."}
+                </Text>
+              </View>
+            </ScrollView>
           )}
 
           <View className="mt-2 flex-row justify-end">
@@ -382,26 +568,19 @@ const ConditionalAssessmentMessage: React.FC<
       <View className={`mb-3 ${isCurrentUser ? "pr-24" : "pl-24"}`}>
         <View
           className={`p-4 bg-white rounded-xl border border-gray-200 shadow-sm ${
-            isCurrentUser ? "rounded-bl-none" : "rounded-tl-none"
+            isCurrentUser ? "rounded-bl-none" : "rounded-br-none"
           }`}
         >
           {/* Header */}
           <View className="flex-row items-center mb-3">
-            <View className="flex-1">
+            <View className="flex-1 ml-4">
               <Text className="text-sm font-pmedium text-gray-500 mb-1">
                 {assessmentType === "pickup"
-                  ? "✅ Pickup Inspection Submitted"
-                  : "✅ Return Inspection Submitted"}
+                  ? "Pickup Inspection Submitted"
+                  : "Return Inspection Submitted"}
               </Text>
               <Text className="text-base font-pbold text-gray-900">
                 Item Condition Assessment
-              </Text>
-            </View>
-            <View
-              className={`w-10 h-10 rounded-full items-center justify-center ${conditionColor.bg}`}
-            >
-              <Text className={`font-pbold text-lg ${conditionColor.text}`}>
-                ✓
               </Text>
             </View>
           </View>
@@ -420,7 +599,9 @@ const ConditionalAssessmentMessage: React.FC<
             // No Damage Found
             <View className="bg-green-50 rounded-lg p-3 mb-4 border border-green-200">
               <View className="flex-row items-center">
-                <Text className="text-2xl mr-2">✨</Text>
+                <View className="w-8 h-8 rounded-full bg-green-500 items-center justify-center mr-2">
+                  <Text className="text-xl font-pbold text-white">0</Text>
+                </View>
                 <View className="flex-1">
                   <Text className="text-sm font-pbold text-green-700">
                     No Issues Found
@@ -557,8 +738,8 @@ const ConditionalAssessmentMessage: React.FC<
                 }`}
               >
                 {damageFound
-                  ? "Waiting for owner to review reported issues..."
-                  : "Waiting for owner to confirm receipt..."}
+                  ? "Awaiting owner acknowledgment of reported issues..."
+                  : "Item confirmed handed over in good condition."}
               </Text>
             </View>
           )}

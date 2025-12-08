@@ -1994,24 +1994,57 @@ const ChatScreen = () => {
           break;
 
         case "initial_payment_paid":
-          // ✅ Owner: Waiting for renter's conditional assessment
-          actions.push({
-            id: "awaiting_assessment",
-            icon: icons.box,
-            label: "Awaiting Renter Assessment",
-            action: () => {
-              Alert.alert(
-                "Assessment Pending",
-                "Waiting for renter to verify item condition..."
-              );
-            },
-            bgColor: "#E3F2FD",
-            iconColor: "#2196F3",
-          });
+          // ✅ Check if renter has submitted assessment
+          const hasRenterSubmittedAssessment = messages.some(
+            (msg) =>
+              msg.type === "conditionalAssessment" &&
+              msg.assessmentType === "pickup" &&
+              msg.status === "submitted" &&
+              msg.senderId !== currentUserId
+          );
+
+          if (hasRenterSubmittedAssessment) {
+            // ✅ Owner: Confirm the submitted assessment
+            actions.push({
+              id: "confirm_assessment",
+              icon: icons.check,
+              label: "Review & Confirm Item",
+              action: () => {
+                Alert.alert(
+                  "Confirm Item Assessment",
+                  "Please confirm that you've reviewed the renter's item condition assessment.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Confirm",
+                      onPress: handleItemReceived,
+                    },
+                  ]
+                );
+              },
+              bgColor: "#E8F5E9",
+              iconColor: "#4CAF50",
+            });
+          } else {
+            // ✅ Still waiting for renter's assessment
+            actions.push({
+              id: "awaiting_assessment",
+              icon: icons.box,
+              label: "Awaiting Renter Assessment",
+              action: () => {
+                Alert.alert(
+                  "Assessment Pending",
+                  "Waiting for renter to verify item condition..."
+                );
+              },
+              bgColor: "#E3F2FD",
+              iconColor: "#2196F3",
+            });
+          }
           break;
 
         case "assessment_submitted":
-          // ✅ Owner: Confirm item received
+          // ✅ Owner: Confirm item received (status was already changed but keep for compatibility)
           actions.push({
             id: "item_received",
             icon: icons.check,
@@ -2127,27 +2160,77 @@ const ChatScreen = () => {
     else {
       switch (status) {
         case "accepted":
-          // ✅ Always show assessment on accepted (even if no downpayment)
-          actions.push({
-            id: "pickup_assessment",
-            icon: icons.box,
-            label: "Verify Item Condition",
-            action: () => setShowPickupAssessmentModal(true),
-            bgColor: "#E3F2FD",
-            iconColor: "#2196F3",
-          });
+          // ✅ Check if renter has already submitted assessment
+          const hasRenterSubmittedAssessmentAccepted = messages.some(
+            (msg) =>
+              msg.type === "conditionalAssessment" &&
+              msg.assessmentType === "pickup" &&
+              msg.senderId === currentUserId
+          );
+
+          if (hasRenterSubmittedAssessmentAccepted) {
+            // ✅ Renter already submitted - show waiting state
+            actions.push({
+              id: "assessment_submitted",
+              icon: icons.check,
+              label: "Assessment Submitted",
+              action: () => {
+                Alert.alert(
+                  "Assessment Submitted",
+                  "You have already submitted your item condition assessment. Waiting for owner to confirm..."
+                );
+              },
+              bgColor: "#D1FAE5",
+              iconColor: "#10B981",
+            });
+          } else {
+            // ✅ Renter can submit assessment
+            actions.push({
+              id: "pickup_assessment",
+              icon: icons.box,
+              label: "Verify Item Condition",
+              action: () => setShowPickupAssessmentModal(true),
+              bgColor: "#E3F2FD",
+              iconColor: "#2196F3",
+            });
+          }
           break;
 
         case "initial_payment_paid":
-          // ✅ Renter: MUST submit conditional assessment if initial payment paid
-          actions.push({
-            id: "pickup_assessment",
-            icon: icons.box,
-            label: "Verify Item Condition (Required)",
-            action: () => setShowPickupAssessmentModal(true),
-            bgColor: "#FED7AA", // Orange = Required
-            iconColor: "#D97706",
-          });
+          // ✅ Check if renter has already submitted assessment
+          const hasRenterSubmittedAssessmentPayment = messages.some(
+            (msg) =>
+              msg.type === "conditionalAssessment" &&
+              msg.assessmentType === "pickup" &&
+              msg.senderId === currentUserId
+          );
+
+          if (hasRenterSubmittedAssessmentPayment) {
+            // ✅ Renter already submitted - show waiting state
+            actions.push({
+              id: "assessment_submitted",
+              icon: icons.check,
+              label: "Assessment Submitted",
+              action: () => {
+                Alert.alert(
+                  "Assessment Submitted",
+                  "You have already submitted your item condition assessment. Waiting for owner to confirm..."
+                );
+              },
+              bgColor: "#D1FAE5",
+              iconColor: "#10B981",
+            });
+          } else {
+            // ✅ Renter MUST submit conditional assessment if initial payment paid
+            actions.push({
+              id: "pickup_assessment",
+              icon: icons.box,
+              label: "Verify Item Condition (Required)",
+              action: () => setShowPickupAssessmentModal(true),
+              bgColor: "#FED7AA", // Orange = Required
+              iconColor: "#D97706",
+            });
+          }
           break;
 
         case "assessment_submitted":
@@ -3617,7 +3700,7 @@ const ChatScreen = () => {
                     editingMessageId ? "Edit message..." : "Type a message..."
                   }
                   multiline
-                  className="flex-1 min-h-8 max-h-24"
+                  className="ml-4 flex-1 min-h-8 max-h-24"
                   style={{ textAlignVertical: "top" }}
                 />
 

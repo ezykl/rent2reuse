@@ -12,8 +12,14 @@ import {
 import { WebView } from "react-native-webview";
 import { icons, images } from "@/constant";
 import { format } from "date-fns";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+  addDoc,
+  collection,
+} from "firebase/firestore";
+import { db, auth } from "@/lib/firebaseConfig";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { PAYPAL_BASE_URL } from "@env";
 
@@ -294,6 +300,45 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
     }
   };
 
+  // ✅ NEW: Save rental payment transaction to Firestore
+  const saveRentalTransaction = async (
+    captureResult: any,
+    txnId: string,
+    orderIdVal: string
+  ) => {
+    try {
+      if (!auth.currentUser || !item.recipientPayPalEmail) {
+        throw new Error("Missing user or recipient email");
+      }
+
+      const transactionsRef = collection(db, "transactions");
+      await addDoc(transactionsRef, {
+        userId: auth.currentUser.uid,
+        recipientId:
+          item.senderId === auth.currentUser.uid ? undefined : item.senderId,
+        type: "rental_payment",
+        paymentType: item.paymentType,
+        amount: item.amount,
+        currency: "PHP",
+        paymentMethod: "PayPal",
+        status: "completed",
+        transactionId: txnId,
+        paypalOrderId: orderIdVal,
+        paypalCaptureId: captureResult.id,
+        recipientPayPalEmail: item.recipientPayPalEmail,
+        itemName: itemDetails?.name || "Item",
+        itemId: item.id,
+        chatId: chatId,
+        createdAt: serverTimestamp(),
+        paidAt: serverTimestamp(),
+      });
+
+      console.log("Transaction saved successfully");
+    } catch (error) {
+      console.log("Error saving transaction:", error);
+    }
+  };
+
   const handleWebViewNavigationStateChange = async (navState: any) => {
     const { url } = navState;
     console.log("WebView URL:", url);
@@ -321,6 +366,8 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       const captureResult = await capturePayPalOrder(accessToken, orderId);
 
       if (captureResult.status === "COMPLETED") {
+        // ✅ SAVE TRANSACTION TO FIRESTORE
+        await saveRentalTransaction(captureResult, transactionId, orderId);
         const messageRef = doc(db, "chat", chatId, "messages", item.id);
         await updateDoc(messageRef, {
           status: "paid",
