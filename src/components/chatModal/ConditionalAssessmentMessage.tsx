@@ -33,6 +33,7 @@ interface ConditionalAssessmentMessageProps {
 export interface AssessmentData {
   overallCondition: "excellent" | "good" | "fair" | "poor";
   scratches: boolean;
+  damageFound: boolean;
   dents: boolean;
   stains: boolean;
   tears: boolean;
@@ -58,6 +59,7 @@ const ConditionalAssessmentMessage: React.FC<
   const [assessment, setAssessment] = useState<AssessmentData>({
     overallCondition: "good",
     scratches: false,
+    damageFound: false,
     dents: false,
     stains: false,
     tears: false,
@@ -138,6 +140,7 @@ const ConditionalAssessmentMessage: React.FC<
       setAssessment({
         overallCondition: "good",
         scratches: false,
+        damageFound: false,
         dents: false,
         stains: false,
         tears: false,
@@ -355,6 +358,12 @@ const ConditionalAssessmentMessage: React.FC<
     const overallCondition = submittedAssessment.overallCondition || "good";
     const conditionColor = getConditionColor(overallCondition);
 
+    // ✅ CHECK IF DAMAGE WAS FOUND
+    const damageFound =
+      submittedAssessment.damageFound !== undefined
+        ? submittedAssessment.damageFound
+        : true;
+
     // ✅ GET DAMAGE ITEMS
     const damageItems = [
       { key: "scratches", label: "Scratches" },
@@ -406,39 +415,56 @@ const ConditionalAssessmentMessage: React.FC<
             </Text>
           </View>
 
-          {/* Damage Summary */}
-          <View className="bg-gray-50 rounded-lg p-3 mb-4">
-            <Text className="text-xs font-pbold text-gray-600 mb-2 uppercase">
-              Damage Assessment
-            </Text>
-            {foundDamage.length > 0 ? (
-              <View>
-                {foundDamage.map(({ key, label }) => (
-                  <View key={key} className="flex-row items-center mb-2">
-                    <View className="w-4 h-4 rounded bg-red-500 mr-2" />
-                    <Text className="text-sm text-gray-700 font-pmedium">
-                      {label} - Found
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : (
+          {/* ✅ NEW: Damage Status */}
+          {!damageFound ? (
+            // No Damage Found
+            <View className="bg-green-50 rounded-lg p-3 mb-4 border border-green-200">
               <View className="flex-row items-center">
-                <View className="w-4 h-4 rounded bg-green-500 mr-2" />
-                <Text className="text-sm text-gray-700 font-pmedium">
-                  No visible damage found
-                </Text>
+                <Text className="text-2xl mr-2">✨</Text>
+                <View className="flex-1">
+                  <Text className="text-sm font-pbold text-green-700">
+                    No Issues Found
+                  </Text>
+                  <Text className="text-xs text-green-600">
+                    Item is in perfect condition for rental
+                  </Text>
+                </View>
               </View>
-            )}
-          </View>
+            </View>
+          ) : (
+            // Damage Found
+            <>
+              <View className="bg-orange-50 rounded-lg p-3 mb-4 border border-orange-200">
+                <Text className="text-xs font-pbold text-orange-600 mb-2 uppercase">
+                  ⚠️ Issues Reported
+                </Text>
+                {foundDamage.length > 0 ? (
+                  <View>
+                    {foundDamage.map(({ key, label }) => (
+                      <View key={key} className="flex-row items-center mb-2">
+                        <View className="w-4 h-4 rounded bg-red-500 mr-2" />
+                        <Text className="text-sm text-gray-700 font-pmedium">
+                          {label} - Found
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text className="text-sm text-orange-700 font-pmedium">
+                    Damage reported but not specified
+                  </Text>
+                )}
+              </View>
+            </>
+          )}
 
           {/* Other Damage */}
           {submittedAssessment.otherDamage && (
-            <View className="bg-orange-50 rounded-lg p-3 mb-4 border border-orange-200">
-              <Text className="text-xs font-pbold text-orange-600 mb-1">
-                🔧 Other Damage
+            <View className="bg-red-50 rounded-lg p-3 mb-4 border border-red-200">
+              <Text className="text-xs font-pbold text-red-600 mb-1">
+                🔧 Other Damage Details
               </Text>
-              <Text className="text-sm text-orange-900">
+              <Text className="text-sm text-red-900">
                 {submittedAssessment.otherDamage}
               </Text>
             </View>
@@ -482,6 +508,19 @@ const ConditionalAssessmentMessage: React.FC<
               </View>
             )}
 
+          {/* ✅ NEW: Alert if damage found */}
+          {damageFound && foundDamage.length > 0 && (
+            <View className="bg-yellow-50 rounded-lg p-3 border border-yellow-200 mb-3">
+              <Text className="text-xs font-pbold text-yellow-700">
+                ⚠️ Important
+              </Text>
+              <Text className="text-xs text-yellow-600 mt-1">
+                Renter reported issues with this item. Owner should review
+                before confirming receipt.
+              </Text>
+            </View>
+          )}
+
           {/* Status Indicator for Owner */}
           {!isCurrentUser && isOwner && (
             <View className="bg-green-50 rounded-lg p-3 border border-green-200 mt-3">
@@ -489,19 +528,37 @@ const ConditionalAssessmentMessage: React.FC<
                 ℹ️ Assessment received
               </Text>
               <Text className="text-xs text-green-600 mt-1">
-                Review the details and click "Confirm Item Received" to proceed.
+                {damageFound
+                  ? "Review the reported issues and decide whether to confirm receipt."
+                  : "Item condition confirmed. Click 'Confirm Item Received' to proceed."}
               </Text>
             </View>
           )}
 
           {/* Status Indicator for Renter */}
           {isCurrentUser && !isOwner && (
-            <View className="bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">
-              <Text className="text-xs font-pbold text-blue-700">
+            <View
+              className={`rounded-lg p-3 border mt-3 ${
+                damageFound
+                  ? "bg-yellow-50 border-yellow-200"
+                  : "bg-blue-50 border-blue-200"
+              }`}
+            >
+              <Text
+                className={`text-xs font-pbold ${
+                  damageFound ? "text-yellow-700" : "text-blue-700"
+                }`}
+              >
                 ℹ️ Assessment submitted
               </Text>
-              <Text className="text-xs text-blue-600 mt-1">
-                Waiting for owner to confirm receipt...
+              <Text
+                className={`text-xs mt-1 ${
+                  damageFound ? "text-yellow-600" : "text-blue-600"
+                }`}
+              >
+                {damageFound
+                  ? "Waiting for owner to review reported issues..."
+                  : "Waiting for owner to confirm receipt..."}
               </Text>
             </View>
           )}

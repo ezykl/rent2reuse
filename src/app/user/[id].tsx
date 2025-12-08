@@ -78,7 +78,8 @@ export default function UserProfile() {
         // Fetch user's items
         const itemsQuery = query(
           collection(db, "items"),
-          where("owner.id", "==", id)
+          where("owner.id", "==", id),
+          where("itemStatus", "==", "available")
         );
         const itemsSnap = await getDocs(itemsQuery);
         const items = itemsSnap.docs.map((doc) => ({
@@ -336,7 +337,7 @@ export default function UserProfile() {
               style={{ width: 200, height: 200, marginTop: 40 }}
             />
             <Text className="text-gray-500 -mt-8">
-              This user hasn't listed any items yet
+              This user hasn't listed any available items yet
             </Text>
           </View>
         )}

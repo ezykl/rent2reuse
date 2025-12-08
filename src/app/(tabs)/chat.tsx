@@ -61,14 +61,30 @@ interface Chat {
   lastMessageTime: Date | null;
   isCurrentUserLastSender: boolean;
   isRentRequest?: boolean;
-  requestStatus: "pending" | "accepted" | "declined" | "cancelled";
+  requestStatus:
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "cancelled"
+    | "initial_payment_paid"
+    | "assessment_submitted"
+    | "pickedup"
+    | "completed";
   itemDetails?: {
     id: string;
     name: string;
     price: number;
     image: string;
   };
-  status: "pending" | "accepted" | "declined" | "cancelled";
+  status:
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "cancelled"
+    | "initial_payment_paid"
+    | "assessment_submitted"
+    | "pickedup"
+    | "completed";
   unreadCounts: {
     [userId: string]: number;
   };
@@ -92,7 +108,15 @@ interface SearchResult {
     price: number;
     image: string;
   };
-  status?: "pending" | "accepted" | "declined" | "cancelled";
+  status?:
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "cancelled"
+    | "initial_payment_paid"
+    | "assessment_submitted"
+    | "pickedup"
+    | "completed";
   isRentRequest?: boolean;
   unreadCounts?: {
     [userId: string]: number;
@@ -248,7 +272,7 @@ const ChatList = () => {
     }
   };
 
-  const loadExistingChats = (userId: string) => {
+  const loadExistingChats = async (userId: string) => {
     try {
       const chatsRef = collection(db, "chat");
       const q = query(
@@ -257,54 +281,46 @@ const ChatList = () => {
         orderBy("lastMessageTime", "desc")
       );
 
-      const unsubscribeChats = onSnapshot(q, async (snapshot) => {
-        if (snapshot.empty) {
-          setChats([]);
-          setLoading(false);
-          return;
-        }
+      const snapshot = await getDocs(q);
 
-        const chatList = await Promise.all(
-          snapshot.docs.map(async (docSnap) => {
-            const chatData = docSnap.data();
-            const chatId = docSnap.id;
+      const chatList = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const chatData = docSnap.data();
+          const chatId = docSnap.id;
 
-            const recipientId = chatData.participants.find(
-              (id: string) => id !== userId
-            );
-            const userDoc = await getDoc(doc(db, "users", recipientId));
-            const recipient = userDoc.exists() ? userDoc.data() : null;
+          const recipientId = chatData.participants.find(
+            (id: string) => id !== userId
+          );
+          const userDoc = await getDoc(doc(db, "users", recipientId));
+          const recipient = userDoc.exists() ? userDoc.data() : null;
 
-            return {
-              id: chatId,
-              recipientId,
-              recipientName: {
-                firstname: recipient?.firstname || "",
-                lastname: recipient?.lastname || "",
-                middlename: recipient?.middlename || "",
-              },
-              recipientProfileImage:
-                recipient?.profileImage || "https://via.placeholder.com/50",
-              lastMessage: chatData.lastMessage || "No messages yet",
-              lastMessageTime: chatData.lastMessageTime?.toDate() || null,
-              isCurrentUserLastSender: chatData.lastSender === userId,
-              lastSender: chatData.lastSender,
-              unreadCounts: chatData.unreadCounts || {},
-              isRentRequest: !!chatData.itemDetails,
-              requestStatus: chatData.status || "pending",
-              itemDetails: chatData.itemDetails || null,
-              status: chatData.status || "pending",
-              requesterId: chatData.requesterId,
-              ownerId: chatData.ownerId,
-            } as Chat;
-          })
-        );
+          return {
+            id: chatId,
+            recipientId,
+            recipientName: {
+              firstname: recipient?.firstname || "",
+              lastname: recipient?.lastname || "",
+              middlename: recipient?.middlename || "",
+            },
+            recipientProfileImage:
+              recipient?.profileImage || "https://via.placeholder.com/50",
+            lastMessage: chatData.lastMessage || "No messages yet",
+            lastMessageTime: chatData.lastMessageTime?.toDate() || null,
+            isCurrentUserLastSender: chatData.lastSender === userId,
+            lastSender: chatData.lastSender,
+            unreadCounts: chatData.unreadCounts || {},
+            isRentRequest: !!chatData.itemDetails,
+            requestStatus: chatData.status || "pending", // ✅ ENSURE STATUS IS SET
+            itemDetails: chatData.itemDetails || null,
+            status: chatData.status || "pending", // ✅ ENSURE STATUS IS SET
+            requesterId: chatData.requesterId,
+            ownerId: chatData.ownerId,
+          } as Chat;
+        })
+      );
 
-        setChats(chatList);
-        setLoading(false);
-      });
-
-      return unsubscribeChats;
+      setChats(chatList);
+      setLoading(false);
     } catch (error) {
       console.log("Error setting up chat query:", error);
       setLoading(false);
@@ -518,6 +534,23 @@ const ChatList = () => {
     // Combine results with existing chats first
     setSearchResults([...chatResults]);
   }, [search, chats, allUsers, activeTab, currentUserId]);
+
+  const getStatusLabel = (status: string): string => {
+    const statusLabels: Record<string, string> = {
+      pending: "Pending",
+      accepted: "Accepted",
+      initial_payment_paid: "Payment Received",
+      assessment_submitted: "Item Verified",
+      pickedup: "In Progress",
+      completed: "Completed",
+      declined: "Declined",
+      cancelled: "Cancelled",
+    };
+
+    return (
+      statusLabels[status] || status.charAt(0).toUpperCase() + status.slice(1)
+    );
+  };
 
   const handleLongPress = (chatId: string) => {
     if (activeTab !== "closed") return;
@@ -733,6 +766,14 @@ const ChatList = () => {
                     ? "bg-yellow-100"
                     : item.status === "accepted"
                     ? "bg-green-100"
+                    : item.status === "initial_payment_paid" // ✅ ADD THIS
+                    ? "bg-blue-100"
+                    : item.status === "assessment_submitted" // ✅ ADD THIS
+                    ? "bg-purple-100"
+                    : item.status === "pickedup" // ✅ ADD THIS
+                    ? "bg-indigo-100"
+                    : item.status === "completed" // ✅ ADD THIS
+                    ? "bg-teal-100"
                     : item.status === "declined" || item.status === "cancelled"
                     ? "bg-red-100"
                     : "bg-gray-100"
@@ -744,13 +785,21 @@ const ChatList = () => {
                       ? "text-yellow-800"
                       : item.status === "accepted"
                       ? "text-green-800"
+                      : item.status === "initial_payment_paid" // ✅ ADD THIS
+                      ? "text-blue-800"
+                      : item.status === "assessment_submitted" // ✅ ADD THIS
+                      ? "text-purple-800"
+                      : item.status === "pickedup" // ✅ ADD THIS
+                      ? "text-indigo-800"
+                      : item.status === "completed" // ✅ ADD THIS
+                      ? "text-teal-800"
                       : item.status === "declined" ||
                         item.status === "cancelled"
                       ? "text-red-800"
                       : "text-gray-800"
                   }`}
                 >
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                  {getStatusLabel(item.status)} {/* ✅ USE HELPER FUNCTION */}
                 </Text>
               </View>
             )}
@@ -964,7 +1013,6 @@ const ChatList = () => {
                         {item.lastMessage}
                       </Text>
 
-                      {/* Request Status Badge */}
                       {item.isRentRequest && item.status && (
                         <View
                           className={`ml-2 px-2 py-1 rounded-full ${
@@ -972,6 +1020,14 @@ const ChatList = () => {
                               ? "bg-yellow-100"
                               : item.status === "accepted"
                               ? "bg-green-100"
+                              : item.status === "initial_payment_paid" // ✅ ADD THIS
+                              ? "bg-blue-100"
+                              : item.status === "assessment_submitted" // ✅ ADD THIS
+                              ? "bg-purple-100"
+                              : item.status === "pickedup" // ✅ ADD THIS
+                              ? "bg-indigo-100"
+                              : item.status === "completed" // ✅ ADD THIS
+                              ? "bg-teal-100"
                               : item.status === "declined" ||
                                 item.status === "cancelled"
                               ? "bg-red-100"
@@ -984,14 +1040,22 @@ const ChatList = () => {
                                 ? "text-yellow-800"
                                 : item.status === "accepted"
                                 ? "text-green-800"
+                                : item.status === "initial_payment_paid" // ✅ ADD THIS
+                                ? "text-blue-800"
+                                : item.status === "assessment_submitted" // ✅ ADD THIS
+                                ? "text-purple-800"
+                                : item.status === "pickedup" // ✅ ADD THIS
+                                ? "text-indigo-800"
+                                : item.status === "completed" // ✅ ADD THIS
+                                ? "text-teal-800"
                                 : item.status === "declined" ||
                                   item.status === "cancelled"
                                 ? "text-red-800"
                                 : "text-gray-800"
                             }`}
                           >
-                            {item.status.charAt(0).toUpperCase() +
-                              item.status.slice(1)}
+                            {getStatusLabel(item.status)}{" "}
+                            {/* ✅ USE HELPER FUNCTION */}
                           </Text>
                         </View>
                       )}

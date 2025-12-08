@@ -14,20 +14,21 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { icons } from "@/constant";
 import * as ImagePicker from "expo-image-picker";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { useLoader } from "@/context/LoaderContext"; // ✅ USE LOADER HOOK
+import { useLoader } from "@/context/LoaderContext";
 
 interface PickupAssessmentModalProps {
   visible: boolean;
   itemName: string;
   onClose: () => void;
   onSubmit: (data: PickupAssessmentData) => void;
+  onCancelRental?: (reason: string) => void; // ✅ ADD THIS
   initialData?: PickupAssessmentData;
   chatId: string;
 }
 
-// ✅ ALIGNED WITH CONDITIONAL ASSESSMENT MESSAGE
 export interface PickupAssessmentData {
   overallCondition: "excellent" | "good" | "fair" | "poor";
+  damageFound: boolean; // ✅ NEW: Track if damage was found
   scratches: boolean;
   dents: boolean;
   stains: boolean;
@@ -43,16 +44,20 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
   itemName,
   onClose,
   onSubmit,
+  onCancelRental, // ✅ ADD THIS
   initialData,
   chatId,
 }) => {
-  // ✅ USE LOADER HOOK
   const { isLoading, setIsLoading } = useLoader();
 
-  // ✅ ALIGNED STATE WITH CONDITIONAL ASSESSMENT
   const [overallCondition, setOverallCondition] = useState<
     "excellent" | "good" | "fair" | "poor"
   >(initialData?.overallCondition || "good");
+
+  // ✅ NEW: Track if damage was found
+  const [damageFound, setDamageFound] = useState(
+    initialData?.damageFound !== undefined ? initialData.damageFound : false
+  );
 
   const [damageItems, setDamageItems] = useState({
     scratches: initialData?.scratches || false,
@@ -122,8 +127,12 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
     setPhotos(photos.filter((_, i) => i !== index));
   };
 
+  // ✅ NEW: Check if any damage is found
+  const hasAnyDamage =
+    Object.values(damageItems).some(Boolean) || otherDamage.trim();
+
   const handleSubmit = async () => {
-    // ✅ VALIDATION
+    // ✅ VALIDATION: Photos are required
     if (photos.length === 0) {
       Alert.alert(
         "Photos Required",
@@ -132,6 +141,67 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
       return;
     }
 
+    // ✅ NEW: If damage was found, ask for confirmation
+    if (hasAnyDamage && damageFound) {
+      Alert.alert(
+        "Issues Found",
+        "You've identified issues with the item. Would you still like to proceed with the rental?",
+        [
+          {
+            text: "No, Cancel Rental",
+            style: "destructive",
+            onPress: () => {
+              // User wants to cancel rental
+              Alert.alert(
+                "Cancel Rental",
+                "Are you sure you want to cancel this rental? The owner will be notified of the damage found.",
+                [
+                  { text: "Keep Renting", style: "cancel" },
+                  {
+                    text: "Yes, Cancel Rental",
+                    style: "destructive",
+                    onPress: async () => {
+                      // ✅ CALL CANCELLATION HANDLER
+                      if (onCancelRental) {
+                        const damageDescription = [
+                          ...Object.entries(damageItems)
+                            .filter(([_, found]) => found)
+                            .map(([key]) => {
+                              const labels: Record<string, string> = {
+                                scratches: "Scratches",
+                                dents: "Dents",
+                                stains: "Stains",
+                                tears: "Tears",
+                                functioningIssues: "Functioning Issues",
+                              };
+                              return labels[key] || key;
+                            }),
+                          ...(otherDamage.trim() ? [otherDamage] : []),
+                        ].join(", ");
+
+                        await onCancelRental(damageDescription);
+                        onClose();
+                      }
+                    },
+                  },
+                ]
+              );
+            },
+          },
+          {
+            text: "Yes, Proceed",
+            style: "default",
+            onPress: performSubmit,
+          },
+        ]
+      );
+      return;
+    }
+
+    performSubmit();
+  };
+
+  const performSubmit = async () => {
     try {
       setIsLoading(true);
 
@@ -171,6 +241,7 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
       // ✅ BUILD ASSESSMENT DATA - ALIGNED WITH CONDITIONAL ASSESSMENT
       const assessmentData: PickupAssessmentData = {
         overallCondition,
+        damageFound, // ✅ Include damage found flag
         scratches: damageItems.scratches,
         dents: damageItems.dents,
         stains: damageItems.stains,
@@ -199,8 +270,8 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
     }
   };
 
-  const canSubmit =
-    photos.length > 0 && Object.values(damageItems).some((v) => v === true);
+  // ✅ UPDATED: Damage is optional, only need photos and condition
+  const canSubmit = photos.length > 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
@@ -229,7 +300,8 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
             </Text>
             <Text className="text-xs text-blue-800 leading-5">
               Assess the item's overall condition and document any visible
-              damage. Capture clear photos showing all important details.
+              damage. Capture clear photos showing all important details. If you
+              find hidden issues, you can choose to cancel the rental.
             </Text>
           </View>
 
@@ -330,64 +402,153 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
             </Text>
           </View>
 
-          {/* Damage Checklist */}
+          {/* ✅ NEW: Damage Found Toggle */}
           <View className="mb-6">
             <Text className="text-sm font-pbold text-gray-900 mb-3">
               🔍 Visible Damage
             </Text>
-            <View className="gap-2">
-              {damageChecklist.map(({ key, label, icon }) => (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() =>
-                    setDamageItems({
-                      ...damageItems,
-                      [key]: !damageItems[key as keyof typeof damageItems],
-                    })
-                  }
-                  className={`p-3 rounded-lg border-2 flex-row items-center ${
-                    damageItems[key as keyof typeof damageItems]
-                      ? "border-red-300 bg-red-50"
-                      : "border-gray-200 bg-white"
+
+            {/* Toggle: Damage Found or Not */}
+            <View className="gap-2 mb-4">
+              <TouchableOpacity
+                onPress={() => {
+                  setDamageFound(false);
+                  // Clear damage items when "No Damage" is selected
+                  setDamageItems({
+                    scratches: false,
+                    dents: false,
+                    stains: false,
+                    tears: false,
+                    functioningIssues: false,
+                  });
+                  setOtherDamage("");
+                }}
+                className={`p-4 rounded-lg border-2 flex-row items-center ${
+                  !damageFound
+                    ? "border-green-500 bg-green-50"
+                    : "border-gray-200 bg-white"
+                }`}
+              >
+                <View
+                  className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                    !damageFound
+                      ? "bg-green-500 border-green-500"
+                      : "border-gray-300"
                   }`}
                 >
-                  <Text className="text-lg mr-3">{icon}</Text>
-                  <View className="flex-1">
-                    <Text
-                      className={`font-pmedium ${
-                        damageItems[key as keyof typeof damageItems]
-                          ? "text-red-700"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      {label}
-                    </Text>
-                  </View>
-                  {damageItems[key as keyof typeof damageItems] && (
-                    <View className="w-5 h-5 rounded bg-red-500 items-center justify-center">
-                      <Text className="text-white font-pbold text-xs">✓</Text>
-                    </View>
+                  {!damageFound && (
+                    <Text className="text-white font-pbold">✓</Text>
                   )}
-                </TouchableOpacity>
-              ))}
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className={`font-psemibold text-base ${
+                      !damageFound ? "text-green-700" : "text-gray-700"
+                    }`}
+                  >
+                    ✨ No Issues Found
+                  </Text>
+                  <Text className="text-xs text-gray-600">
+                    Item is in perfect condition
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setDamageFound(true)}
+                className={`p-4 rounded-lg border-2 flex-row items-center ${
+                  damageFound
+                    ? "border-orange-500 bg-orange-50"
+                    : "border-gray-200 bg-white"
+                }`}
+              >
+                <View
+                  className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
+                    damageFound
+                      ? "bg-orange-500 border-orange-500"
+                      : "border-gray-300"
+                  }`}
+                >
+                  {damageFound && (
+                    <Text className="text-white font-pbold">✓</Text>
+                  )}
+                </View>
+                <View className="flex-1">
+                  <Text
+                    className={`font-psemibold text-base ${
+                      damageFound ? "text-orange-700" : "text-gray-700"
+                    }`}
+                  >
+                    ⚠️ Issues Found
+                  </Text>
+                  <Text className="text-xs text-gray-600">
+                    Describe the damage below
+                  </Text>
+                </View>
+              </TouchableOpacity>
             </View>
+
+            {/* ✅ CONDITIONAL: Only show damage checklist if damage was found */}
+            {damageFound && (
+              <View className="gap-2 mb-4 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <Text className="text-xs font-pbold text-orange-700 mb-2">
+                  SELECT DAMAGE TYPES
+                </Text>
+                {damageChecklist.map(({ key, label, icon }) => (
+                  <TouchableOpacity
+                    key={key}
+                    onPress={() =>
+                      setDamageItems({
+                        ...damageItems,
+                        [key]: !damageItems[key as keyof typeof damageItems],
+                      })
+                    }
+                    className={`p-3 rounded-lg border-2 flex-row items-center ${
+                      damageItems[key as keyof typeof damageItems]
+                        ? "border-red-300 bg-red-50"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <Text className="text-lg mr-3">{icon}</Text>
+                    <View className="flex-1">
+                      <Text
+                        className={`font-pmedium ${
+                          damageItems[key as keyof typeof damageItems]
+                            ? "text-red-700"
+                            : "text-gray-700"
+                        }`}
+                      >
+                        {label}
+                      </Text>
+                    </View>
+                    {damageItems[key as keyof typeof damageItems] && (
+                      <View className="w-5 h-5 rounded bg-red-500 items-center justify-center">
+                        <Text className="text-white font-pbold text-xs">✓</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
-          {/* Other Damage */}
-          <View className="mb-6">
-            <Text className="text-sm font-pbold text-gray-900 mb-2">
-              Other Damage (Optional)
-            </Text>
-            <TextInput
-              value={otherDamage}
-              onChangeText={setOtherDamage}
-              placeholder="e.g., Broken handle, Missing battery cover..."
-              multiline
-              numberOfLines={2}
-              className="border border-gray-300 rounded-lg p-3 text-gray-900 font-pregular"
-              style={{ textAlignVertical: "top" }}
-            />
-          </View>
+          {/* ✅ CONDITIONAL: Other Damage - Only show if damage was found */}
+          {damageFound && (
+            <View className="mb-6">
+              <Text className="text-sm font-pbold text-gray-900 mb-2">
+                Other Damage (Optional)
+              </Text>
+              <TextInput
+                value={otherDamage}
+                onChangeText={setOtherDamage}
+                placeholder="e.g., Broken handle, Missing battery cover..."
+                multiline
+                numberOfLines={2}
+                className="border border-gray-300 rounded-lg p-3 text-gray-900 font-pregular"
+                style={{ textAlignVertical: "top" }}
+              />
+            </View>
+          )}
 
           {/* Additional Notes */}
           <View className="mb-6">
@@ -416,9 +577,12 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
             <Text className="text-xs text-gray-600 mb-1">
               📋 Condition: {overallCondition}
             </Text>
-            <Text className="text-xs text-gray-600 mb-1">
-              🔴 Damage items:{" "}
-              {Object.values(damageItems).filter(Boolean).length}
+            <Text className="text-xs text-gray-600">
+              {damageFound
+                ? `🔴 Damage items: ${
+                    Object.values(damageItems).filter(Boolean).length
+                  }`
+                : "✨ No damage reported"}
             </Text>
           </View>
         </ScrollView>
@@ -478,7 +642,7 @@ const PickupAssessmentModal: React.FC<PickupAssessmentModalProps> = ({
                   tintColor="#fff"
                 />
                 <Text className="text-white font-psemibold">
-                  {canSubmit ? "Submit Assessment" : "Complete All Fields"}
+                  {canSubmit ? "Submit Assessment" : "Add Photos to Continue"}
                 </Text>
               </>
             )}

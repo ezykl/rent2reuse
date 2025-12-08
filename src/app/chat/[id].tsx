@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import MessageBubble from "@/components/chatModal/MessageBubble";
+
 import {
   View,
   Text,
@@ -315,20 +317,138 @@ const ChatScreen = () => {
     );
   }
 
+  const handleCancelRentalDueToDamage = async (damageDescription: string) => {
+    try {
+      setIsLoading(true);
+
+      const chatRef = doc(db, "chat", String(chatId));
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+
+      // ✅ Update chat status to cancelled
+      await updateDoc(chatRef, {
+        status: "cancelled",
+        cancellationReason: "Renter cancelled due to damage found",
+        damageFounded: damageDescription,
+        cancelledAt: serverTimestamp(),
+        lastMessage: "Rental cancelled - Damage found during inspection",
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // ✅ Update item status back to available
+      if (chatData?.itemDetails?.itemId) {
+        const itemRef = doc(db, "items", chatData.itemDetails.itemId);
+        await updateDoc(itemRef, {
+          itemStatus: "available",
+          rentedTo: null,
+          rentedAt: null,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // ✅ Add cancellation message to chat
+      await addDoc(messagesRef, {
+        type: "statusUpdate",
+        text: `Rental cancelled - Renter found damage: ${damageDescription}`,
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+        status: "cancelled",
+      });
+
+      // ✅ Update user's plan (refund rent usage)
+      try {
+        if (currentUserId) {
+          const userRef = doc(db, "users", currentUserId);
+          const userDoc = await getDoc(userRef);
+
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const currentPlan = userData.currentPlan;
+
+            if (currentPlan && typeof currentPlan.rentUsed === "number") {
+              const newRentUsed = Math.max(0, currentPlan.rentUsed - 1);
+
+              await updateDoc(userRef, {
+                "currentPlan.rentUsed": newRentUsed,
+                "currentPlan.updatedAt": new Date(),
+              });
+            }
+          }
+        }
+      } catch (planError) {
+        console.log("Error updating user plan:", planError);
+      }
+
+      // ✅ Delete from rentRequests if exists
+      try {
+        const rentRequestsQuery = query(
+          collection(db, "rentRequests"),
+          where("chatId", "==", String(chatId)),
+          limit(1)
+        );
+        const rentRequestSnap = await getDocs(rentRequestsQuery);
+
+        if (!rentRequestSnap.empty) {
+          await deleteDoc(rentRequestSnap.docs[0].ref);
+        }
+      } catch (deleteError) {
+        console.log("Error deleting rent request:", deleteError);
+      }
+
+      // ✅ Send notification to owner
+      try {
+        const ownerId = chatData?.ownerId;
+        if (ownerId) {
+          await createInAppNotification(ownerId, {
+            type: "RENTAL_CANCELLED_DAMAGE",
+            title: "Rental Cancelled",
+            message: `Rental was cancelled due to damage found: ${damageDescription}`,
+            data: {
+              route: "/chat",
+              params: { id: String(chatId) },
+            },
+          });
+        }
+      } catch (notificationError) {
+        console.log(
+          "Error sending cancellation notification:",
+          notificationError
+        );
+      }
+
+      Toast.show({
+        type: ALERT_TYPE.INFO,
+        title: "Rental Cancelled",
+        textBody: "Rental has been cancelled and owner has been notified",
+      });
+    } catch (error) {
+      console.log("Error cancelling rental due to damage:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to cancel rental",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handlePickupAssessmentSubmit = async (
-    assessmentData: PickupAssessmentData // ✅ Use the correct aligned type
+    assessmentData: PickupAssessmentData
   ) => {
     try {
       setIsLoading(true);
 
       const messagesRef = collection(db, "chat", String(chatId), "messages");
 
-      // ✅ Create assessment message with aligned data
+      // ✅ Create assessment message with damageFound
       const assessmentMessage = await addDoc(messagesRef, {
         type: "conditionalAssessment",
         assessmentType: "pickup",
         assessment: {
           overallCondition: assessmentData.overallCondition,
+          damageFound: assessmentData.damageFound, // ✅ INCLUDE THIS
           scratches: assessmentData.scratches,
           dents: assessmentData.dents,
           stains: assessmentData.stains,
@@ -339,52 +459,13 @@ const ChatScreen = () => {
           photos: assessmentData.photos,
           submittedAt: serverTimestamp(),
         },
-        status: "submitted", // ✅ Changed from pending
+        status: "submitted",
         senderId: currentUserId,
         createdAt: serverTimestamp(),
         read: false,
       });
 
-      // ✅ Update chat status
-      const chatRef = doc(db, "chat", String(chatId));
-      await updateDoc(chatRef, {
-        renterPickupAssessmentSubmitted: true,
-        renterPickupAssessmentMessageId: assessmentMessage.id,
-        renterPickupAssessmentData: {
-          overallCondition: assessmentData.overallCondition,
-          scratches: assessmentData.scratches,
-          dents: assessmentData.dents,
-          stains: assessmentData.stains,
-          tears: assessmentData.tears,
-          functioningIssues: assessmentData.functioningIssues,
-          otherDamage: assessmentData.otherDamage,
-          notes: assessmentData.notes,
-          photoCount: assessmentData.photos.length,
-          photoUrls: assessmentData.photos,
-          submittedAt: serverTimestamp(),
-        },
-        status: "assessment_submitted",
-        lastMessage: "Renter submitted pickup inspection",
-        lastMessageTime: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // Add status message
-      await addDoc(messagesRef, {
-        type: "statusUpdate",
-        text: "Renter completed pickup inspection with photos",
-        senderId: currentUserId,
-        createdAt: serverTimestamp(),
-        read: false,
-      });
-
-      setShowPickupAssessmentModal(false);
-
-      Toast.show({
-        type: ALERT_TYPE.SUCCESS,
-        title: "Assessment Submitted",
-        textBody: "Waiting for owner to confirm receipt",
-      });
+      // Rest of your code...
     } catch (error) {
       console.log("Error submitting pickup assessment:", error);
       Toast.show({
@@ -1836,6 +1917,20 @@ const ChatScreen = () => {
       return []; // No actions available
     }
 
+    const isReturnDateToday = () => {
+      if (!chatData?.itemDetails?.endDate) return false;
+
+      const endDate = new Date(chatData.itemDetails.endDate);
+      const today = new Date();
+
+      // Set times to start of day for comparison
+      endDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+
+      // Show actions on return date or after
+      return today >= endDate;
+    };
+
     // OWNER ACTIONS
     if (isOwner) {
       switch (status) {
@@ -1928,6 +2023,30 @@ const ChatScreen = () => {
           break;
 
         case "pickedup":
+          if (!isReturnDateToday()) {
+            // Show message instead
+            actions.push({
+              id: "rental_in_progress",
+              icon: icons.clock,
+              label: `Return Due: ${
+                chatData?.itemDetails?.endDate
+                  ? format(
+                      new Date(chatData.itemDetails.endDate),
+                      "MMM d, yyyy"
+                    )
+                  : "Unknown"
+              }`,
+              action: () => {
+                Alert.alert(
+                  "Rental In Progress",
+                  "Item is currently rented. Actions will be available on or after the return date."
+                );
+              },
+              bgColor: "#E3F2FD",
+              iconColor: "#2196F3",
+            });
+            break;
+          }
           // ✅ Check for pending full payment
           const hasPendingFullPayment = messages.some(
             (msg) =>
@@ -2049,6 +2168,30 @@ const ChatScreen = () => {
           break;
 
         case "pickedup":
+          if (!isReturnDateToday()) {
+            // Show countdown instead
+            actions.push({
+              id: "rental_in_progress",
+              icon: icons.clock,
+              label: `Return Due: ${
+                chatData?.itemDetails?.endDate
+                  ? format(
+                      new Date(chatData.itemDetails.endDate),
+                      "MMM d, yyyy"
+                    )
+                  : "Unknown"
+              }`,
+              action: () => {
+                Alert.alert(
+                  "Rental In Progress",
+                  "Item is currently rented. Return action will be available on or after the return date."
+                );
+              },
+              bgColor: "#E3F2FD",
+              iconColor: "#2196F3",
+            });
+            break;
+          }
           // ✅ Renter: Prepare return
           actions.push({
             id: "prepare_return",
@@ -3387,87 +3530,28 @@ const ChatScreen = () => {
                     }
                     delayLongPress={300}
                     activeOpacity={0.7}
-                    className={`flex-row mb-2 ${
-                      isCurrentUser ? "justify-end" : "justify-start"
-                    }`}
+                    className="flex-row mb-2 "
                   >
+                    {/* Recipient avatar on left */}
                     {!isCurrentUser && (
                       <Image
                         source={{ uri: recipientImage }}
                         className="w-8 h-8 rounded-full mr-2 mt-1"
                       />
                     )}
-                    <View className="flex-col">
-                      <View
-                        className={`max-w-[90%] min-w-[20px] justify-center rounded-2xl px-4 py-3 ${
-                          isCurrentUser
-                            ? "bg-primary rounded-tr-none self-end"
-                            : "bg-white rounded-tl-none border border-gray-200"
-                        }  } ${
-                          messageSelection.selectedMessages.includes(item.id)
-                            ? "border-2 border-primary"
-                            : ""
-                        }`}
-                      >
-                        <Text
-                          className={`${
-                            isCurrentUser ? "text-white" : "text-gray-800"
-                          } text-base`}
-                        >
-                          {item.isDeleted ? (
-                            <Text
-                              className={`text-base italic ${
-                                isCurrentUser
-                                  ? "text-white/70"
-                                  : "text-gray-500"
-                              }`}
-                            >
-                              [Message deleted]
-                            </Text>
-                          ) : (
-                            item.text
-                          )}
-                        </Text>
-                        {item.isEdited && (
-                          <Text
-                            className={`text-xs ${
-                              isCurrentUser ? "text-white/70" : "text-gray-500"
-                            }`}
-                          >
-                            (edited)
-                          </Text>
-                        )}
-                      </View>
 
-                      <View
-                        className={`flex-row items-center mt-1 px-1 ${
-                          isCurrentUser ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        {isCurrentUser && (
-                          <>
-                            {item.read ? (
-                              <Image
-                                source={icons.doubleCheck}
-                                className="w-3 h-3 mr-1"
-                                tintColor="#4285F4"
-                              />
-                            ) : (
-                              <Image
-                                source={icons.singleCheck}
-                                className="w-3 h-3 mr-1"
-                                tintColor="#9CA3AF"
-                              />
-                            )}
-                          </>
-                        )}
-                        <Text className="text-xs text-gray-400">
-                          {item.createdAt
-                            ? format(item.createdAt.toDate(), "h:mm a")
-                            : ""}
-                        </Text>
-                      </View>
-                    </View>
+                    {/* ✅ USE MESSAGE BUBBLE COMPONENT */}
+                    <MessageBubble
+                      text={item.text}
+                      isCurrentUser={isCurrentUser}
+                      isDeleted={item.isDeleted || false}
+                      isEdited={item.isEdited || false}
+                      read={item.read || false}
+                      createdAt={item.createdAt}
+                      isSelected={messageSelection.selectedMessages.includes(
+                        item.id
+                      )}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -3707,6 +3791,7 @@ const ChatScreen = () => {
           visible={showPickupAssessmentModal}
           itemName={chatData?.itemDetails?.name || "Item"}
           onClose={() => setShowPickupAssessmentModal(false)}
+          onCancelRental={handleCancelRentalDueToDamage}
           onSubmit={handlePickupAssessmentSubmit}
           initialData={pickupAssessmentData || undefined}
           chatId={String(chatId)}
