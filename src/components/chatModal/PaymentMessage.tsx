@@ -212,15 +212,15 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   const getPaymentTypeLabel = () => {
     if (item.paymentType === "initial") {
       const percentage = item.downpaymentPercentage || 0;
-      return `Initial Payment (${percentage}%)`;
+      return `Payment`;
     }
-    return "Full Payment";
+    return "Security Deposit Refund";
   };
 
   const getPaymentDescription = () => {
     const itemName = itemDetails?.name || "Item";
     if (item.paymentType === "initial") {
-      return `Initial payment for renting ${itemName}`;
+      return `Full payment for renting ${itemName}`;
     }
     return `Full payment for renting ${itemName}`;
   };
@@ -488,12 +488,39 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           <Text className="text-2xl font-pbold text-gray-900">
             ₱{item.amount.toFixed(2)}
           </Text>
-          <Text className="text-sm text-gray-500">
-            of ₱{item.totalAmount.toFixed(2)} total
-          </Text>
+
           <Text className="text-xs text-gray-400">
             ≈ ${DatabaseHelper.convertToUsd(item.amount)} USD
           </Text>
+
+          {/* Payment Breakdown */}
+          <View className="mt-3 p-2 bg-gray-50 rounded-lg">
+            <Text className="text-xs font-psemibold text-gray-700 mb-2">
+              Breakdown:
+            </Text>
+            <View className="flex-row justify-between mb-1">
+              <Text className="text-xs text-gray-600">Payment Amount:</Text>
+              <Text className="text-xs font-pmedium text-gray-900">
+                ₱{item.totalAmount.toFixed(2)}
+              </Text>
+            </View>
+            {item.totalAmount < item.amount && (
+              <View className="flex-row justify-between">
+                <Text className="text-xs text-gray-600">Security Deposit:</Text>
+                <Text className="text-xs font-pmedium text-gray-900">
+                  ₱{(item.amount - item.totalAmount).toFixed(2)}
+                </Text>
+              </View>
+            )}
+            <View className="flex-row justify-between border-t border-gray-200 mt-2 pt-2">
+              <Text className="text-xs font-psemibold text-gray-700">
+                Total:
+              </Text>
+              <Text className="text-xs font-psemibold text-gray-900">
+                ₱{item.amount.toFixed(2)}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Recipient Email */}

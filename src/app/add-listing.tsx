@@ -569,8 +569,8 @@ const AddListing = () => {
         radius: 0,
       },
       owner: { id: "", fullname: "" },
-      downpaymentPercentage: "",
-      enableDownpayment: false,
+      securityDepositPercentage: "",
+      enableSecurityDeposit: false,
     });
 
     const titleSearch = initialData?.label || "";
@@ -583,7 +583,7 @@ const AddListing = () => {
       description: "",
       condition: "",
       images: "",
-      downpaymentPercentage: "",
+      securityDepositPercentage: "",
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -640,7 +640,7 @@ const AddListing = () => {
         description: "",
         condition: "",
         images: "",
-        downpaymentPercentage: "",
+        securityDepositPercentage: "",
       };
 
       let isValid = true;
@@ -702,7 +702,7 @@ const AddListing = () => {
         description: "",
         condition: "",
         images: "",
-        downpaymentPercentage: "",
+        securityDepositPercentage: "",
       };
       let isValid = true;
 
@@ -753,7 +753,7 @@ const AddListing = () => {
         description: "",
         condition: "",
         images: "",
-        downpaymentPercentage: "",
+        securityDepositPercentage: "",
       };
       let isValid = true;
 
@@ -777,12 +777,12 @@ const AddListing = () => {
         newErrors.minimumDays = "Minimum duration must be at least 1 day";
         isValid = false;
       }
-      const downpaymentError = validateField(
-        "downpaymentPercentage",
-        formData.downpaymentPercentage
+      const securityDepositError = validateField(
+        "securityDepositPercentage",
+        formData.securityDepositPercentage
       );
-      if (downpaymentError) {
-        newErrors.downpaymentPercentage = downpaymentError;
+      if (securityDepositError) {
+        newErrors.securityDepositPercentage = securityDepositError;
         isValid = false;
       }
 
@@ -1036,8 +1036,10 @@ const AddListing = () => {
           },
           createdAt: serverTimestamp(),
           itemStatus: "Available",
-          ...(formData.enableDownpayment && {
-            downpaymentPercentage: Number(formData.downpaymentPercentage),
+          ...(formData.enableSecurityDeposit && {
+            securityDepositPercentage: Number(
+              formData.securityDepositPercentage
+            ),
           }),
           enableAI: useAI,
         };
@@ -1167,16 +1169,16 @@ const AddListing = () => {
         case "images":
           return value.length === 0 ? "At least one image is required" : "";
 
-        case "downpaymentPercentage":
-          if (formData.enableDownpayment && !value)
-            return "Downpayment percentage is required when enabled";
+        case "securityDepositPercentage":
+          if (formData.enableSecurityDeposit && !value)
+            return "Security deposit percentage is required when enabled";
           if (
-            formData.enableDownpayment &&
+            formData.enableSecurityDeposit &&
             (isNaN(Number(value)) || Number(value) <= 0 || Number(value) > 100)
           )
             return "Please enter a valid percentage (1-100)";
-          if (formData.enableDownpayment && Number(value) < 10)
-            return "Minimum downpayment is 10%";
+          if (formData.enableSecurityDeposit && Number(value) < 10)
+            return "Minimum security deposit is 10%";
           return "";
 
         default:
@@ -1581,48 +1583,48 @@ const AddListing = () => {
               Payment Options
             </Text>
 
-            {/* Rental Downpayment */}
+            {/* Rental Security Deposit */}
             <View className="bg-gray-50 rounded-xl p-4 mb-3">
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-1">
                   <Text className="text-secondary-400 font-pmedium">
-                    Require Downpayment
+                    Require Security Deposit
                   </Text>
                   <Text className="text-secondary-300 font-pregular text-xs">
-                    Secures rental and must be paid at pickup before handing
-                    over the item
+                    Protects your item and is refunded after safe return at end
+                    of rental
                   </Text>
                 </View>
                 <Switch
-                  value={formData.enableDownpayment}
+                  value={formData.enableSecurityDeposit}
                   onValueChange={(value) => {
                     setFormData((prev) => ({
                       ...prev,
-                      enableDownpayment: value,
-                      downpaymentPercentage: value
-                        ? prev.downpaymentPercentage || "30"
+                      enableSecurityDeposit: value,
+                      securityDepositPercentage: value
+                        ? prev.securityDepositPercentage || "30"
                         : "",
                     }));
                     if (!value) {
                       setErrors((prev) => ({
                         ...prev,
-                        downpaymentPercentage: "",
+                        securityDepositPercentage: "",
                       }));
                     }
                   }}
                   trackColor={{ false: "#767577", true: "#4BD07F" }}
                   thumbColor={
-                    formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
+                    formData.enableSecurityDeposit ? "#ffffff" : "#f4f3f4"
                   }
                 />
               </View>
 
-              {formData.enableDownpayment && (
+              {formData.enableSecurityDeposit && (
                 <View>
                   {/* Percentage Input */}
                   <View className="mb-3">
                     <Text className="text-secondary-400 font-pmedium mb-2">
-                      Downpayment Amount
+                      Security Deposit Amount
                     </Text>
                     <View className="flex-row gap-2 mb-2">
                       {/* Quick Select Buttons */}
@@ -1632,25 +1634,25 @@ const AddListing = () => {
                           onPress={() => {
                             setFormData((prev) => ({
                               ...prev,
-                              downpaymentPercentage: percentage,
+                              securityDepositPercentage: percentage,
                             }));
                             setErrors((prev) => ({
                               ...prev,
-                              downpaymentPercentage: validateField(
-                                "downpaymentPercentage",
+                              securityDepositPercentage: validateField(
+                                "securityDepositPercentage",
                                 percentage
                               ),
                             }));
                           }}
                           className={`px-3 py-2 rounded-lg border ${
-                            formData.downpaymentPercentage === percentage
+                            formData.securityDepositPercentage === percentage
                               ? "bg-primary border-primary"
                               : "bg-white border-gray-300"
                           }`}
                         >
                           <Text
                             className={`font-pmedium ${
-                              formData.downpaymentPercentage === percentage
+                              formData.securityDepositPercentage === percentage
                                 ? "text-white"
                                 : "text-secondary-400"
                             }`}
@@ -1660,83 +1662,73 @@ const AddListing = () => {
                         </TouchableOpacity>
                       ))}
                     </View>
-
-                    {/* <TextInput
-                      value={formData.downpaymentPercentage}
-                      onChangeText={(text) => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          downpaymentPercentage: text,
-                        }));
-                        setErrors((prev) => ({
-                          ...prev,
-                          downpaymentPercentage: validateField(
-                            "downpaymentPercentage",
-                            text
-                          ),
-                        }));
-                      }}
-                      className={`font-pregular bg-white border rounded-xl p-3 ${
-                        errors.downpaymentPercentage
-                          ? "border-red-500"
-                          : "border-gray-200"
-                      }`}
-                      keyboardType="numeric"
-                      placeholder="Enter percentage (e.g., 30 for 30%)"
-                    /> */}
-                    {/* {errors.downpaymentPercentage ? (
-                      <Text className="text-red-500 text-xs mt-1">
-                        {errors.downpaymentPercentage}
-                      </Text>
-                    ) : (
-                      <Text className="text-secondary-300 font-pregular text-xs mt-1">
-                        Minimum 10%, Maximum 100%
-                      </Text>
-                    )} */}
                   </View>
 
                   {/* Payment Example */}
-                  {formData.downpaymentPercentage &&
+                  {formData.securityDepositPercentage &&
                     formData.price &&
                     formData.minimumDays && (
                       <View className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                        <Text className="text-blue-700 font-psemibold mb-2">
+                        <Text className="text-blue-700 font-psemibold mb-3">
                           Payment Breakdown Example
                         </Text>
                         <Text className="text-blue-600 font-pregular text-sm">
                           For {formData.minimumDays} day(s) rental:
                         </Text>
-                        <Text className="text-blue-600 font-pregular text-sm mb-1">
-                          • Total Cost: ₱
-                          {(
-                            Number(formData.price) *
-                            Number(formData.minimumDays)
-                          ).toLocaleString()}
-                        </Text>
-                        <Text className="text-blue-600 font-pregular text-sm mb-1">
-                          • Required Downpayment (
-                          {formData.downpaymentPercentage}%): ₱
-                          {Math.round(
-                            (Number(formData.price) *
-                              Number(formData.minimumDays) *
-                              Number(formData.downpaymentPercentage)) /
-                              100
-                          ).toLocaleString()}
-                        </Text>
-                        <Text className="text-blue-600 font-pregular text-sm">
-                          • Remaining Balance: ₱
-                          {Math.round(
-                            Number(formData.price) *
-                              Number(formData.minimumDays) -
-                              (Number(formData.price) *
-                                Number(formData.minimumDays) *
-                                Number(formData.downpaymentPercentage)) /
-                                100
-                          ).toLocaleString()}
-                        </Text>
-                        <Text className="text-blue-500 font-pregular text-xs mt-2">
-                          Downpayment must be paid at pickup before item
-                          handover
+                        <View className="mt-2 space-y-2">
+                          <View className="flex-row justify-between">
+                            <Text className="text-blue-600 font-pregular text-sm">
+                              • Daily Rate × Days:
+                            </Text>
+                            <Text className="text-blue-700 font-psemibold text-sm">
+                              ₱
+                              {(
+                                Number(formData.price) *
+                                Number(formData.minimumDays)
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                          <View className="border-t border-blue-300 my-2" />
+                          <View className="flex-row justify-between">
+                            <Text className="text-blue-600 font-pregular text-sm">
+                              Security Deposit (
+                              {formData.securityDepositPercentage}% of rental):
+                            </Text>
+                            <Text className="text-blue-700 font-psemibold text-sm">
+                              ₱
+                              {Math.round(
+                                (Number(formData.price) *
+                                  Number(formData.minimumDays) *
+                                  Number(formData.securityDepositPercentage)) /
+                                  100
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                          <View className="border-t border-blue-300 my-2" />
+                          <View className="flex-row justify-between bg-blue-100 p-2 rounded">
+                            <Text className="text-blue-700 font-psemibold text-sm">
+                              Total Amount Due at Pickup:
+                            </Text>
+                            <Text className="text-blue-700 font-pbold text-sm">
+                              ₱
+                              {(
+                                Number(formData.price) *
+                                  Number(formData.minimumDays) +
+                                Math.round(
+                                  (Number(formData.price) *
+                                    Number(formData.minimumDays) *
+                                    Number(
+                                      formData.securityDepositPercentage
+                                    )) /
+                                    100
+                                )
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text className="text-blue-500 font-pregular text-xs mt-3">
+                          ℹ️ Security deposit is refundable upon safe return of
+                          the item in agreed condition
                         </Text>
                       </View>
                     )}
@@ -1749,17 +1741,17 @@ const AddListing = () => {
               <View className="flex-row items-center mb-2">
                 <Text className="text-2xl mr-2">💡</Text>
                 <Text className="text-green-700 font-psemibold">
-                  Why require a downpayment?
+                  Why require a security deposit?
                 </Text>
               </View>
               <Text className="text-green-600 font-pregular text-sm mb-1">
                 • Ensures serious renters only
               </Text>
               <Text className="text-green-600 font-pregular text-sm mb-1">
-                • Acts as security deposit
+                • Protects against damage or loss
               </Text>
               <Text className="text-green-600 font-pregular text-sm">
-                • Reduces risk of item damage/loss
+                • Fully refundable after safe return
               </Text>
             </View>
           </View>

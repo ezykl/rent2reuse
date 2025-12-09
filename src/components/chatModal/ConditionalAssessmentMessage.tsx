@@ -565,10 +565,10 @@ const ConditionalAssessmentMessage: React.FC<
     );
 
     return (
-      <View className={`mb-3 ${isCurrentUser ? "pr-24" : "pl-24"}`}>
+      <View className={`mb-3 ${!isCurrentUser ? "pr-24" : "pl-24"}`}>
         <View
           className={`p-4 bg-white rounded-xl border border-gray-200 shadow-sm ${
-            isCurrentUser ? "rounded-bl-none" : "rounded-br-none"
+            !isCurrentUser ? "rounded-bl-none" : "rounded-br-none"
           }`}
         >
           {/* Header */}

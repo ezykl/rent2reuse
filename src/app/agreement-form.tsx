@@ -177,7 +177,7 @@ const AgreementForm = () => {
   const calculateRemainingPayment = () => {
     const totalPrice = agreementData?.itemDetails?.totalPrice || 0;
     const downpayment = calculateDownpayment();
-    return totalPrice - downpayment;
+    return totalPrice + downpayment;
   };
 
   const handleAgreedToTerms = async () => {
@@ -282,7 +282,7 @@ Location: ${locationDisplay}
 
 PAYMENT TERMS:
 Total Rental Price: ₱${totalPrice.toLocaleString()}
-Down Payment (${downpaymentPercentage}%): ₱${downpayment.toLocaleString()}
+Security Deposit (${downpaymentPercentage}%): ₱${downpayment.toLocaleString()}
 Remaining Balance: ₱${remaining.toLocaleString()}
 
 TERMS & CONDITIONS:
@@ -437,7 +437,7 @@ Date: ${new Date().toLocaleDateString()}`;
                 </View>
                 <View className="flex-row justify-between pt-2 border-t border-yellow-200">
                   <Text className="text-sm text-gray-600 font-pmedium">
-                    Remaining
+                    Total Amount + Security Deposit
                   </Text>
                   <Text className="font-pbold text-yellow-700">
                     ₱{remaining.toLocaleString()}

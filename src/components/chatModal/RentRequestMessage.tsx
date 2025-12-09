@@ -79,14 +79,25 @@ const RentRequestMessage = ({
         setCurrentStatus(chatData.status || "pending");
 
         // Map chat data directly to rent request data
+        // ✅ CHANGE: Fetch from securityDepositPercentage but store as downpaymentPercentage
+        const securityDepositPercentage =
+          chatData.itemDetails?.securityDepositPercentage || 0;
+        const basePrice = chatData.itemDetails?.price || 0;
+        const rentalDays = chatData.itemDetails?.rentalDays || 0;
+        const baseTotal = basePrice * rentalDays;
+        const depositAmount = (baseTotal * securityDepositPercentage) / 100;
+        const totalWithDeposit = baseTotal + depositAmount;
+
         const requestData = {
           name: chatData.itemDetails?.name || "Unknown Item",
           itemImage: chatData.itemDetails?.image || "",
-          price: chatData.itemDetails?.price || 0,
-          totalPrice: chatData.itemDetails?.totalPrice || 0,
-          rentalDays: chatData.itemDetails?.rentalDays || 0,
-          downpaymentPercentage:
-            chatData.itemDetails?.downpaymentPercentage || 0,
+          price: basePrice,
+          totalPrice: totalWithDeposit, // ✅ CHANGE: Include security deposit in total
+          baseTotal: baseTotal, // ✅ NEW: Store base rental total separately
+          rentalDays: rentalDays,
+          downpaymentPercentage: securityDepositPercentage, // ✅ CHANGE: Use this variable name
+          securityDepositPercentage: securityDepositPercentage, // ✅ NEW: Also store original name
+          depositAmount: depositAmount, // ✅ NEW: Store deposit amount for display
           itemLocation: chatData.itemDetails?.itemLocation || null,
           pickupTime: chatData.itemDetails?.pickupTime || 480,
           startDate: chatData.itemDetails?.startDate?.toDate() || new Date(),
@@ -94,7 +105,7 @@ const RentRequestMessage = ({
           message: chatData.itemDetails?.message || "",
           status: chatData.status || "pending",
 
-          // Additional chat-level fields you might need
+          // Additional chat-level fields
           requesterId: chatData.requesterId,
           ownerId: chatData.ownerId,
           itemId: chatData.itemId,
@@ -273,7 +284,7 @@ const RentRequestMessage = ({
               </Text>
             </View>
 
-            <View className=" mt-3">
+            <View className="mt-3">
               <View>
                 <Text className="text-xs font-pbold uppercase text-gray-400">
                   Rental Period
@@ -283,13 +294,67 @@ const RentRequestMessage = ({
                 </Text>
               </View>
 
-              <View className=" mt-3">
-                <Text className="text-xs font-pbold uppercase text-gray-400">
-                  Total Amount
+              {/* ✅ NEW: Price Breakdown Section */}
+              <View className="mt-3 bg-gray-50 p-3 rounded-lg">
+                <Text className="text-xs font-pbold uppercase text-gray-400 mb-2">
+                  Price Breakdown
                 </Text>
-                <Text className="text-sm font-pmedium mt-1 text-gray-700">
-                  ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
-                </Text>
+
+                {/* Base Rental */}
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-sm font-pregular text-gray-700">
+                    Rental Fee ({rentRequestData.rentalDays} days × ₱
+                    {rentRequestData.price})
+                  </Text>
+                  <Text className="text-sm font-pmedium text-gray-800">
+                    ₱{(rentRequestData.baseTotal || 0).toLocaleString()}
+                  </Text>
+                </View>
+
+                {/* Security Deposit - Only show if percentage > 0 */}
+                {rentRequestData.downpaymentPercentage &&
+                rentRequestData.downpaymentPercentage > 0 ? (
+                  <>
+                    <View className="flex-row justify-between py-2 border-t border-gray-200 mb-2">
+                      <Text className="text-sm font-pregular text-gray-700">
+                        Security Deposit (
+                        {rentRequestData.downpaymentPercentage}
+                        %)
+                      </Text>
+                      <Text className="text-sm font-pmedium text-orange-600">
+                        ₱{(rentRequestData.depositAmount || 0).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    {/* Total with Deposit */}
+                    <View className="flex-row justify-between pt-2 border-t border-gray-200">
+                      <Text className="text-sm font-pbold text-gray-900">
+                        Total Amount Due
+                      </Text>
+                      <Text className="text-base font-pbold text-primary">
+                        ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
+                      </Text>
+                    </View>
+
+                    {/* Info Note */}
+                    <View className="mt-2 bg-orange-50 p-2 rounded border border-orange-200">
+                      <Text className="text-xs font-pregular text-orange-700">
+                        💡 Security deposit will be collected at pickup and
+                        refunded upon safe return.
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  // No security deposit
+                  <View className="flex-row justify-between pt-2 border-t border-gray-200">
+                    <Text className="text-sm font-pbold text-gray-900">
+                      Total Amount Due
+                    </Text>
+                    <Text className="text-base font-pbold text-primary">
+                      ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           </View>

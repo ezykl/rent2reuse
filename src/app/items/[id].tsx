@@ -581,10 +581,8 @@ export default function ItemDetails() {
         .minute(minutes)
         .second(0);
 
-      // Calculate days difference including both start and end dates
       const daysDifference = endDateTime.diff(startDateTime, "day");
 
-      // Create rent request with complete data
       const requesterFullName = [
         user?.firstname ?? "",
         user?.middlename ?? "",
@@ -593,20 +591,19 @@ export default function ItemDetails() {
         .filter((name) => name && name.trim().length > 0)
         .join(" ");
 
-      // Create chat document first
       const chatRef = await addDoc(collection(db, "chat"), {
         participants: [user.uid, item?.owner?.id],
         itemId: item?.id,
 
-        requesterId: user.uid, // Add this explicitly
-        ownerId: item?.owner?.id, // Add this explicitly
+        requesterId: user.uid,
+        ownerId: item?.owner?.id,
         itemDetails: {
           name: item?.itemName,
           image: item?.images?.[0],
           price: item?.itemPrice,
           totalPrice: daysDifference * (item?.itemPrice ?? 0),
           rentalDays: daysDifference,
-          downpaymentPercentage: item?.downpaymentPercentage ?? 0,
+          securityDepositPercentage: item?.securityDepositPercentage ?? 0,
           itemLocation: item?.itemLocation ?? null,
           startDate: Timestamp.fromDate(startDateTime.toDate()),
           endDate: Timestamp.fromDate(endDateTime.toDate()),
@@ -624,7 +621,6 @@ export default function ItemDetails() {
         },
       });
 
-      // Create rent request with chat reference
       const rentRequestRef = await addDoc(collection(db, "rentRequests"), {
         itemId: item?.id ?? "",
         itemName: item?.itemName ?? "",
@@ -648,7 +644,7 @@ export default function ItemDetails() {
       await updateDoc(chatRef, {
         rentRequestId: rentRequestRef.id,
       });
-      // Add initial message to chat
+
       await addDoc(collection(db, "chat", chatRef.id, "messages"), {
         senderId: user.uid,
         text: formData.message,
@@ -660,7 +656,6 @@ export default function ItemDetails() {
 
       await checkAndUpdateLimits(user?.uid, "rent");
 
-      // Send notifications
       await sendRentRequestNotifications(item?.owner?.id!, {
         itemId: item?.id!,
         itemName: item?.itemName!,
@@ -1149,16 +1144,16 @@ export default function ItemDetails() {
                     </Text>
                   </View>
 
-                  {item?.downpaymentPercentage && (
+                  {item?.securityDepositPercentage && (
                     <View className="flex-row justify-between items-center ">
                       <View className="flex-row items-center">
                         <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
                         <Text className="text-gray-700 font-pmedium">
-                          Downpayment
+                          Security Deposit
                         </Text>
                       </View>
                       <Text className="font-psemibold text-orange-600">
-                        {item.downpaymentPercentage}%
+                        {item.securityDepositPercentage}%
                       </Text>
                     </View>
                   )}
@@ -1341,7 +1336,7 @@ export default function ItemDetails() {
         itemPrice={item?.itemPrice ?? 0}
         itemImage={item?.images?.[0] ?? ""}
         itemMinRentDuration={item?.itemMinRentDuration ?? 1}
-        downpaymentPercentage={item?.downpaymentPercentage ?? 0}
+        securityDepositPercentage={item?.securityDepositPercentage ?? 0}
       />
 
       <CustomImageViewer
@@ -1382,7 +1377,7 @@ const RentRequestForm = ({
   itemName,
   itemPrice,
   itemImage,
-  downpaymentPercentage,
+  securityDepositPercentage,
   itemMinRentDuration,
 }: {
   visible: boolean;
@@ -1396,7 +1391,7 @@ const RentRequestForm = ({
   itemName: string;
   itemPrice: number;
   itemImage: string;
-  downpaymentPercentage: number;
+  securityDepositPercentage: number;
   itemMinRentDuration: number;
 }) => {
   if (!visible) return null;
@@ -1811,7 +1806,8 @@ const RentRequestForm = ({
                 <Text className="text-xs text-amber-500 leading-4">
                   By accepting these terms, you acknowledge that you have read,
                   understood, and agree to be bound by these conditions for the
-                  duration of your rental period.
+                  duration of your rental period. Any security deposit required
+                  is held separately and refunded upon safe return of the item.
                 </Text>
               </View>
             </ScrollView>
@@ -1992,6 +1988,7 @@ const RentRequestForm = ({
             )}
           </View>
 
+          {/* Rental Fee */}
           <View className="flex-row justify-between items-center mb-2">
             <Text className="text-gray-600">
               ₱{itemPrice} ×{" "}
@@ -2005,59 +2002,74 @@ const RentRequestForm = ({
             </Text>
           </View>
 
-          {downpaymentPercentage && (
-            <View>
-              <View className="border-t border-gray-200 my-2" />
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-orange-400 font-pmedium">
-                  Required Downpayment ({downpaymentPercentage}%)
-                </Text>
-                <Text className="font-psemibold text-orange-400">
+          {/* Security Deposit - Always shown if percentage exists */}
+          {securityDepositPercentage ? (
+            <>
+              <View className="border-t border-gray-200 my-3" />
+              <View className="flex-row justify-between items-center mb-3 bg-orange-50 p-3 rounded-lg border border-orange-200">
+                <View>
+                  <Text className="text-orange-700 font-pmedium text-sm">
+                    Security Deposit ({securityDepositPercentage}%)
+                  </Text>
+                  <Text className="text-orange-600 text-xs mt-1">
+                    Refundable upon safe return
+                  </Text>
+                </View>
+                <Text className="font-psemibold text-orange-600">
                   ₱
                   {(
                     calculateTotalPrice() *
-                    (downpaymentPercentage / 100)
+                    (securityDepositPercentage / 100)
                   ).toFixed(2)}
                 </Text>
               </View>
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-gray-600 font-pmedium">
-                  Balance on Return ({100 - downpaymentPercentage}%)
-                </Text>
-                <Text className="font-psemibold text-gray-800">
-                  ₱
-                  {(
-                    calculateTotalPrice() *
-                    ((100 - downpaymentPercentage) / 100)
-                  ).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          )}
-          <View className="border-t border-gray-200 my-2" />
+            </>
+          ) : null}
+
+          {/* Total with Security Deposit */}
+          <View className="border-t border-gray-200 my-3" />
           <View className="flex-row justify-between items-center">
-            <Text className="text-lg font-psemibold text-gray-800">
-              Total Amount
-            </Text>
-            <Text className="text-lg font-pbold text-primary">
-              ₱{calculateTotalPrice().toFixed(2)}
+            <View>
+              <Text className="text-base font-pmedium text-gray-700">
+                Total Amount Due
+              </Text>
+              <Text className="text-xs text-gray-500 mt-1">
+                {securityDepositPercentage
+                  ? "Rental fee + Security deposit"
+                  : "Rental fee"}
+              </Text>
+            </View>
+            <Text className="text-xl font-pbold text-primary">
+              ₱
+              {securityDepositPercentage
+                ? (
+                    calculateTotalPrice() *
+                    ((100 + securityDepositPercentage) / 100)
+                  ).toFixed(2)
+                : calculateTotalPrice().toFixed(2)}
             </Text>
           </View>
+
+          {securityDepositPercentage && (
+            <View className="mt-3 bg-blue-50 border border-blue-200 p-3 rounded-lg">
+              <Text className="text-blue-700 text-xs leading-5">
+                <Text className="font-psemibold">Note:</Text> The security
+                deposit of ₱
+                {(
+                  calculateTotalPrice() *
+                  (securityDepositPercentage / 100)
+                ).toFixed(2)}{" "}
+                will be collected during pickup and refunded during the return
+                process.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View className="mb-6 p-4 border border-gray-200 rounded-xl">
           <Text className="text-lg font-psemibold text-gray-700 mb-3">
             Agreement
           </Text>
-
-          {/* <TouchableOpacity
-            onPress={() => setShowTermsModal(true)}
-            className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg"
-          >
-            <Text className="text-blue-600 font-pmedium text-sm text-center">
-              Read Terms & Conditions
-            </Text>
-          </TouchableOpacity> */}
 
           <TouchableOpacity
             onPress={() => setAcceptedTerms(!acceptedTerms)}

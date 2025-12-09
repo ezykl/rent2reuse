@@ -535,29 +535,25 @@ const ChatScreen = () => {
         return;
       }
 
-      const { totalPrice, downpaymentPercentage = 0 } = chatData.itemDetails;
+      const downpaymentPercentage =
+        chatData.itemDetails.downpaymentPercentage || 0;
+      const basePrice = chatData.itemDetails.price || 0;
+      const rentalDays = chatData.itemDetails.rentalDays || 0;
+      const baseTotal = basePrice * rentalDays;
+      const depositAmount = (baseTotal * downpaymentPercentage) / 100;
+      const totalWithDeposit = baseTotal + depositAmount;
 
-      if (!totalPrice) {
-        Alert.alert("Error", "Total price not available");
-        return;
-      }
-
-      // Calculate payment amount
       let amount: number;
+      let paymentDescription: string;
+
       if (paymentType === "initial") {
-        if (downpaymentPercentage === 0) {
-          Alert.alert("Error", "No downpayment required for this item");
-          return;
-        }
-        amount = (totalPrice * downpaymentPercentage) / 100;
+        // ✅ Initial payment = Rental + Security Deposit (full amount)
+        amount = totalWithDeposit;
+        paymentDescription = `Full Payment (Rental + ${downpaymentPercentage}% Security Deposit)`;
       } else {
-        // Full payment
-        if (downpaymentPercentage > 0) {
-          const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
-          amount = totalPrice - downpaymentAmount;
-        } else {
-          amount = totalPrice;
-        }
+        // ✅ Full payment = Security Deposit Return to renter
+        amount = depositAmount;
+        paymentDescription = `Security Deposit Refund (${downpaymentPercentage}%)`;
       }
 
       // Get recipient (renter) ID
@@ -571,8 +567,9 @@ const ChatScreen = () => {
         type: "payment",
         paymentType: paymentType,
         amount: amount,
-        totalAmount: totalPrice,
+        totalAmount: baseTotal, // ✅ Store base rental total
         downpaymentPercentage: downpaymentPercentage,
+        paymentDescription: paymentDescription,
         status: "pending",
         recipientPayPalEmail: currentUserPayPalEmail,
         recipientId: recipientId,
@@ -588,9 +585,7 @@ const ChatScreen = () => {
 
       const chatRef = doc(db, "chat", String(chatId));
       const updateData = {
-        lastMessage: `Payment request: ${
-          paymentType === "initial" ? "Initial Payment" : "Full Payment"
-        }`,
+        lastMessage: `Payment request: ${paymentDescription}`,
         lastMessageTime: serverTimestamp(),
         lastSender: currentUserId,
         [`unreadCounts.${recipientId}`]: increment(1),
@@ -610,9 +605,7 @@ const ChatScreen = () => {
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Payment Request Sent",
-        textBody: `${
-          paymentType === "initial" ? "Initial" : "Full"
-        } payment request sent successfully`,
+        textBody: `${paymentDescription} request sent successfully`,
       });
     } catch (error) {
       console.log("Error sending payment message:", error);
@@ -642,12 +635,15 @@ const ChatScreen = () => {
 
     const downpaymentPercentage =
       chatData.itemDetails.downpaymentPercentage || 0;
-    const totalPrice = chatData.itemDetails.totalPrice || 0;
-    const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
+    const basePrice = chatData.itemDetails.price || 0;
+    const rentalDays = chatData.itemDetails.rentalDays || 0;
+    const baseTotal = basePrice * rentalDays;
+    const depositAmount = (baseTotal * downpaymentPercentage) / 100;
+    const fullAmount = baseTotal + depositAmount;
 
     Alert.alert(
-      "Request Initial Payment",
-      `Request ₱${downpaymentAmount.toLocaleString()} (${downpaymentPercentage}% down payment)?`,
+      "Request Full Payment (Pickup)",
+      `Rental Fee: ₱${baseTotal.toLocaleString()}\nSecurity Deposit (${downpaymentPercentage}%): ₱${depositAmount.toLocaleString()}\nTotal Due: ₱${fullAmount.toLocaleString()}`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -775,13 +771,42 @@ const ChatScreen = () => {
 
     const downpaymentPercentage =
       chatData.itemDetails.downpaymentPercentage || 0;
-    const totalPrice = chatData.itemDetails.totalPrice || 0;
-    const downpaymentAmount = (totalPrice * downpaymentPercentage) / 100;
-    const remainingAmount = totalPrice - downpaymentAmount;
+    const basePrice = chatData.itemDetails.price || 0;
+    const rentalDays = chatData.itemDetails.rentalDays || 0;
+    const baseTotal = basePrice * rentalDays;
+    const depositAmount = (baseTotal * downpaymentPercentage) / 100;
+    const remainingAmount = baseTotal - depositAmount;
 
     Alert.alert(
       "Request Full Payment",
       `Request remaining payment of ₱${remainingAmount.toLocaleString()}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Send Request",
+          style: "default",
+          onPress: () => sendPaymentMessage("full"),
+        },
+      ]
+    );
+  };
+
+  const handleSecurityDepositReturn = () => {
+    if (!chatData?.itemDetails) {
+      Alert.alert("Error", "Item details not found");
+      return;
+    }
+
+    const downpaymentPercentage =
+      chatData.itemDetails.downpaymentPercentage || 0;
+    const basePrice = chatData.itemDetails.price || 0;
+    const rentalDays = chatData.itemDetails.rentalDays || 0;
+    const baseTotal = basePrice * rentalDays;
+    const depositAmount = (baseTotal * downpaymentPercentage) / 100;
+
+    Alert.alert(
+      "Return Security Deposit",
+      `Return security deposit of ₱${depositAmount.toLocaleString()}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -804,7 +829,7 @@ const ChatScreen = () => {
     if (isOwner) {
       switch (status) {
         case "accepted":
-          return "💰 Request initial payment if applicable...";
+          return "💰 Request payment if ...";
         case "initial_payment_paid":
           return "⏳ Waiting for renter to verify item condition...";
         case "assessment_submitted":
@@ -1566,11 +1591,40 @@ const ChatScreen = () => {
     const unsubscribe = onSnapshot(chatRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
+
+        // ✅ FETCH securityDepositPercentage FROM FIRESTORE but use as downpaymentPercentage
+        const securityDepositPercentage =
+          data.itemDetails?.securityDepositPercentage || 0;
+        const basePrice = data.itemDetails?.price || 0;
+        const rentalDays = data.itemDetails?.rentalDays || 0;
+        const baseTotal = basePrice * rentalDays;
+        const depositAmount = (baseTotal * securityDepositPercentage) / 100;
+        const totalWithDeposit = baseTotal + depositAmount; // ✅ ADD deposit to total
+
         setChatData({
           requesterId: data.requesterId,
           ownerId: data.ownerId,
           status: data.status,
-          itemDetails: data.itemDetails,
+          itemDetails: {
+            downpaymentPercentage: securityDepositPercentage, // ✅ USE AS downpaymentPercentage
+            name: data.itemDetails?.name,
+            price: basePrice,
+            image: data.itemDetails?.image,
+            itemId: data.itemDetails?.itemId,
+            totalPrice: totalWithDeposit, // ✅ INCLUDE DEPOSIT IN TOTAL
+            startDate: data.itemDetails?.startDate,
+            rentalDays: rentalDays,
+            endDate: data.itemDetails?.endDate,
+            pickupTime: data.itemDetails?.pickupTime,
+          },
+          initialPaymentSent: data.initialPaymentSent,
+          fullPaymentSent: data.fullPaymentSent,
+          initialPaymentStatus: data.initialPaymentStatus,
+          fullPaymentStatus: data.fullPaymentStatus,
+          ownerRatingSubmitted: data.ownerRatingSubmitted,
+          renterRatingSubmitted: data.renterRatingSubmitted,
+          ownerRatedAt: data.ownerRatedAt,
+          renterRatedAt: data.renterRatedAt,
         });
       }
     });
@@ -1920,15 +1974,54 @@ const ChatScreen = () => {
     const isReturnDateToday = () => {
       if (!chatData?.itemDetails?.endDate) return false;
 
-      const endDate = new Date(chatData.itemDetails.endDate);
-      const today = new Date();
+      try {
+        const endDate = new Date(chatData.itemDetails.endDate);
 
-      // Set times to start of day for comparison
-      endDate.setHours(0, 0, 0, 0);
-      today.setHours(0, 0, 0, 0);
+        // ✅ FIX: Check if date is valid
+        if (isNaN(endDate.getTime())) return false;
 
-      // Show actions on return date or after
-      return today >= endDate;
+        const today = new Date();
+
+        // Set times to start of day for comparison
+        endDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+
+        // Show actions on return date or after
+        return today >= endDate;
+      } catch (error) {
+        console.log("Error checking return date:", error);
+        return false;
+      }
+    };
+
+    // ✅ ADD HELPER FUNCTION TO FORMAT END DATE SAFELY
+    const formatEndDate = (): string => {
+      if (!chatData?.itemDetails?.endDate) return "Unknown";
+
+      try {
+        let endDate: Date;
+
+        // Handle Firestore Timestamp
+        if (chatData.itemDetails.endDate?.toDate) {
+          endDate = chatData.itemDetails.endDate.toDate();
+        } else if (typeof chatData.itemDetails.endDate === "string") {
+          endDate = new Date(chatData.itemDetails.endDate);
+        } else if (chatData.itemDetails.endDate instanceof Date) {
+          endDate = chatData.itemDetails.endDate;
+        } else {
+          return "Unknown";
+        }
+
+        // Validate the date
+        if (isNaN(endDate.getTime())) {
+          return "Unknown";
+        }
+
+        return format(endDate, "MMM d, yyyy");
+      } catch (error) {
+        console.log("Error formatting end date:", error);
+        return "Unknown";
+      }
     };
 
     // OWNER ACTIONS
@@ -1943,7 +2036,7 @@ const ChatScreen = () => {
               msg.status === "pending"
           );
 
-          // ✅ Only show if there's a downpayment required AND no pending request
+          // ✅ Only show if there's a security deposit required AND no pending request
           if (
             chatData.itemDetails?.downpaymentPercentage &&
             chatData.itemDetails.downpaymentPercentage > 0 &&
@@ -1953,7 +2046,7 @@ const ChatScreen = () => {
             actions.push({
               id: "initial_payment",
               icon: icons.card,
-              label: "Request Initial Payment",
+              label: "Request Full Payment (Pickup)",
               action: handleInitialPayment,
               bgColor: "#FFF3E0",
               iconColor: "#FF9800",
@@ -1964,18 +2057,18 @@ const ChatScreen = () => {
             actions.push({
               id: "initial_payment_pending",
               icon: icons.clock,
-              label: "Initial Payment Pending",
+              label: "Full Payment Pending",
               action: () => {
                 Alert.alert(
                   "Payment Pending",
-                  "An initial payment request has already been sent. Waiting for renter's response..."
+                  "A full payment request has already been sent. Waiting for renter's response..."
                 );
               },
               bgColor: "#FEF3C7",
               iconColor: "#F59E0B",
             });
           }
-          // ✅ If NO downpayment, owner can skip to assessment waiting
+          // ✅ If NO security deposit, owner can skip to assessment waiting
           else {
             actions.push({
               id: "awaiting_assessment",
@@ -1994,7 +2087,7 @@ const ChatScreen = () => {
           break;
 
         case "initial_payment_paid":
-          // ✅ Check if renter has submitted assessment
+          // ✅ Owner: Waiting for renter's conditional assessment
           const hasRenterSubmittedAssessment = messages.some(
             (msg) =>
               msg.type === "conditionalAssessment" &&
@@ -2044,7 +2137,7 @@ const ChatScreen = () => {
           break;
 
         case "assessment_submitted":
-          // ✅ Owner: Confirm item received (status was already changed but keep for compatibility)
+          // ✅ Owner: Confirm item received
           actions.push({
             id: "item_received",
             icon: icons.check,
@@ -2058,17 +2151,11 @@ const ChatScreen = () => {
         case "pickedup":
           if (!isReturnDateToday()) {
             // Show message instead
+            const formattedDate = formatEndDate();
             actions.push({
               id: "rental_in_progress",
               icon: icons.clock,
-              label: `Return Due: ${
-                chatData?.itemDetails?.endDate
-                  ? format(
-                      new Date(chatData.itemDetails.endDate),
-                      "MMM d, yyyy"
-                    )
-                  : "Unknown"
-              }`,
+              label: `Return Due: ${formattedDate}`,
               action: () => {
                 Alert.alert(
                   "Rental In Progress",
@@ -2080,40 +2167,43 @@ const ChatScreen = () => {
             });
             break;
           }
-          // ✅ Check for pending full payment
-          const hasPendingFullPayment = messages.some(
-            (msg) =>
-              msg.type === "payment" &&
-              msg.paymentType === "full" &&
-              msg.status === "pending"
-          );
 
-          // ✅ Only show full payment if no pending request
-          if (!chatData.fullPaymentSent && !hasPendingFullPayment) {
-            actions.push({
-              id: "full_payment",
-              icon: icons.card,
-              label: "Request Full Payment",
-              action: handleFullPayment,
-              bgColor: "#FFF3E0",
-              iconColor: "#FF9800",
-            });
-          }
-          // ✅ If pending payment exists, show info instead
-          else if (hasPendingFullPayment) {
-            actions.push({
-              id: "full_payment_pending",
-              icon: icons.clock,
-              label: "Full Payment Pending",
-              action: () => {
-                Alert.alert(
-                  "Payment Pending",
-                  "A full payment request has already been sent. Waiting for renter's response..."
-                );
-              },
-              bgColor: "#FEF3C7",
-              iconColor: "#F59E0B",
-            });
+          // ✅ RETURN STAGE: Check if security deposit should be returned
+          if (
+            chatData.itemDetails?.downpaymentPercentage &&
+            chatData.itemDetails.downpaymentPercentage > 0
+          ) {
+            const hasPendingDepositReturn = messages.some(
+              (msg) =>
+                msg.type === "payment" &&
+                msg.paymentType === "full" &&
+                msg.status === "pending"
+            );
+
+            if (!hasPendingDepositReturn) {
+              actions.push({
+                id: "deposit_return",
+                icon: icons.card,
+                label: "Return Security Deposit",
+                action: handleSecurityDepositReturn,
+                bgColor: "#FFF3E0",
+                iconColor: "#FF9800",
+              });
+            } else {
+              actions.push({
+                id: "deposit_return_pending",
+                icon: icons.clock,
+                label: "Security Deposit Return Pending",
+                action: () => {
+                  Alert.alert(
+                    "Return Pending",
+                    "A security deposit return request has already been sent..."
+                  );
+                },
+                bgColor: "#FEF3C7",
+                iconColor: "#F59E0B",
+              });
+            }
           }
 
           // Always show return inspection
@@ -2160,44 +2250,19 @@ const ChatScreen = () => {
     else {
       switch (status) {
         case "accepted":
-          // ✅ Check if renter has already submitted assessment
-          const hasRenterSubmittedAssessmentAccepted = messages.some(
-            (msg) =>
-              msg.type === "conditionalAssessment" &&
-              msg.assessmentType === "pickup" &&
-              msg.senderId === currentUserId
-          );
-
-          if (hasRenterSubmittedAssessmentAccepted) {
-            // ✅ Renter already submitted - show waiting state
-            actions.push({
-              id: "assessment_submitted",
-              icon: icons.check,
-              label: "Assessment Submitted",
-              action: () => {
-                Alert.alert(
-                  "Assessment Submitted",
-                  "You have already submitted your item condition assessment. Waiting for owner to confirm..."
-                );
-              },
-              bgColor: "#D1FAE5",
-              iconColor: "#10B981",
-            });
-          } else {
-            // ✅ Renter can submit assessment
-            actions.push({
-              id: "pickup_assessment",
-              icon: icons.box,
-              label: "Verify Item Condition",
-              action: () => setShowPickupAssessmentModal(true),
-              bgColor: "#E3F2FD",
-              iconColor: "#2196F3",
-            });
-          }
+          // ✅ Renter: Show assessment option on accepted
+          actions.push({
+            id: "pickup_assessment",
+            icon: icons.box,
+            label: "Verify Item Condition",
+            action: () => setShowPickupAssessmentModal(true),
+            bgColor: "#E3F2FD",
+            iconColor: "#2196F3",
+          });
           break;
 
         case "initial_payment_paid":
-          // ✅ Check if renter has already submitted assessment
+          // ✅ Renter: MUST submit conditional assessment if initial payment paid
           const hasRenterSubmittedAssessmentPayment = messages.some(
             (msg) =>
               msg.type === "conditionalAssessment" &&
@@ -2221,7 +2286,7 @@ const ChatScreen = () => {
               iconColor: "#10B981",
             });
           } else {
-            // ✅ Renter MUST submit conditional assessment if initial payment paid
+            // ✅ Renter MUST submit conditional assessment
             actions.push({
               id: "pickup_assessment",
               icon: icons.box,
@@ -2253,17 +2318,11 @@ const ChatScreen = () => {
         case "pickedup":
           if (!isReturnDateToday()) {
             // Show countdown instead
+            const formattedDate = formatEndDate();
             actions.push({
               id: "rental_in_progress",
               icon: icons.clock,
-              label: `Return Due: ${
-                chatData?.itemDetails?.endDate
-                  ? format(
-                      new Date(chatData.itemDetails.endDate),
-                      "MMM d, yyyy"
-                    )
-                  : "Unknown"
-              }`,
+              label: `Return Due: ${formattedDate}`,
               action: () => {
                 Alert.alert(
                   "Rental In Progress",
@@ -3700,7 +3759,7 @@ const ChatScreen = () => {
                     editingMessageId ? "Edit message..." : "Type a message..."
                   }
                   multiline
-                  className="ml-4 flex-1 min-h-8 max-h-24"
+                  className="ml-2 flex-1 min-h-8 max-h-24"
                   style={{ textAlignVertical: "top" }}
                 />
 
