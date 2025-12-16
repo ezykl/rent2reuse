@@ -31,7 +31,7 @@ export const manageUserToken = async (
 
     console.log("Push token registered successfully");
   } catch (error) {
-    console.error("Error managing push token:", error);
+    console.log("Error managing push token:", error);
   }
 };
 
@@ -51,6 +51,6 @@ export const removeUserToken = async (
 
     console.log("Push token removed successfully");
   } catch (error) {
-    console.error("Error removing push token:", error);
+    console.log("Error removing push token:", error);
   }
 };

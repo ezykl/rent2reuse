@@ -136,7 +136,7 @@ const Profile: React.FC = () => {
         // Force refresh profile completion status
         await refreshStatus();
       } catch (error) {
-        console.error("Error checking auth:", error);
+        console.log("Error checking auth:", error);
       }
     };
 
@@ -189,7 +189,7 @@ const Profile: React.FC = () => {
           });
         }
       } catch (error) {
-        console.error("Error fetching profile data:", error);
+        console.log("Error fetching profile data:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -241,7 +241,7 @@ const Profile: React.FC = () => {
         }
       },
       (error) => {
-        console.error("Error in profile snapshot:", error);
+        console.log("Error in profile snapshot:", error);
       }
     );
 
@@ -262,7 +262,7 @@ const Profile: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error("Error ensuring profile exists:", error);
+      console.log("Error ensuring profile exists:", error);
     }
   };
 
@@ -280,7 +280,7 @@ const Profile: React.FC = () => {
       });
       router.replace("/(auth)/sign-in");
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.log("Error signing out:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -401,9 +401,9 @@ const Profile: React.FC = () => {
       await refreshStatus();
       setActiveModal(null);
     } catch (error) {
-      console.error("Error updating profile image:", error);
+      console.log("Error updating profile image:", error);
       if (error instanceof Error) {
-        console.error("Error details:", (error as any).code, error.message);
+        console.log("Error details:", (error as any).code, error.message);
       }
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -503,7 +503,7 @@ const Profile: React.FC = () => {
 
       setActiveModal(null);
     } catch (error) {
-      console.error("Error updating ID verification:", error);
+      console.log("Error updating ID verification:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -537,7 +537,7 @@ const Profile: React.FC = () => {
 
       return "recently";
     } catch (error) {
-      console.error("Error formatting Firestore date:", error);
+      console.log("Error formatting Firestore date:", error);
       return "recently";
     }
   };
@@ -548,7 +548,7 @@ const Profile: React.FC = () => {
       await refreshStatus();
       setRefreshFlag((prev) => prev + 1);
     } catch (error) {
-      console.error("Refresh error:", error);
+      console.log("Refresh error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -759,7 +759,7 @@ const Profile: React.FC = () => {
         textBody: "You can now start renting and listing items!",
       });
     } catch (error) {
-      console.error("Error claiming free plan:", error);
+      console.log("Error claiming free plan:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -782,7 +782,7 @@ const Profile: React.FC = () => {
 
     return (
       <>
-        {isLoading && (
+        {!isLoading && (
           <View className="bg-orange-50 rounded-xl p-4 mb-6 border border-orange-200">
             <View className="flex-row items-center justify-between mb-4">
               <View className="flex-1">
@@ -881,50 +881,12 @@ const Profile: React.FC = () => {
     return (
       <View className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-6">
         {/* Quick Actions */}
-        <View className="divide-y divide-red-100">
+        <View className="divide-y divide-red-100 px-6">
           {isProfileComplete && (
             <>
               <TouchableOpacity
-                onPress={() => setActiveModal("contact")}
-                className="flex-row items-center px-6 py-4"
-              >
-                <Image
-                  source={icons.call}
-                  className="w-6 h-6 mr-3"
-                  tintColor="#6B7280"
-                />
-                <Text className="flex-1 font-pmedium text-gray-800">
-                  Contact Number
-                </Text>
-                <Image
-                  source={icons.arrowRight}
-                  className="w-5 h-5"
-                  tintColor="#9CA3AF"
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => setActiveModal("location")}
-                className="flex-row items-center px-6 py-4"
-              >
-                <Image
-                  source={icons.location}
-                  className="w-6 h-6 mr-3"
-                  tintColor="#6B7280"
-                />
-                <Text className="flex-1 font-pmedium text-gray-800">
-                  Location
-                </Text>
-                <Image
-                  source={icons.arrowRight}
-                  className="w-5 h-5"
-                  tintColor="#9CA3AF"
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
                 onPress={() => router.push("/payment-options")}
-                className="flex-row items-center px-6 py-4"
+                className="flex-row items-center py-4"
                 disabled={!isProfileComplete}
               >
                 <Image
@@ -944,7 +906,7 @@ const Profile: React.FC = () => {
 
               <TouchableOpacity
                 onPress={() => router.push("/plans")}
-                className="flex-row items-center px-6 py-4"
+                className="flex-row items-center py-4 border-t border-gray-200"
                 disabled={!isProfileComplete}
               >
                 <Image
@@ -966,7 +928,7 @@ const Profile: React.FC = () => {
 
           <TouchableOpacity
             onPress={() => router.push("/transactions")}
-            className="flex-row items-center px-6 py-4"
+            className="flex-row items-center py-4 border-t border-gray-200"
           >
             <Image
               source={icons.receipt}
@@ -985,7 +947,7 @@ const Profile: React.FC = () => {
 
           <TouchableOpacity
             onPress={() => router.push("/create-ticket")}
-            className="flex-row items-center px-6 py-4"
+            className="flex-row items-center py-4 border-t border-gray-200"
           >
             <Image
               source={icons.ticket}
@@ -1005,7 +967,7 @@ const Profile: React.FC = () => {
 
           <TouchableOpacity
             onPress={() => router.push("/setting")}
-            className="flex-row items-center px-6 py-4"
+            className="flex-row items-center py-4 border-t border-gray-200"
           >
             <Image
               source={icons.faq}
@@ -1056,11 +1018,11 @@ const Profile: React.FC = () => {
           }
         >
           {!isProfileComplete && !isLoading && (
-            <View className=" mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-              <TouchableOpacity
-                onPress={() => setShowFullDetails(!showFullDetails)}
-                className="flex-row items-center justify-between mb-3"
-              >
+            <TouchableOpacity
+              className=" mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl"
+              onPress={() => setShowFullDetails(!showFullDetails)}
+            >
+              <View className="flex-row items-center justify-between mb-3">
                 <View className="flex-row items-center flex-1">
                   <Image source={icons.danger} className="w-5 h-5 mr-2" />
                   <Text className="text-yellow-800 font-pbold flex-1">
@@ -1079,7 +1041,7 @@ const Profile: React.FC = () => {
                     tintColor="#92400E"
                   />
                 </View>
-              </TouchableOpacity>
+              </View>
 
               {/* Progress Bar */}
               <View className="bg-yellow-200 rounded-full h-2 mb-3">
@@ -1132,7 +1094,7 @@ const Profile: React.FC = () => {
                   </TouchableOpacity>
                 </>
               )}
-            </View>
+            </TouchableOpacity>
           )}
 
           {currentUserId && (
@@ -1275,7 +1237,7 @@ const Profile: React.FC = () => {
               <Text className=" font-pbold text-lg text-gray-800 ">
                 Personal Information
               </Text>
-              <View className="flex-row items-center">
+              <View className="flex-row items-center border-t border-gray-200 pt-2">
                 <Image
                   source={icons.envelope}
                   className="w-5 h-5 mr-3"
@@ -1290,7 +1252,7 @@ const Profile: React.FC = () => {
               </View>
 
               <TouchableOpacity
-                className="flex-row justify-between items-center"
+                className="flex-row justify-between items-center border-t border-gray-200 pt-2"
                 onPress={() => setActiveModal("contact")}
               >
                 <View className="flex-row justify-center items-center">
@@ -1314,10 +1276,10 @@ const Profile: React.FC = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                className="flex-row justify-between items-center"
+                className="flex-row justify-between items-center border-t border-gray-200 pt-2"
                 onPress={() => setActiveModal("location")}
               >
-                <View className="flex-row justify-center items-center">
+                <View className="flex-row justify-start items-center w-min-[80%] w-[90%]  border border-white">
                   <Image
                     source={icons.location}
                     className="w-5 h-5 mr-3"
@@ -1332,7 +1294,7 @@ const Profile: React.FC = () => {
                 </View>
                 <Image
                   source={icons.arrowRight}
-                  className="w-5 h-5"
+                  className="w-5 h-5 "
                   tintColor="#9CA3AF"
                 />
               </TouchableOpacity>
@@ -1382,9 +1344,9 @@ const Profile: React.FC = () => {
                     {activeModal === "location" && "Set Your Location"}
                     {activeModal === "emailVerification" && "Verify Email"}
                     {activeModal === "idVerification" && "Verify ID"}
-                    {activeModal === "birthday" && "Add Birth Date"}
-                    {activeModal === "contact" && "Add Contact #"}
-                    {activeModal === "profileImage" && "Add Profile Picture"}
+                    {activeModal === "birthday" && "Birth Date"}
+                    {activeModal === "contact" && "Contact Number"}
+                    {activeModal === "profileImage" && "Profile Picture"}
                   </Text>
                   <View style={{ width: 50 }} />
                 </View>

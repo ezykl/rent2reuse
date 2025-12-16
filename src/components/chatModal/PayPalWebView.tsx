@@ -138,7 +138,7 @@ const PayPalWebView: React.FC<PayPalWebViewProps> = ({
                     });
                 },
                 onError: function(err) {
-                    console.error('PayPal error:', err);
+                    console.log('PayPal error:', err);
                     window.ReactNativeWebView.postMessage(JSON.stringify({
                         type: 'PAYMENT_ERROR',
                         error: err.toString()
@@ -190,7 +190,7 @@ const PayPalWebView: React.FC<PayPalWebViewProps> = ({
                   console.log("Unknown message type:", data.type);
               }
             } catch (error) {
-              console.error("Error parsing WebView message:", error);
+              console.log("Error parsing WebView message:", error);
               onPaymentError("Failed to process payment response");
             }
           }}

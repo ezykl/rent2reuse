@@ -99,7 +99,7 @@ const Home = () => {
       // Refresh items using the exposed refreshItems function
       await refreshItems();
     } catch (error) {
-      console.error("Error refreshing:", error);
+      console.log("Error refreshing:", error);
     } finally {
       setRefreshing(false);
       setIsFetchingAnnouncement(false);
@@ -141,7 +141,7 @@ const Home = () => {
                 });
                 console.log("Current location:", location);
               } catch (error) {
-                console.error("Error getting location:", error);
+                console.log("Error getting location:", error);
               }
             } else {
               console.log("Location permission denied");
@@ -152,7 +152,7 @@ const Home = () => {
           console.log("Location services are disabled on the device");
         }
       } catch (error) {
-        console.error("Error checking location settings:", error);
+        console.log("Error checking location settings:", error);
       }
     };
 
@@ -330,13 +330,13 @@ const Home = () => {
 
               {/* Profile Completion Alert */}
               {!isProfileComplete && (
-                <View className=" mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <TouchableOpacity
+                  className=" mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl"
+                  onPress={() => setShowFullDetails(!showFullDetails)}
+                >
                   {/* Progress Header with Toggle */}
 
-                  <TouchableOpacity
-                    onPress={() => setShowFullDetails(!showFullDetails)}
-                    className="flex-row items-center justify-between mb-3"
-                  >
+                  <View className="flex-row items-center justify-between mb-3">
                     <View className="flex-row items-center flex-1">
                       <Imagex source={icons.danger} className="w-5 h-5 mr-2" />
                       <Text className="text-yellow-800 font-pbold flex-1">
@@ -356,7 +356,7 @@ const Home = () => {
                         tintColor="#92400E"
                       />
                     </View>
-                  </TouchableOpacity>
+                  </View>
 
                   {/* Progress Bar */}
                   <View className="bg-yellow-200 rounded-full h-2 mb-3">
@@ -412,7 +412,7 @@ const Home = () => {
                       </TouchableOpacity>
                     </>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Announcements Carousel */}
@@ -447,7 +447,7 @@ const Home = () => {
                               refreshing ? Date.now() : ""
                             }`}
                             onError={(error) => {
-                              console.error("Image loading error:", error);
+                              console.log("Image loading error:", error);
                             }}
                           />
                         ) : (
@@ -479,7 +479,9 @@ const Home = () => {
 
               <Category />
               <Text className="text-2xl text-secondary-400 font-psemibold mt-10 mb-2">
-                Recently Added
+                {recentItems.length === 0
+                  ? "No Items on the Market"
+                  : "Recently Added"}
               </Text>
             </>
           )}

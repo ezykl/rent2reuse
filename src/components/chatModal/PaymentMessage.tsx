@@ -12,8 +12,14 @@ import {
 import { WebView } from "react-native-webview";
 import { icons, images } from "@/constant";
 import { format } from "date-fns";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebaseConfig";
+import {
+  doc,
+  updateDoc,
+  serverTimestamp,
+  addDoc,
+  collection,
+} from "firebase/firestore";
+import { db, auth } from "@/lib/firebaseConfig";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { PAYPAL_BASE_URL } from "@env";
 
@@ -50,6 +56,7 @@ interface PaymentMessageProps {
   };
   clientId: string;
   clientSecret: string;
+  onCancelPayment?: (messageId: string) => void;
 }
 
 // Exchange rate helper
@@ -108,7 +115,7 @@ const getPayPalAccessToken = async (clientId: string, clientSecret: string) => {
       throw new Error(data.error_description || "Failed to get access token");
     }
   } catch (error) {
-    console.error("Error getting PayPal access token:", error);
+    console.log("Error getting PayPal access token:", error);
     throw error;
   }
 };
@@ -155,7 +162,7 @@ const createPayPalOrder = async (
       throw new Error(data.message || "Failed to create PayPal order");
     }
   } catch (error) {
-    console.error("Error creating PayPal order:", error);
+    console.log("Error creating PayPal order:", error);
     throw error;
   }
 };
@@ -180,7 +187,7 @@ const capturePayPalOrder = async (accessToken: string, orderId: string) => {
       throw new Error(data.message || "Failed to capture PayPal payment");
     }
   } catch (error) {
-    console.error("Error capturing PayPal payment:", error);
+    console.log("Error capturing PayPal payment:", error);
     throw error;
   }
 };
@@ -205,15 +212,15 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   const getPaymentTypeLabel = () => {
     if (item.paymentType === "initial") {
       const percentage = item.downpaymentPercentage || 0;
-      return `Initial Payment (${percentage}%)`;
+      return `Payment`;
     }
-    return "Full Payment";
+    return "Security Deposit Refund";
   };
 
   const getPaymentDescription = () => {
     const itemName = itemDetails?.name || "Item";
     if (item.paymentType === "initial") {
-      return `Initial payment for renting ${itemName}`;
+      return `Full payment for renting ${itemName}`;
     }
     return `Full payment for renting ${itemName}`;
   };
@@ -244,7 +251,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         textBody: "Payment request is now available for the renter",
       });
     } catch (error) {
-      console.error("Payment request creation error:", error);
+      console.log("Payment request creation error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -282,7 +289,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       setPaymentUrl(approvalUrl);
       setShowPayPalWebView(true);
     } catch (error) {
-      console.error("Payment error:", error);
+      console.log("Payment error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -290,6 +297,45 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ NEW: Save rental payment transaction to Firestore
+  const saveRentalTransaction = async (
+    captureResult: any,
+    txnId: string,
+    orderIdVal: string
+  ) => {
+    try {
+      if (!auth.currentUser || !item.recipientPayPalEmail) {
+        throw new Error("Missing user or recipient email");
+      }
+
+      const transactionsRef = collection(db, "transactions");
+      await addDoc(transactionsRef, {
+        userId: auth.currentUser.uid,
+        recipientId:
+          item.senderId === auth.currentUser.uid ? undefined : item.senderId,
+        type: "rental_payment",
+        paymentType: item.paymentType,
+        amount: item.amount,
+        currency: "PHP",
+        paymentMethod: "PayPal",
+        status: "completed",
+        transactionId: txnId,
+        paypalOrderId: orderIdVal,
+        paypalCaptureId: captureResult.id,
+        recipientPayPalEmail: item.recipientPayPalEmail,
+        itemName: itemDetails?.name || "Item",
+        itemId: item.id,
+        chatId: chatId,
+        createdAt: serverTimestamp(),
+        paidAt: serverTimestamp(),
+      });
+
+      console.log("Transaction saved successfully");
+    } catch (error) {
+      console.log("Error saving transaction:", error);
     }
   };
 
@@ -320,15 +366,39 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       const captureResult = await capturePayPalOrder(accessToken, orderId);
 
       if (captureResult.status === "COMPLETED") {
+        // ✅ SAVE TRANSACTION TO FIRESTORE
+        await saveRentalTransaction(captureResult, transactionId, orderId);
         const messageRef = doc(db, "chat", chatId, "messages", item.id);
         await updateDoc(messageRef, {
           status: "paid",
           paidAt: serverTimestamp(),
           transactionId: transactionId,
           paypalOrderId: orderId,
-          paypalCaptureId:
-            captureResult.purchase_units[0]?.payments?.captures[0]?.id,
         });
+
+        // ✅ UPDATE CHAT STATUS BASED ON PAYMENT TYPE
+        const chatRef = doc(db, "chat", chatId);
+
+        if (item.paymentType === "initial") {
+          // ✅ If there's an initial payment, mark as initial_payment_paid
+          // This allows renter to submit conditional assessment before pickup
+          await updateDoc(chatRef, {
+            status: "initial_payment_paid", // ✅ NEW STATUS
+            initialPaymentStatus: "completed",
+            lastMessage: "Initial payment confirmed",
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          // Full payment - move to pickedup
+          await updateDoc(chatRef, {
+            status: "pickedup",
+            fullPaymentStatus: "completed",
+            lastMessage: "Full payment confirmed",
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
 
         Toast.show({
           type: ALERT_TYPE.SUCCESS,
@@ -337,7 +407,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         });
       }
     } catch (error) {
-      console.error("Payment capture error:", error);
+      console.log("Payment capture error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -418,12 +488,39 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           <Text className="text-2xl font-pbold text-gray-900">
             ₱{item.amount.toFixed(2)}
           </Text>
-          <Text className="text-sm text-gray-500">
-            of ₱{item.totalAmount.toFixed(2)} total
-          </Text>
+
           <Text className="text-xs text-gray-400">
             ≈ ${DatabaseHelper.convertToUsd(item.amount)} USD
           </Text>
+
+          {/* Payment Breakdown */}
+          <View className="mt-3 p-2 bg-gray-50 rounded-lg">
+            <Text className="text-xs font-psemibold text-gray-700 mb-2">
+              Breakdown:
+            </Text>
+            <View className="flex-row justify-between mb-1">
+              <Text className="text-xs text-gray-600">Payment Amount:</Text>
+              <Text className="text-xs font-pmedium text-gray-900">
+                ₱{item.totalAmount.toFixed(2)}
+              </Text>
+            </View>
+            {item.totalAmount < item.amount && (
+              <View className="flex-row justify-between">
+                <Text className="text-xs text-gray-600">Security Deposit:</Text>
+                <Text className="text-xs font-pmedium text-gray-900">
+                  ₱{(item.amount - item.totalAmount).toFixed(2)}
+                </Text>
+              </View>
+            )}
+            <View className="flex-row justify-between border-t border-gray-200 mt-2 pt-2">
+              <Text className="text-xs font-psemibold text-gray-700">
+                Total:
+              </Text>
+              <Text className="text-xs font-psemibold text-gray-900">
+                ₱{item.amount.toFixed(2)}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Recipient Email */}
@@ -659,6 +756,55 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
             ID:{" "}
             {item.transactionId || item.paypalCaptureId || item.paypalOrderId}
           </Text>
+        )}
+
+        {/* Cancel Button for Owner (only if pending) */}
+        {item.status === "pending" && !isCurrentUser && isOwner && (
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                "Cancel Payment Request",
+                "Are you sure you want to cancel this payment request?",
+                [
+                  { text: "No", style: "cancel" },
+                  {
+                    text: "Yes, Cancel",
+                    style: "destructive",
+                    onPress: async () => {
+                      const messageRef = doc(
+                        db,
+                        "chat",
+                        chatId,
+                        "messages",
+                        item.id
+                      );
+                      await updateDoc(messageRef, {
+                        status: "cancelled",
+                        cancelledAt: serverTimestamp(),
+                      });
+                      Toast.show({
+                        type: ALERT_TYPE.SUCCESS,
+                        title: "Request Cancelled",
+                        textBody: "Payment request has been cancelled",
+                      });
+                    },
+                  },
+                ]
+              );
+            }}
+            className="bg-red-100 rounded-lg py-2 mt-3"
+          >
+            <View className="flex-row items-center justify-center">
+              <Image
+                source={icons.close}
+                className="w-4 h-4 mr-2"
+                tintColor="#DC2626"
+              />
+              <Text className="text-red-600 font-psemibold text-sm">
+                Cancel Request
+              </Text>
+            </View>
+          </TouchableOpacity>
         )}
       </View>
     </View>

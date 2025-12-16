@@ -76,7 +76,7 @@ const DistanceBadge = ({
         itemLocation
       );
     } catch (err) {
-      console.error("Error calculating distance:", err);
+      console.log("Error calculating distance:", err);
       return null;
     }
   }, [userLocation, itemLocation]);

@@ -40,7 +40,7 @@ export function useAccountStatus() {
           }
         },
         (error) => {
-          console.error("Error getting account status:", error);
+          console.log("Error getting account status:", error);
         }
       );
     });

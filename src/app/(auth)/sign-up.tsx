@@ -17,7 +17,7 @@ import { images } from "../../constant";
 import InputField from "../../components/InputField";
 import LargeButton from "../../components/LargeButton";
 import { Link, router, useRouter } from "expo-router";
-import Terms from "./terms"; 
+import Terms from "./terms";
 import { Checkbox, useTheme } from "react-native-paper"; // Ensure you have this installed
 import { ALERT_TYPE, Dialog, Toast } from "react-native-alert-notification";
 import { useLoader } from "@/context/LoaderContext";
@@ -304,7 +304,7 @@ const SignUp = () => {
         },
       });
     } catch (error) {
-      console.error("Error creating welcome notification:", error);
+      console.log("Error creating welcome notification:", error);
     }
   };
 
@@ -381,7 +381,7 @@ const SignUp = () => {
             "This email is already linked to an account. Try logging in or use a different email.",
         });
       } else {
-        console.error("Signup error:", error);
+        console.log("Signup error:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",

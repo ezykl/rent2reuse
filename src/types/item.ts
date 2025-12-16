@@ -12,7 +12,7 @@ export interface Item {
     address: string;
     radius?: number;
   };
-  downpaymentPercentage?: number;
+  securityDepositPercentage?: number;
   enableAI?: boolean;
   itemCategory?: string;
   itemMinRentDuration?: number;

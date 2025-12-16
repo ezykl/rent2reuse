@@ -79,7 +79,7 @@ export const getPayPalAccessToken = async (
       throw new Error(data.error_description || "Failed to get access token");
     }
   } catch (error) {
-    console.error("Error getting PayPal access token:", error);
+    console.log("Error getting PayPal access token:", error);
     throw error;
   }
 };
@@ -138,11 +138,11 @@ export const createPayPalOrder = async (
     if (response.ok) {
       return data;
     } else {
-      console.error("PayPal order creation failed:", data);
+      console.log("PayPal order creation failed:", data);
       throw new Error(data.details?.[0]?.description || "Failed to create PayPal order");
     }
   } catch (error) {
-    console.error("Error creating PayPal order:", error);
+    console.log("Error creating PayPal order:", error);
     throw error;
   }
 };
@@ -178,11 +178,11 @@ export const capturePayPalOrder = async (
     if (response.ok) {
       return data;
     } else {
-      console.error("PayPal order capture failed:", data);
+      console.log("PayPal order capture failed:", data);
       throw new Error(data.details?.[0]?.description || "Failed to capture PayPal order");
     }
   } catch (error) {
-    console.error("Error capturing PayPal order:", error);
+    console.log("Error capturing PayPal order:", error);
     throw error;
   }
 };
@@ -211,11 +211,11 @@ export const getPayPalOrderStatus = async (
     if (response.ok) {
       return data;
     } else {
-      console.error("PayPal order status failed:", data);
+      console.log("PayPal order status failed:", data);
       throw new Error(data.details?.[0]?.description || "Failed to get order status");
     }
   } catch (error) {
-    console.error("Error getting PayPal order status:", error);
+    console.log("Error getting PayPal order status:", error);
     throw error;
   }
 };
@@ -275,11 +275,11 @@ export const sendPayPalMoney = async (
     if (response.ok) {
       return data;
     } else {
-      console.error("PayPal payout failed:", data);
+      console.log("PayPal payout failed:", data);
       throw new Error(data.message || "Failed to send PayPal money");
     }
   } catch (error) {
-    console.error("Error sending PayPal money:", error);
+    console.log("Error sending PayPal money:", error);
     throw error;
   }
 };
@@ -375,11 +375,11 @@ export const createPayPalInvoice = async (
     if (response.ok) {
       return data;
     } else {
-      console.error("PayPal invoice creation failed:", data);
+      console.log("PayPal invoice creation failed:", data);
       throw new Error(data.message || "Failed to create PayPal invoice");
     }
   } catch (error) {
-    console.error("Error creating PayPal invoice:", error);
+    console.log("Error creating PayPal invoice:", error);
     throw error;
   }
 };
@@ -417,11 +417,11 @@ export const sendPayPalInvoice = async (
       return { success: true };
     } else {
       const data = await response.json();
-      console.error("PayPal invoice send failed:", data);
+      console.log("PayPal invoice send failed:", data);
       throw new Error(data.message || "Failed to send PayPal invoice");
     }
   } catch (error) {
-    console.error("Error sending PayPal invoice:", error);
+    console.log("Error sending PayPal invoice:", error);
     throw error;
   }
 };
@@ -453,7 +453,7 @@ export const getPayPalInvoiceStatus = async (
       throw new Error(data.message || "Failed to get invoice status");
     }
   } catch (error) {
-    console.error("Error getting PayPal invoice status:", error);
+    console.log("Error getting PayPal invoice status:", error);
     throw error;
   }
 };

@@ -19,7 +19,7 @@ const AccountSuspendedScreen = () => {
       await auth.signOut();
       router.replace("/(auth)/sign-in");
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.log("Error signing out:", error);
       router.replace("/(auth)/sign-in");
     }
   };

@@ -97,7 +97,7 @@ export const useItems = (
 
       setItems(itemsData);
     } catch (error) {
-      console.error("Error refreshing items:", error);
+      console.log("Error refreshing items:", error);
       setError(error instanceof Error ? error.message : "Unknown error");
     }
   }, [type, params?.category]);

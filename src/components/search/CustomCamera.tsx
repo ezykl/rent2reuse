@@ -100,7 +100,7 @@ const CustomCamera: React.FC<CustomCameraProps> = ({
         setShowPreview(true);
       }
     } catch (error) {
-      console.error("Error taking picture:", error);
+      console.log("Error taking picture:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -134,7 +134,7 @@ const CustomCamera: React.FC<CustomCameraProps> = ({
       setPreviewUri(null);
       onClose();
     } catch (error) {
-      console.error("Error saving photo:", error);
+      console.log("Error saving photo:", error);
       Toast.show({
         type: ALERT_TYPE.WARNING,
         title: "Warning",

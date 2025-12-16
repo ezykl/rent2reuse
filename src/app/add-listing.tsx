@@ -22,7 +22,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { icons, images } from "@/constant";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
-import { getToolCategory, TOOL_CATEGORIES } from "@/constant/tool-categories";
+import { TOOL_CATEGORIES } from "@/constant/tool-categories";
+import {
+  getToolCategory,
+  isToolProhibited,
+  getCategoryStatus,
+} from "@/constant/tool-categories";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
 import { R2R_MODEL } from "@/constant/api";
 import { useLoader } from "@/context/LoaderContext";
@@ -234,7 +239,7 @@ const AddListing = () => {
               });
             }
           } catch (err) {
-            console.error("Classification Error:", err);
+            console.log("Classification Error:", err);
             Toast.show({
               type: ALERT_TYPE.DANGER,
               title: "Error",
@@ -245,7 +250,7 @@ const AddListing = () => {
           }
         }
       } catch (error) {
-        console.error("Camera Error:", error);
+        console.log("Camera Error:", error);
         Alert.alert("Error", "Failed to capture image");
       }
     }
@@ -327,7 +332,7 @@ const AddListing = () => {
         });
       }
     } catch (err) {
-      console.error("Classification Error:", err);
+      console.log("Classification Error:", err);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -377,6 +382,45 @@ const AddListing = () => {
     </View>
   );
 
+  const isItemProhibited = (itemName: string, category?: string): boolean => {
+    // Check 1: Exact item name match in tool-categories
+    const categoryStatus = getCategoryStatus(itemName);
+    if (categoryStatus === "prohibited") {
+      console.log(`❌ Prohibited by exact match: ${itemName}`);
+      return true;
+    }
+
+    // Check 2: Use keyword-based checker
+    const keywordCheck = isProhibited(itemName);
+    if (keywordCheck.prohibited) {
+      console.log(
+        `❌ Prohibited by keyword: ${itemName} (matched: ${keywordCheck.matchedKeywords})`
+      );
+      return true;
+    }
+
+    // Check 3: If category is provided, check if it's in prohibited categories
+    if (category) {
+      const isProhibitedCategory =
+        category.toLowerCase() === "prohibited" ||
+        category.toLowerCase() === "unknown";
+      if (isProhibitedCategory) {
+        console.log(`❌ Prohibited by category: ${category}`);
+        return true;
+      }
+
+      // Also check if category itself is prohibited
+      const categoryKeywordCheck = isProhibited(category);
+      if (categoryKeywordCheck.prohibited) {
+        console.log(`❌ Prohibited category: ${category}`);
+        return true;
+      }
+    }
+
+    console.log(`✓ Item allowed: ${itemName}`);
+    return false;
+  };
+
   interface PredictionItem {
     label?: string;
     category?: string;
@@ -387,28 +431,23 @@ const AddListing = () => {
   }
 
   const renderResultItem = (item: PredictionItem, index: number) => {
-    // Handle different result formats (API vs local model)
     const label = item.label || item["Predicted Item"] || "";
     const category = item.category || item["Category"] || "";
     const confidence = item.probability
       ? `${(item.probability * 100).toFixed(1)}%`
       : item["Confidence"] || "";
 
-    const isProhibited =
-      category?.toLowerCase() === "prohibited" ||
-      label?.toLowerCase() === "unknown";
-    const isUnknow = label?.toLowerCase() === "unknown";
+    // USE THE NEW INTEGRATED CHECKER
+    const isProhibitedItem = isItemProhibited(label, category);
 
     return (
       <TouchableOpacity
         key={index}
         className={`flex-row items-center justify-between bg-white p-4 rounded-xl mb-2 shadow-sm border ${
-          isProhibited || isUnknow
-            ? "border-red-200 bg-red-50"
-            : "border-gray-100"
+          isProhibitedItem ? "border-red-200 bg-red-50" : "border-gray-100"
         }`}
         onPress={() => {
-          if (isProhibited) {
+          if (isProhibitedItem) {
             Toast.show({
               type: ALERT_TYPE.WARNING,
               title: "Prohibited Item",
@@ -431,12 +470,12 @@ const AddListing = () => {
         <View className="flex-row items-center flex-1">
           <View
             className={`w-10 h-10 rounded-full items-center justify-center mr-3 ${
-              isProhibited || isUnknow ? "bg-red-200" : "bg-primary/10"
+              isProhibitedItem ? "bg-red-200" : "bg-primary/10"
             }`}
           >
             <Text
               className={`font-psemibold ${
-                isProhibited || isUnknow ? "text-red-600" : "text-primary"
+                isProhibitedItem ? "text-red-600" : "text-primary"
               }`}
             >
               {index + 1}
@@ -445,7 +484,7 @@ const AddListing = () => {
           <View className="flex-1">
             <Text
               className={`text-lg font-psemibold ${
-                isProhibited || isUnknow ? "text-red-600" : "text-secondary-400"
+                isProhibitedItem ? "text-red-600" : "text-secondary-400"
               }`}
             >
               {label}
@@ -453,9 +492,7 @@ const AddListing = () => {
             {category ? (
               <Text
                 className={`text-sm font-pregular ${
-                  isProhibited || isUnknow
-                    ? "text-red-500"
-                    : "text-secondary-300"
+                  isProhibitedItem ? "text-red-500" : "text-secondary-300"
                 }`}
               >
                 {category}
@@ -465,13 +502,28 @@ const AddListing = () => {
         </View>
         <Text
           className={`font-pregular ml-2 ${
-            isProhibited || isUnknow ? "text-red-500" : "text-secondary-300"
+            isProhibitedItem ? "text-red-500" : "text-secondary-300"
           }`}
         >
           {confidence}
         </Text>
       </TouchableOpacity>
     );
+  };
+  const extractActualContent = (description: string): string => {
+    const lines = description.split("\n");
+    const contentLines = lines.filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+
+      const isTemplateLabel =
+        /^(Brand|Model|Type|Features|Specifications|Included|Additional Notes|Power|Capacity|Voltage|Battery|Speed|Safety):\s*$/i.test(
+          trimmed
+        );
+      return !isTemplateLabel;
+    });
+
+    return contentLines.join(" ").trim();
   };
 
   interface ManualListingModalProps {
@@ -517,8 +569,8 @@ const AddListing = () => {
         radius: 0,
       },
       owner: { id: "", fullname: "" },
-      downpaymentPercentage: "",
-      enableDownpayment: false,
+      securityDepositPercentage: "",
+      enableSecurityDeposit: false,
     });
 
     const titleSearch = initialData?.label || "";
@@ -531,7 +583,7 @@ const AddListing = () => {
       description: "",
       condition: "",
       images: "",
-      downpaymentPercentage: "",
+      securityDepositPercentage: "",
     });
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -570,7 +622,7 @@ const AddListing = () => {
             }));
           }
         } catch (error) {
-          console.error("Error fetching location:", error);
+          console.log("Error fetching location:", error);
         }
       };
 
@@ -588,23 +640,25 @@ const AddListing = () => {
         description: "",
         condition: "",
         images: "",
-        downpaymentPercentage: "",
+        securityDepositPercentage: "",
       };
 
       let isValid = true;
 
-      // Check product title
-      const titleCheck = isProhibited(formData.title);
-      if (titleCheck.prohibited) {
-        newErrors.title = `Product title contains prohibited item about ${titleCheck.category}`; // (matched: ${titleCheck.matchedKeywords?.join(", ")})
+      // Check product title using BOTH systems
+      if (isItemProhibited(formData.title)) {
+        newErrors.title = `Product title contains prohibited item`;
         isValid = false;
       }
 
-      // Check description
-      const descCheck = isProhibited(formData.description);
-      if (descCheck.prohibited) {
-        newErrors.description = `Description contains prohibited content about ${descCheck.category}`; // (matched: ${descCheck.matchedKeywords?.join(", ")})
-        isValid = false;
+      // Extract and check description content
+      const actualContent = extractActualContent(formData.description);
+      if (actualContent.length > 5) {
+        const descCheck = isProhibited(actualContent);
+        if (descCheck.prohibited) {
+          newErrors.description = `Description contains prohibited content: ${descCheck.category}`;
+          isValid = false;
+        }
       }
 
       setErrors(newErrors);
@@ -648,7 +702,7 @@ const AddListing = () => {
         description: "",
         condition: "",
         images: "",
-        downpaymentPercentage: "",
+        securityDepositPercentage: "",
       };
       let isValid = true;
 
@@ -699,7 +753,7 @@ const AddListing = () => {
         description: "",
         condition: "",
         images: "",
-        downpaymentPercentage: "",
+        securityDepositPercentage: "",
       };
       let isValid = true;
 
@@ -723,12 +777,12 @@ const AddListing = () => {
         newErrors.minimumDays = "Minimum duration must be at least 1 day";
         isValid = false;
       }
-      const downpaymentError = validateField(
-        "downpaymentPercentage",
-        formData.downpaymentPercentage
+      const securityDepositError = validateField(
+        "securityDepositPercentage",
+        formData.securityDepositPercentage
       );
-      if (downpaymentError) {
-        newErrors.downpaymentPercentage = downpaymentError;
+      if (securityDepositError) {
+        newErrors.securityDepositPercentage = securityDepositError;
         isValid = false;
       }
 
@@ -808,7 +862,7 @@ const AddListing = () => {
         }
         setCurrentStep(2);
       } catch (error) {
-        console.error("Error calculating price suggestions:", error);
+        console.log("Error calculating price suggestions:", error);
         if (useAI) {
           setShowNoMarketData(true);
         }
@@ -843,7 +897,7 @@ const AddListing = () => {
         handleImageChange(newImages);
         setShowCamera(false);
       } catch (error) {
-        console.error("Camera Error:", error);
+        console.log("Camera Error:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -896,7 +950,7 @@ const AddListing = () => {
           setImages((prev) => [...prev, result.assets[0].uri]);
         }
       } catch (error) {
-        console.error("Error picking image:", error);
+        console.log("Error picking image:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -982,8 +1036,10 @@ const AddListing = () => {
           },
           createdAt: serverTimestamp(),
           itemStatus: "Available",
-          ...(formData.enableDownpayment && {
-            downpaymentPercentage: Number(formData.downpaymentPercentage),
+          ...(formData.enableSecurityDeposit && {
+            securityDepositPercentage: Number(
+              formData.securityDepositPercentage
+            ),
           }),
           enableAI: useAI,
         };
@@ -1017,7 +1073,7 @@ const AddListing = () => {
         onClose();
         router.push("/(tabs)/tools");
       } catch (error) {
-        console.error("Error creating listing:", error);
+        console.log("Error creating listing:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -1113,16 +1169,16 @@ const AddListing = () => {
         case "images":
           return value.length === 0 ? "At least one image is required" : "";
 
-        case "downpaymentPercentage":
-          if (formData.enableDownpayment && !value)
-            return "Downpayment percentage is required when enabled";
+        case "securityDepositPercentage":
+          if (formData.enableSecurityDeposit && !value)
+            return "Security deposit percentage is required when enabled";
           if (
-            formData.enableDownpayment &&
+            formData.enableSecurityDeposit &&
             (isNaN(Number(value)) || Number(value) <= 0 || Number(value) > 100)
           )
             return "Please enter a valid percentage (1-100)";
-          if (formData.enableDownpayment && Number(value) < 10)
-            return "Minimum downpayment is 10%";
+          if (formData.enableSecurityDeposit && Number(value) < 10)
+            return "Minimum security deposit is 10%";
           return "";
 
         default:
@@ -1527,48 +1583,48 @@ const AddListing = () => {
               Payment Options
             </Text>
 
-            {/* Rental Downpayment */}
+            {/* Rental Security Deposit */}
             <View className="bg-gray-50 rounded-xl p-4 mb-3">
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-1">
                   <Text className="text-secondary-400 font-pmedium">
-                    Require Downpayment
+                    Require Security Deposit
                   </Text>
                   <Text className="text-secondary-300 font-pregular text-xs">
-                    Secures rental and must be paid at pickup before handing
-                    over the item
+                    Protects your item and is refunded after safe return at end
+                    of rental
                   </Text>
                 </View>
                 <Switch
-                  value={formData.enableDownpayment}
+                  value={formData.enableSecurityDeposit}
                   onValueChange={(value) => {
                     setFormData((prev) => ({
                       ...prev,
-                      enableDownpayment: value,
-                      downpaymentPercentage: value
-                        ? prev.downpaymentPercentage || "30"
+                      enableSecurityDeposit: value,
+                      securityDepositPercentage: value
+                        ? prev.securityDepositPercentage || "30"
                         : "",
                     }));
                     if (!value) {
                       setErrors((prev) => ({
                         ...prev,
-                        downpaymentPercentage: "",
+                        securityDepositPercentage: "",
                       }));
                     }
                   }}
                   trackColor={{ false: "#767577", true: "#4BD07F" }}
                   thumbColor={
-                    formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
+                    formData.enableSecurityDeposit ? "#ffffff" : "#f4f3f4"
                   }
                 />
               </View>
 
-              {formData.enableDownpayment && (
+              {formData.enableSecurityDeposit && (
                 <View>
                   {/* Percentage Input */}
                   <View className="mb-3">
                     <Text className="text-secondary-400 font-pmedium mb-2">
-                      Downpayment Amount
+                      Security Deposit Amount
                     </Text>
                     <View className="flex-row gap-2 mb-2">
                       {/* Quick Select Buttons */}
@@ -1578,25 +1634,25 @@ const AddListing = () => {
                           onPress={() => {
                             setFormData((prev) => ({
                               ...prev,
-                              downpaymentPercentage: percentage,
+                              securityDepositPercentage: percentage,
                             }));
                             setErrors((prev) => ({
                               ...prev,
-                              downpaymentPercentage: validateField(
-                                "downpaymentPercentage",
+                              securityDepositPercentage: validateField(
+                                "securityDepositPercentage",
                                 percentage
                               ),
                             }));
                           }}
                           className={`px-3 py-2 rounded-lg border ${
-                            formData.downpaymentPercentage === percentage
+                            formData.securityDepositPercentage === percentage
                               ? "bg-primary border-primary"
                               : "bg-white border-gray-300"
                           }`}
                         >
                           <Text
                             className={`font-pmedium ${
-                              formData.downpaymentPercentage === percentage
+                              formData.securityDepositPercentage === percentage
                                 ? "text-white"
                                 : "text-secondary-400"
                             }`}
@@ -1606,83 +1662,73 @@ const AddListing = () => {
                         </TouchableOpacity>
                       ))}
                     </View>
-
-                    {/* <TextInput
-                      value={formData.downpaymentPercentage}
-                      onChangeText={(text) => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          downpaymentPercentage: text,
-                        }));
-                        setErrors((prev) => ({
-                          ...prev,
-                          downpaymentPercentage: validateField(
-                            "downpaymentPercentage",
-                            text
-                          ),
-                        }));
-                      }}
-                      className={`font-pregular bg-white border rounded-xl p-3 ${
-                        errors.downpaymentPercentage
-                          ? "border-red-500"
-                          : "border-gray-200"
-                      }`}
-                      keyboardType="numeric"
-                      placeholder="Enter percentage (e.g., 30 for 30%)"
-                    /> */}
-                    {/* {errors.downpaymentPercentage ? (
-                      <Text className="text-red-500 text-xs mt-1">
-                        {errors.downpaymentPercentage}
-                      </Text>
-                    ) : (
-                      <Text className="text-secondary-300 font-pregular text-xs mt-1">
-                        Minimum 10%, Maximum 100%
-                      </Text>
-                    )} */}
                   </View>
 
                   {/* Payment Example */}
-                  {formData.downpaymentPercentage &&
+                  {formData.securityDepositPercentage &&
                     formData.price &&
                     formData.minimumDays && (
                       <View className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                        <Text className="text-blue-700 font-psemibold mb-2">
+                        <Text className="text-blue-700 font-psemibold mb-3">
                           Payment Breakdown Example
                         </Text>
                         <Text className="text-blue-600 font-pregular text-sm">
                           For {formData.minimumDays} day(s) rental:
                         </Text>
-                        <Text className="text-blue-600 font-pregular text-sm mb-1">
-                          • Total Cost: ₱
-                          {(
-                            Number(formData.price) *
-                            Number(formData.minimumDays)
-                          ).toLocaleString()}
-                        </Text>
-                        <Text className="text-blue-600 font-pregular text-sm mb-1">
-                          • Required Downpayment (
-                          {formData.downpaymentPercentage}%): ₱
-                          {Math.round(
-                            (Number(formData.price) *
-                              Number(formData.minimumDays) *
-                              Number(formData.downpaymentPercentage)) /
-                              100
-                          ).toLocaleString()}
-                        </Text>
-                        <Text className="text-blue-600 font-pregular text-sm">
-                          • Remaining Balance: ₱
-                          {Math.round(
-                            Number(formData.price) *
-                              Number(formData.minimumDays) -
-                              (Number(formData.price) *
-                                Number(formData.minimumDays) *
-                                Number(formData.downpaymentPercentage)) /
-                                100
-                          ).toLocaleString()}
-                        </Text>
-                        <Text className="text-blue-500 font-pregular text-xs mt-2">
-                          Downpayment must be paid at pickup before item
-                          handover
+                        <View className="mt-2 space-y-2">
+                          <View className="flex-row justify-between">
+                            <Text className="text-blue-600 font-pregular text-sm">
+                              • Daily Rate × Days:
+                            </Text>
+                            <Text className="text-blue-700 font-psemibold text-sm">
+                              ₱
+                              {(
+                                Number(formData.price) *
+                                Number(formData.minimumDays)
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                          <View className="border-t border-blue-300 my-2" />
+                          <View className="flex-row justify-between">
+                            <Text className="text-blue-600 font-pregular text-sm">
+                              Security Deposit (
+                              {formData.securityDepositPercentage}% of rental):
+                            </Text>
+                            <Text className="text-blue-700 font-psemibold text-sm">
+                              ₱
+                              {Math.round(
+                                (Number(formData.price) *
+                                  Number(formData.minimumDays) *
+                                  Number(formData.securityDepositPercentage)) /
+                                  100
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                          <View className="border-t border-blue-300 my-2" />
+                          <View className="flex-row justify-between bg-blue-100 p-2 rounded">
+                            <Text className="text-blue-700 font-psemibold text-sm">
+                              Total Amount Due at Pickup:
+                            </Text>
+                            <Text className="text-blue-700 font-pbold text-sm">
+                              ₱
+                              {(
+                                Number(formData.price) *
+                                  Number(formData.minimumDays) +
+                                Math.round(
+                                  (Number(formData.price) *
+                                    Number(formData.minimumDays) *
+                                    Number(
+                                      formData.securityDepositPercentage
+                                    )) /
+                                    100
+                                )
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text className="text-blue-500 font-pregular text-xs mt-3">
+                          ℹ️ Security deposit is refundable upon safe return of
+                          the item in agreed condition
                         </Text>
                       </View>
                     )}
@@ -1695,17 +1741,17 @@ const AddListing = () => {
               <View className="flex-row items-center mb-2">
                 <Text className="text-2xl mr-2">💡</Text>
                 <Text className="text-green-700 font-psemibold">
-                  Why require a downpayment?
+                  Why require a security deposit?
                 </Text>
               </View>
               <Text className="text-green-600 font-pregular text-sm mb-1">
                 • Ensures serious renters only
               </Text>
               <Text className="text-green-600 font-pregular text-sm mb-1">
-                • Acts as security deposit
+                • Protects against damage or loss
               </Text>
               <Text className="text-green-600 font-pregular text-sm">
-                • Reduces risk of item damage/loss
+                • Fully refundable after safe return
               </Text>
             </View>
           </View>

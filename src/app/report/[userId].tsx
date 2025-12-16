@@ -77,7 +77,7 @@ export default function ReportScreen() {
             },
           });
         } catch (error) {
-          console.error("Error creating welcome notification:", error);
+          console.log("Error creating welcome notification:", error);
         }
 
         // await createNotification(auth.currentUser.uid, "REPORT_ISSUE", {
@@ -93,7 +93,7 @@ export default function ReportScreen() {
 
       router.back();
     } catch (error) {
-      console.error("Error submitting report:", error);
+      console.log("Error submitting report:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

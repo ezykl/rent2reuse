@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ItemCard from "@/components/ItemCard";
 import { useLocation } from "@/hooks/useLocation";
 import LottieView from "lottie-react-native";
+import { useAuth } from "@/context/AuthContext";
 
 interface UserProfile {
   id: string;
@@ -49,6 +50,7 @@ interface UserProfile {
 
 export default function UserProfile() {
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { width } = Dimensions.get("window");
   const { isLoading, setIsLoading } = useLoader();
@@ -76,7 +78,8 @@ export default function UserProfile() {
         // Fetch user's items
         const itemsQuery = query(
           collection(db, "items"),
-          where("owner.id", "==", id)
+          where("owner.id", "==", id),
+          where("itemStatus", "==", "available")
         );
         const itemsSnap = await getDocs(itemsQuery);
         const items = itemsSnap.docs.map((doc) => ({
@@ -85,7 +88,7 @@ export default function UserProfile() {
         })) as Item[];
         setUserItems(items);
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.log("Error fetching user data:", error);
       } finally {
         setIsLoading(false);
       }
@@ -131,7 +134,7 @@ export default function UserProfile() {
 
       return "recently";
     } catch (error) {
-      console.error("Error formatting Firestore date:", error);
+      console.log("Error formatting Firestore date:", error);
       return "recently";
     }
   };
@@ -211,17 +214,32 @@ export default function UserProfile() {
           <Text className="text-xl font-pbold text-gray-800">User Details</Text>
         </View>
         <View className="flex-row items-center">
-          {/* Report button */}
-          <TouchableOpacity
-            onPress={() => router.push(`/report/${userProfile?.id}`)}
-            className="mr-3"
-          >
-            <Image
-              source={icons.report}
-              className="w-6 h-6"
-              tintColor="#EF4444"
-            />
-          </TouchableOpacity>
+          {/* Edit/Report button */}
+          {user?.uid === id ? (
+            // Edit button for own profile
+            <TouchableOpacity
+              onPress={() => router.push("/profile")}
+              className="mr-3"
+            >
+              <Image
+                source={icons.edit} // Make sure you have this icon
+                className="w-6 h-6"
+                tintColor="#3B82F6"
+              />
+            </TouchableOpacity>
+          ) : (
+            // Report button for other users
+            <TouchableOpacity
+              onPress={() => router.push(`/report/${userProfile?.id}`)}
+              className="mr-3"
+            >
+              <Image
+                source={icons.report}
+                className="w-6 h-6"
+                tintColor="#EF4444"
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -319,7 +337,7 @@ export default function UserProfile() {
               style={{ width: 200, height: 200, marginTop: 40 }}
             />
             <Text className="text-gray-500 -mt-8">
-              This user hasn't listed any items yet
+              This user hasn't listed any available items yet
             </Text>
           </View>
         )}

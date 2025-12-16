@@ -145,7 +145,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
 
       return "recently";
     } catch (error) {
-      console.error("Error formatting Firestore date:", error);
+      console.log("Error formatting Firestore date:", error);
       return "recently";
     }
   };
@@ -169,7 +169,7 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
           });
         }
       } catch (error) {
-        console.error("Error fetching current user data:", error);
+        console.log("Error fetching current user data:", error);
       }
     };
 
@@ -310,6 +310,26 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
       return "Date unavailable";
     };
 
+    // ✅ NEW: Calculate security deposit amounts
+    const calculateDepositAmount = () => {
+      const rentalDays = chatData?.itemDetails?.rentalDays || 0;
+      const price = chatData?.itemDetails?.price || 0;
+      const securityDepositPercentage =
+        chatData?.itemDetails?.securityDepositPercentage || 0;
+
+      const baseTotal = price * rentalDays;
+      const depositAmount = (baseTotal * securityDepositPercentage) / 100;
+
+      return {
+        baseTotal,
+        depositAmount,
+        securityDepositPercentage,
+        totalWithDeposit: baseTotal + depositAmount,
+      };
+    };
+
+    const depositInfo = calculateDepositAmount();
+
     return (
       <ScrollView className="flex-1 p-4">
         {chatData?.status ? (
@@ -364,7 +384,6 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
                   </Text>
                 </View>
 
-                {/* Rental Duration */}
                 {/* Rental Period - Updated Start Date */}
                 <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
                   <Text className="text-gray-600 font-pmedium">Start Date</Text>
@@ -381,40 +400,77 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
                   </Text>
                 </View>
 
-                {/* Total Price */}
+                {/* Rental Days */}
                 <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
                   <Text className="text-gray-600 font-pmedium">
-                    Total Price
+                    Rental Days
                   </Text>
-                  <Text className="text-green-600 font-pbold text-lg">
-                    ₱
-                    {chatData.itemDetails.totalPrice?.toLocaleString() || "N/A"}
+                  <Text className="text-gray-800 font-psemibold">
+                    {chatData.itemDetails.rentalDays || 0} days
                   </Text>
                 </View>
 
-                {/* Downpayment if applicable */}
-                {chatData.itemDetails.downpaymentPercentage && (
-                  <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
-                    <Text className="text-gray-600 font-pmedium">
-                      Downpayment
-                    </Text>
-                    <Text className="text-orange-600 font-psemibold">
-                      {chatData.itemDetails.downpaymentPercentage}%
-                    </Text>
-                  </View>
-                )}
+                {/* ✅ NEW: Price Breakdown Section */}
+                <View className="mt-3 bg-gray-50 p-3 rounded-lg">
+                  <Text className="text-xs font-pbold uppercase text-gray-400 mb-2">
+                    Price Breakdown
+                  </Text>
 
-                {/* Pickup Time */}
-                {chatData.itemDetails.pickupTime && (
-                  <View className="flex-row justify-between items-center py-2">
-                    <Text className="text-gray-600 font-pmedium">
-                      Pickup Time
+                  {/* Base Rental Fee */}
+                  <View className="flex-row justify-between mb-2">
+                    <Text className="text-sm font-pregular text-gray-700">
+                      Rental Fee ({chatData.itemDetails.rentalDays || 0} days ×
+                      ₱{chatData.itemDetails.price?.toLocaleString()})
                     </Text>
-                    <Text className="text-gray-800 font-psemibold">
-                      {minutesToTime(chatData.itemDetails.pickupTime)}
+                    <Text className="text-sm font-pmedium text-gray-800">
+                      ₱{depositInfo.baseTotal.toLocaleString()}
                     </Text>
                   </View>
-                )}
+
+                  {/* Security Deposit - Only show if applicable */}
+                  {depositInfo.securityDepositPercentage &&
+                  depositInfo.securityDepositPercentage > 0 ? (
+                    <>
+                      <View className="flex-row justify-between py-2 border-t border-gray-200 mb-2">
+                        <Text className="text-sm font-pregular text-gray-700">
+                          Security Deposit (
+                          {depositInfo.securityDepositPercentage}%)
+                        </Text>
+                        <Text className="text-sm font-pmedium text-orange-600">
+                          ₱{depositInfo.depositAmount.toLocaleString()}
+                        </Text>
+                      </View>
+
+                      {/* Total with Deposit */}
+                      <View className="flex-row justify-between pt-2 border-t border-gray-200">
+                        <Text className="text-sm font-pbold text-gray-900">
+                          Total Amount Due
+                        </Text>
+                        <Text className="text-base font-pbold text-primary">
+                          ₱{depositInfo.totalWithDeposit.toLocaleString()}
+                        </Text>
+                      </View>
+
+                      {/* Info Note */}
+                      <View className="mt-2 bg-orange-50 p-2 rounded border border-orange-200">
+                        <Text className="text-xs font-pregular text-orange-700">
+                          💡 Security deposit will be collected at pickup and
+                          refunded upon safe return.
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    // No security deposit
+                    <View className="flex-row justify-between pt-2 border-t border-gray-200">
+                      <Text className="text-sm font-pbold text-gray-900">
+                        Total Amount Due
+                      </Text>
+                      <Text className="text-base font-pbold text-primary">
+                        ₱{depositInfo.baseTotal.toLocaleString()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
 
@@ -630,7 +686,13 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
         />
         <View className="flex-1">
           <Text className="text-base font-pmedium text-gray-800">
-            {formatFullName()}
+            {currentUserData?.firstname && currentUserData?.lastname
+              ? `${currentUserData.firstname}${
+                  currentUserData.middlename
+                    ? ` ${currentUserData.middlename.charAt(0)}.`
+                    : ""
+                } ${currentUserData.lastname}`
+              : "You"}
           </Text>
           <Text className="text-sm text-gray-500">
             {isOwner ? "Item Owner" : "Requester"} • You
@@ -654,7 +716,13 @@ const ChatDetailsModal: React.FC<ChatDetailsModalProps> = ({
         />
         <View className="flex-1">
           <Text className="text-base font-pmedium text-gray-800">
-            {formatFullName()}
+            {recipientName.firstname && recipientName.lastname
+              ? `${recipientName.firstname}${
+                  recipientName.middlename
+                    ? ` ${recipientName.middlename.charAt(0)}.`
+                    : ""
+                } ${recipientName.lastname}`
+              : "User"}
           </Text>
           <Text className="text-sm text-gray-500">
             {isOwner ? "Requester" : "Item Owner"}

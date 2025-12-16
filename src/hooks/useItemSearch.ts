@@ -32,7 +32,7 @@ export const useItemSearch = () => {
 
         setPopularItems(Array.from(categories));
       } catch (error) {
-        console.error("Error fetching popular items:", error);
+        console.log("Error fetching popular items:", error);
         setPopularItems([]);
       }
     };
@@ -93,7 +93,7 @@ export const useItemSearch = () => {
 
       return results;
     } catch (error) {
-      console.error("Search error:", error);
+      console.log("Search error:", error);
       return [];
     }
   };

@@ -54,7 +54,7 @@ const verifyEmailToken = async (token: string, userId: string) => {
 
     return { success: true, message: "Email verified successfully" };
   } catch (error: any) {
-    console.error("Email verification error:", error);
+    console.log("Email verification error:", error);
     return { success: false, error: error.message };
   }
 };
@@ -71,7 +71,7 @@ export const handleVerificationLink = async (url: string) => {
 
     return await verifyEmailToken(token, uid);
   } catch (error: any) {
-    console.error("Handle verification link error:", error);
+    console.log("Handle verification link error:", error);
     return { success: false, error: error.message };
   }
 };

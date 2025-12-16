@@ -143,7 +143,7 @@ const PlanConfirmationModal: React.FC<ConfirmationModalProps> = ({
       statusBarTranslucent={true}
     >
       <View className="flex-1 bg-black/50 justify-center  items-center">
-        <View className="bg-white rounded-2xl p-6 w-full max-w-sm">
+        <View className="bg-white rounded-2xl p-4 border w-full max-w-md">
           {/* Header */}
           <View className="items-center mb-6">
             <View className="w-16 h-16 bg-orange-100 rounded-full items-center justify-center mb-3">
@@ -542,7 +542,7 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
 
         setPlans(sortedPlans);
       } catch (error) {
-        console.error("Error fetching plans:", error);
+        console.log("Error fetching plans:", error);
       } finally {
         setLoading(false);
       }
@@ -602,8 +602,10 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
                   className="text-2xl font-pbold text-center"
                   style={{ color: plan.textColor }}
                 >
-                  {plan.planType.charAt(0).toUpperCase() +
-                    plan.planType.slice(1)}
+                  {plan.planType.toLowerCase() === "platinum"
+                    ? "Limited Time Offer"
+                    : plan.planType.charAt(0).toUpperCase() +
+                      plan.planType.slice(1)}
                 </Text>
               </View>
 

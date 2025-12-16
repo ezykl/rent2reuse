@@ -28,14 +28,17 @@ interface Announcement {
 export default function AnnouncementDetails() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
-  const [prevId, setPrevId] = useState<string | null>(null);
-  const [nextId, setNextId] = useState<string | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]); // Store ALL announcements
+  const [currentAnnouncement, setCurrentAnnouncement] =
+    useState<Announcement | null>(null);
+  const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch all announcements ONCE on mount
   useEffect(() => {
-    const fetchAnnouncements = async () => {
+    const fetchAllAnnouncements = async () => {
       try {
-        // Get all active announcements ordered by createdAt
+        setIsLoading(true);
         const allAnnouncementsQuery = query(
           collection(db, "announcements"),
           where("isActive", "==", true),
@@ -43,45 +46,82 @@ export default function AnnouncementDetails() {
         );
 
         const querySnapshot = await getDocs(allAnnouncementsQuery);
-        const announcements = querySnapshot.docs.map((doc) => ({
+        const fetchedAnnouncements = querySnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-        }));
+        })) as Announcement[];
 
-        // Find current announcement index
-        const currentIndex = announcements.findIndex((ann) => ann.id === id);
-
-        if (currentIndex !== -1) {
-          // Set current announcement
-          setAnnouncement(announcements[currentIndex] as Announcement);
-
-          // Set previous and next IDs
-          setPrevId(
-            currentIndex > 0 ? announcements[currentIndex - 1].id : null
-          );
-          setNextId(
-            currentIndex < announcements.length - 1
-              ? announcements[currentIndex + 1].id
-              : null
-          );
-        }
+        setAnnouncements(fetchedAnnouncements);
       } catch (error) {
-        console.error("Error fetching announcements:", error);
+        console.log("Error fetching announcements:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchAnnouncements();
-  }, [id]);
+    fetchAllAnnouncements();
+  }, []); // Empty dependency - fetch only once
 
-  if (!announcement) {
+  // Update current announcement when ID or announcements change
+  useEffect(() => {
+    if (announcements.length > 0 && id) {
+      const index = announcements.findIndex((ann) => ann.id === id);
+      if (index !== -1) {
+        setCurrentIndex(index);
+        setCurrentAnnouncement(announcements[index]);
+      }
+    }
+  }, [id, announcements]);
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      const prevId = announcements[currentIndex - 1].id;
+      router.replace(`/announcement/${prevId}`);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentIndex < announcements.length - 1) {
+      const nextId = announcements[currentIndex + 1].id;
+      router.replace(`/announcement/${nextId}`);
+    }
+  };
+
+  // Show loading only on initial fetch
+  if (isLoading) {
     return (
-      <View className=" flex-1 bg-white w-full h-full">
+      <View className="flex-1 bg-white w-full h-full">
         <View className="flex-1 items-center justify-center">
           <LottieActivityIndicator size={100} color="#5C6EF6" />
         </View>
       </View>
     );
   }
+
+  // Show error state if announcement not found
+  if (!currentAnnouncement) {
+    return (
+      <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
+        <View className="flex-row justify-between items-center p-4 border-b border-gray-100">
+          <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
+            <Image
+              source={icons.leftArrow}
+              className="w-8 h-8"
+              tintColor="#6B7280"
+            />
+          </TouchableOpacity>
+          <Text className="text-xl font-pbold text-gray-800">Announcement</Text>
+          <View className="w-6" />
+        </View>
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-gray-500">Announcement not found</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const hasPrevious = currentIndex > 0;
+  const hasNext = currentIndex < announcements.length - 1;
 
   return (
     <View className="flex-1 bg-white" style={{ paddingTop: insets.top }}>
@@ -100,10 +140,10 @@ export default function AnnouncementDetails() {
 
       <ScrollView>
         {/* Image */}
-        {announcement.imageUrl && (
+        {currentAnnouncement.imageUrl && (
           <View className="px-2 rounded-lg overflow-hidden">
             <Image
-              source={{ uri: announcement.imageUrl }}
+              source={{ uri: currentAnnouncement.imageUrl }}
               className="w-full h-64 rounded-lg"
               resizeMode="cover"
             />
@@ -113,46 +153,49 @@ export default function AnnouncementDetails() {
         {/* Content */}
         <View className="p-4">
           <Text className="text-2xl font-pbold text-gray-900 mb-4">
-            {announcement.title}
+            {currentAnnouncement.title}
           </Text>
 
           <Text className="text-gray-600 text-base leading-6">
-            {announcement.message}
+            {currentAnnouncement.message}
           </Text>
 
-          {announcement.createdAt && (
+          {currentAnnouncement.createdAt && (
             <Text className="text-gray-400 text-sm mt-6">
-              Posted on {announcement.createdAt.toDate().toLocaleDateString()}
+              Posted on{" "}
+              {currentAnnouncement.createdAt.toDate().toLocaleDateString()}
             </Text>
           )}
         </View>
       </ScrollView>
+
+      {/* Navigation Buttons */}
       <View className="flex-row justify-between items-center p-4">
         <TouchableOpacity
-          disabled={!prevId}
-          onPress={() => prevId && router.replace(`/announcement/${prevId}`)}
+          disabled={!hasPrevious}
+          onPress={handlePrevious}
           className={`p-4 rounded-full ${
-            prevId ? "bg-primary" : "bg-gray-200"
+            hasPrevious ? "bg-primary" : "bg-gray-200"
           }`}
         >
           <Image
             source={icons.leftArrow}
             className="w-6 h-6"
-            tintColor={prevId ? "#FFFFFF" : "#9CA3AF"}
+            tintColor={hasPrevious ? "#FFFFFF" : "#9CA3AF"}
           />
         </TouchableOpacity>
 
         <TouchableOpacity
-          disabled={!nextId}
-          onPress={() => nextId && router.replace(`/announcement/${nextId}`)}
+          disabled={!hasNext}
+          onPress={handleNext}
           className={`p-4 rounded-full ${
-            nextId ? "bg-primary" : "bg-gray-200"
+            hasNext ? "bg-primary" : "bg-gray-200"
           }`}
         >
           <Image
             source={icons.rightArrow}
             className="w-6 h-6"
-            tintColor="#FFFFFF"
+            tintColor={hasNext ? "#FFFFFF" : "#9CA3AF"}
           />
         </TouchableOpacity>
       </View>
