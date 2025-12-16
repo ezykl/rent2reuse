@@ -1,9 +1,11 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { icons } from "../constant";
 import dayjs from "dayjs";
 import { useTimeConverter } from "@/hooks/useTimeConverter";
 import { min } from "date-fns";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebaseConfig";
 
 interface SentRequestCardProps {
   request: {
@@ -78,12 +80,54 @@ const SentRequestCard = ({
   onEdit,
 }: SentRequestCardProps) => {
   const { minutesToTime } = useTimeConverter();
+  const [securityDepositPercentage, setSecurityDepositPercentage] = useState<
+    number | null
+  >(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch security deposit percentage from item document
+  useEffect(() => {
+    const fetchSecurityDeposit = async () => {
+      try {
+        if (request.itemId) {
+          const itemDoc = await getDoc(doc(db, "items", request.itemId));
+          if (itemDoc.exists()) {
+            const data = itemDoc.data();
+            setSecurityDepositPercentage(
+              data.securityDepositPercentage || null
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching security deposit:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSecurityDeposit();
+  }, [request.itemId]);
 
   // Add this function to check if request is expired
   const isExpired = () => {
     const now = dayjs();
     const start = dayjs(request.startDate.toDate?.() ?? request.startDate);
     return now.isAfter(start) && request.status === "pending";
+  };
+
+  // Calculate deposit amount
+  const calculateDepositAmount = (): number => {
+    if (!securityDepositPercentage) return 0;
+    // totalPrice already includes rental, so we calculate deposit based on it
+    const baseTotal = request.totalPrice; // This is the rental total
+    const depositAmount = (baseTotal * securityDepositPercentage) / 100;
+    return Math.round(depositAmount);
+  };
+
+  // Get total with deposit
+  const getTotalWithDeposit = (): number => {
+    const depositAmount = calculateDepositAmount();
+    return request.totalPrice + depositAmount;
   };
 
   // Get card styles based on status and expiry
@@ -251,9 +295,40 @@ const SentRequestCard = ({
             <Text className="text-sm text-gray-500 mb-1">
               Owner: {request.ownerName}
             </Text>
-            <Text className="text-base font-psemibold text-primary">
-              ₱{request.totalPrice} total
-            </Text>
+
+            {/* Price Breakdown */}
+            {securityDepositPercentage && securityDepositPercentage > 0 ? (
+              <View className="mb-2">
+                <View className="flex-row justify-between items-center mb-1">
+                  <Text className="text-xs text-gray-600">Rental:</Text>
+                  <Text className="text-xs font-psemibold text-gray-800">
+                    ₱{request.totalPrice.toLocaleString()}
+                  </Text>
+                </View>
+                <View className="flex-row justify-between items-center mb-2">
+                  <Text className="text-xs text-orange-600">
+                    Security Deposit ({securityDepositPercentage}%):
+                  </Text>
+                  <Text className="text-xs font-psemibold text-orange-600">
+                    ₱{calculateDepositAmount().toLocaleString()}
+                  </Text>
+                </View>
+                <View className="border-t border-orange-200 pt-1">
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-sm font-pbold text-gray-800">
+                      Total:
+                    </Text>
+                    <Text className="text-sm font-pbold text-primary">
+                      ₱{getTotalWithDeposit().toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <Text className="text-base font-psemibold text-primary">
+                ₱{request.totalPrice.toLocaleString()} total
+              </Text>
+            )}
           </View>
         </View>
 
