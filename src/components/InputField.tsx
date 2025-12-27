@@ -9,6 +9,7 @@ interface InputFieldProps {
   placeholder: string;
   handleChangeText: (text: string) => void;
   otherStyles?: string;
+  borderColor?: string;
   [key: string]: any;
 }
 
@@ -39,7 +40,8 @@ const InputField = ({
       <View
         className="w-full h-16 px-4 bg-black-100 rounded-xl border-2 border-secondary-300  flex flex-row items-center"
         style={[
-          isFocused && { borderColor: "#4BD07F" }, // Apply focus styles to parent
+          isFocused && { borderColor: "#4BD07F" },
+          props.borderColor && { borderColor: props.borderColor },
         ]}
       >
         <TextInput
@@ -54,6 +56,7 @@ const InputField = ({
           }
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          style={{ color: "#6C9082" }}
           {...props}
         />
         {title === "Password" && (

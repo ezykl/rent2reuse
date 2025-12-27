@@ -246,8 +246,10 @@ const Home = () => {
     itemLocation?: {
       latitude: number;
       longitude: number;
-      address?: string; //
+      address?: string;
     };
+    //New Added
+    category?: string;
     owner: {
       id: string;
       fullname: string;
@@ -276,6 +278,8 @@ const Home = () => {
         itemLocation={
           isProfileComplete && locationData ? locationData : undefined
         }
+        // Category Added
+        category={isProfileComplete ? item.category : undefined}
         owner={isProfileComplete ? item.owner : undefined}
         showProtectionOverlay={!isProfileComplete}
         enableAI={item.enableAI}

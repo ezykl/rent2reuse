@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
+  TextInput,
 } from "react-native";
 import React, { useState, useRef } from "react";
 import { images } from "../../constant";
@@ -26,6 +27,8 @@ import { useAuth } from "@/context/AuthContext";
 import { icons } from "@/constant";
 import { createUserWithEmailAndPassword } from "@firebase/auth";
 import { auth, db } from "@/lib/firebaseConfig";
+import { ActivityIndicator } from "react-native";
+
 import {
   getFirestore,
   doc,
@@ -33,6 +36,9 @@ import {
   collection,
   addDoc,
   serverTimestamp,
+  query,
+  where,
+  getDocs,
 } from "firebase/firestore";
 
 const SignUp = () => {
@@ -43,6 +49,10 @@ const SignUp = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 2;
   const { setSignupMode } = useAuth();
+
+  // Add this new state for email exists error
+  const [emailExistsError, setEmailExistsError] = useState(false);
+
   const [form, setForm] = useState<{
     firstname: string;
     middlename?: string;
@@ -101,6 +111,10 @@ const SignUp = () => {
     if (!/\S+@\S+\.\S+/.test(trimmedEmail)) return "Invalid email format";
     return "";
   };
+
+  const [isFocusedEmail, setIsFocusedEmail] = useState(false);
+  const [isFocusedPassword, setIsFocusedPassword] = useState(false);
+  const [isFocusedConfirmPass, setIsFocusedConfirmPass] = useState(false);
 
   const validatePassword = (password: string) => {
     const errors: string[] = [];
@@ -251,9 +265,38 @@ const SignUp = () => {
     return false;
   };
 
-  const handleNext = () => {
-    if (isStepValid()) {
-      setCurrentStep(currentStep + 1);
+  // Add this function to check if email exists
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const usersRef = collection(db, "users");
+      const q = query(usersRef, where("email", "==", email.trim()));
+      const querySnapshot = await getDocs(q);
+      return !querySnapshot.empty;
+    } catch (error) {
+      console.log("Error checking email:", error);
+      return false;
+    }
+  };
+
+  const handleNext = async () => {
+    if (isStepValid() && !emailExistsError) {
+      if (currentStep === 1) {
+        setIsSubmitting(true);
+        try {
+          const emailExists = await checkEmailExists(form.email);
+          if (emailExists) {
+            setEmailExistsError(true);
+            setIsSubmitting(false);
+            return;
+          }
+          setEmailExistsError(false);
+          setCurrentStep(currentStep + 1);
+        } finally {
+          setIsSubmitting(false);
+        }
+      } else {
+        setCurrentStep(currentStep + 1);
+      }
     } else {
       // Trigger validation for all fields in current step
       if (currentStep === 1) {
@@ -432,43 +475,98 @@ const SignUp = () => {
   // Step 1: Authentication Details
   const renderStep1 = () => (
     <View>
-      <InputField
-        title="Email"
-        value={form.email}
-        placeholder="sample@email.com"
-        handleChangeText={(e: string) => handleFormChange("email", e)}
-        otherStyles="mt-2"
-        keyboardType="email-address"
-      />
-      {errors.email && (
-        <Text className="text-red-500 text-sm mt-1 ml-2">{errors.email}</Text>
-      )}
-
-      <InputField
-        title="Password"
-        value={form.password}
-        placeholder="Enter Password"
-        handleChangeText={(e: string) => handleFormChange("password", e)}
-        otherStyles="mt-2"
-      />
-      {errors.password && (
-        <Text className="text-red-500 text-sm mt-1 ml-2">
-          {errors.password}
+      <View>
+        <Text className="text-xl text-secondary-300 font-psemibold mb-2">
+          Email
         </Text>
-      )}
+        <TextInput
+          value={form.email}
+          placeholder="sample@email.com"
+          onChangeText={(e: string) => {
+            handleFormChange("email", e);
+            setEmailExistsError(false);
+          }}
+          keyboardType="email-address"
+          placeholderTextColor="#A7BEB4"
+          onFocus={() => setIsFocusedEmail(true)}
+          onBlur={() => setIsFocusedEmail(false)}
+          className="border-2 h-16 rounded-xl px-4 py-3 font-psemibold text-base"
+          style={{
+            borderColor:
+              errors.email || emailExistsError
+                ? "#ef4444"
+                : isFocusedEmail
+                ? "#4BD07F"
+                : "#6C9082",
+            color: "#6C9082",
+          }}
+        />
+        {(errors.email || emailExistsError) && (
+          <View style={{ minHeight: 24 }}>
+            <Text className="text-red-500 text-sm mt-1 ml-2">
+              {emailExistsError ? "Email already exists" : errors.email}
+            </Text>
+          </View>
+        )}
+      </View>
 
-      <InputField
-        title="Confirm Password"
-        value={form.confirmPass}
-        placeholder="Confirm Password"
-        handleChangeText={(e: string) => handleFormChange("confirmPass", e)}
-        otherStyles="mt-2"
-      />
-      {errors.confirmPass && (
-        <Text className="text-red-500 text-sm mt-1 ml-2">
-          {errors.confirmPass}
+      <View className="mt-2">
+        <Text className="text-xl text-secondary-300 font-psemibold mb-2">
+          Password
         </Text>
-      )}
+        <TextInput
+          value={form.password}
+          placeholder="Enter Password"
+          onChangeText={(e: string) => handleFormChange("password", e)}
+          secureTextEntry
+          placeholderTextColor="#A7BEB4"
+          onFocus={() => setIsFocusedPassword(true)}
+          onBlur={() => setIsFocusedPassword(false)}
+          className="border-2 h-16 rounded-xl px-4 py-3 font-psemibold text-base"
+          style={{
+            borderColor: errors.password
+              ? "#ef4444"
+              : isFocusedPassword
+              ? "#4BD07F"
+              : "#6C9082",
+            color: "#6C9082",
+          }}
+        />
+        {errors.password && (
+          <Text className="text-red-500 text-sm mt-1 ml-2">
+            {errors.password}
+          </Text>
+        )}
+      </View>
+
+      <View className="mt-2">
+        <Text className="text-xl text-secondary-300 font-psemibold mb-2">
+          Confirm Password
+        </Text>
+        <TextInput
+          value={form.confirmPass}
+          placeholder="Confirm Password"
+          onChangeText={(e: string) => handleFormChange("confirmPass", e)}
+          secureTextEntry
+          placeholderTextColor="#A7BEB4"
+          onFocus={() => setIsFocusedConfirmPass(true)}
+          onBlur={() => setIsFocusedConfirmPass(false)}
+          className="border-2 h-16 rounded-xl px-4 py-3 font-psemibold text-base"
+          style={{
+            borderColor: errors.confirmPass
+              ? "#ef4444"
+              : isFocusedConfirmPass
+              ? "#4BD07F"
+              : "#6C9082",
+            color: "#6C9082",
+          }}
+        />
+        {errors.confirmPass && (
+          <Text className="text-red-500 text-sm mt-1 ml-2">
+            {errors.confirmPass}
+          </Text>
+        )}
+      </View>
     </View>
   );
 
@@ -706,15 +804,16 @@ const SignUp = () => {
 
                 {currentStep < totalSteps ? (
                   <LargeButton
-                    title="Next"
+                    title={isSubmitting ? "Checking..." : "Next"}
                     handlePress={() => {
                       handleNext();
                     }}
                     containerStyles={`flex-1 ${currentStep > 1 ? "ml-2" : ""} ${
-                      !isStepValid() ? "opacity-50" : ""
+                      !isStepValid() || isSubmitting ? "opacity-50" : ""
                     }`}
                     textStyles="text-white"
-                    disabled={!isStepValid()}
+                    disabled={!isStepValid() || isSubmitting}
+                    isLoading={isSubmitting}
                   />
                 ) : (
                   <LargeButton

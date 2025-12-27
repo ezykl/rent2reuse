@@ -257,6 +257,7 @@ const Tools = () => {
             itemDesc: data.itemDesc || "",
             itemPrice: data.itemPrice || 0,
             itemStatus: data.itemStatus || "Available",
+            itemCategory: data.itemCategory || "", // New Added
             images: data.images || [],
             createdAt: data.createdAt?.toDate().toLocaleDateString("en-US", {
               year: "numeric",

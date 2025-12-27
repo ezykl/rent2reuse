@@ -24,6 +24,8 @@ interface ItemCardProps {
     longitude: number;
     address?: string;
   };
+  //New Added
+  category?: string;
   owner?: {
     id: string;
     fullname: string;
@@ -116,6 +118,7 @@ const ItemCard = ({
   enableAI,
   condition,
   itemLocation,
+  category,
   showProtectionOverlay = false,
   onPress,
   userLocationProp,
@@ -249,6 +252,13 @@ const ItemCard = ({
         {/* Protected Content - Only show if profile is complete */}
         {!showProtectionOverlay ? (
           <>
+            {/* New Added */}
+            {category && (
+              <Text className="text-xs text-gray-500 mt-1 font-psemibold">
+                {category}
+              </Text>
+            )}
+
             {/* Owner */}
             {owner && (
               <Text className="text-xs text-gray-500 mt-1 font-pregular">
