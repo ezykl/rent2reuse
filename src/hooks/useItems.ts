@@ -23,6 +23,7 @@ interface Item {
     longitude: number;
     address?: string;
   };
+  category?: string;
   itemMinRentDuration: number;
   itemName: string;
   itemPrice: number;
@@ -78,6 +79,7 @@ export const useItems = (
               data.itemLocation && typeof data.itemLocation === "object"
                 ? data.itemLocation
                 : undefined,
+            category: data.itemCategory || "",
             itemMinRentDuration: data.itemMinRentDuration || 0,
             itemName: data.itemName || "",
             itemPrice: data.itemPrice || 0,

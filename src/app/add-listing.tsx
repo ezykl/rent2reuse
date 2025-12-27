@@ -872,7 +872,16 @@ const AddListing = () => {
 
     // Handle Step 2 Back
     const handleStep2Back = () => {
-      setCurrentStep(1);
+      //Back to Step 1 with confirmation
+      Alert.alert(
+        "Go Back",
+        "Are you sure you want to go back? Unsaved changes will be lost.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Yes", onPress: () => setCurrentStep(1) },
+        ]
+      );
+      //setCurrentStep(1);
     };
 
     // Update image handlers
@@ -964,9 +973,49 @@ const AddListing = () => {
       handleImageChange(newImages);
     };
 
+    const handleSumbitAlert = () => {
+      Alert.alert(
+        "Submit Listing",
+        "Are you sure you want to submit this listing?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Yes", onPress: () => handleSubmit() },
+        ]
+      );
+    };
+
     // Final submit function
     const handleSubmit = async () => {
       setIsLoading(true);
+
+      Alert.alert(
+        "Submit Listing",
+        "Are you sure you want to submit this listing?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => {
+              return;
+            },
+          },
+          {
+            text: "Yes",
+            onPress: () => {
+              if (!validateStep2()) {
+                Toast.show({
+                  type: ALERT_TYPE.DANGER,
+                  title: "Validation Error",
+                  textBody: "Please complete all required fields",
+                });
+                setIsLoading(false);
+                return;
+              }
+            },
+          },
+        ]
+      );
+
       if (!validateStep2()) {
         Toast.show({
           type: ALERT_TYPE.DANGER,
@@ -2271,7 +2320,23 @@ const AddListing = () => {
       {/* Manual Listing Modal */}
       <ManualListingModal
         visible={showManualModal}
-        onClose={() => setShowManualModal(false)}
+        onClose={() =>
+          Alert.alert(
+            "Discard Listing",
+            "Are you sure you want to discard this listing?",
+            [
+              {
+                text: "Cancel",
+                style: "cancel",
+              },
+              {
+                text: "Discard",
+                style: "destructive",
+                onPress: () => setShowManualModal(false),
+              },
+            ]
+          )
+        }
         initialData={selectedItem}
         useAI={useAI}
         initialImage={imageUri || undefined}
