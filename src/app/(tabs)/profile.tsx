@@ -417,6 +417,46 @@ const Profile: React.FC = () => {
     }
   };
 
+  const fetchIdImageBase64 = async (): Promise<string | null> => {
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return null;
+
+      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const idImageUrl = userData?.idVerified?.idImage;
+
+        if (!idImageUrl) {
+          console.log("No ID image found in Firestore");
+          return null;
+        }
+
+        // Convert image URL to base64
+        const response = await fetch(idImageUrl);
+        const blob = await response.blob();
+
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = reader.result as string;
+            // Remove data:image/jpeg;base64, prefix if it exists
+            const base64Data = base64String.split(",")[1] || base64String;
+            resolve(base64Data);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      return null;
+    } catch (error) {
+      console.log("Error fetching ID image:", error);
+      return null;
+    }
+  };
+
   //Save Location (Data From Modal)
   const handleLocationSave = async (location: {
     latitude: number;
@@ -583,13 +623,6 @@ const Profile: React.FC = () => {
         isCompleted: details?.isEmailVerified || false,
       },
       {
-        id: "profileImage",
-        title: "Add Profile Picture",
-        description: "Add a profile picture to personalize your account",
-        icon: icons.user,
-        isCompleted: details?.hasProfileImage ? true : false,
-      },
-      {
         id: "contact",
         title: "Add Contact Number",
         description: "Add your phone number for better communication",
@@ -616,6 +649,13 @@ const Profile: React.FC = () => {
         description: "Verify your identity for enhanced security",
         icon: icons.identity,
         isCompleted: details?.hasIdVerification || false,
+      },
+      {
+        id: "profileImage",
+        title: "Add Profile Picture",
+        description: "Add a profile picture to personalize your account",
+        icon: icons.user,
+        isCompleted: details?.hasProfileImage ? true : false,
       },
     ];
 
@@ -833,26 +873,15 @@ const Profile: React.FC = () => {
               if (auth.currentUser) {
                 await auth.currentUser.reload();
               }
-
-              // Force refresh the profile completion status
               await refreshStatus();
-
-              // Update other states
               setRefreshFlag((prev) => prev + 1);
               setActiveModal(null);
             }}
             onVerified={async () => {
-              // Force refresh the profile completion status
               await refreshStatus();
-
-              // Force UI update
               setRefreshFlag((prev) => prev + 1);
             }}
           />
-        );
-      case "location":
-        return (
-          <LocationModalContent onSave={handleLocationSave} loading={loading} />
         );
       case "idVerification":
         return (
@@ -862,8 +891,9 @@ const Profile: React.FC = () => {
           />
         );
       case "profileImage":
+        // Show loading state while fetching ID image
         return (
-          <ProfileImageContent
+          <ProfileImageContentWrapper
             onSave={handleSaveProfileImage}
             loading={loading}
           />
@@ -875,6 +905,41 @@ const Profile: React.FC = () => {
       default:
         return null;
     }
+  };
+
+  const ProfileImageContentWrapper: React.FC<{
+    onSave: (imageUri: string) => void;
+    loading: boolean;
+  }> = ({ onSave, loading }) => {
+    const [idImageBase64, setIdImageBase64] = useState<string | null>(null);
+    const [isFetching, setIsFetching] = useState(true);
+
+    useEffect(() => {
+      const loadIdImage = async () => {
+        const idBase64 = await fetchIdImageBase64();
+        setIdImageBase64(idBase64);
+        setIsFetching(false);
+      };
+
+      loadIdImage();
+    }, []);
+
+    if (isFetching) {
+      return (
+        <View className="flex-1 justify-center items-center">
+          <Text className="text-gray-600 font-pmedium">Loading...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <ProfileImageContent
+        onSave={onSave}
+        loading={loading}
+        idImageBase64={idImageBase64 || undefined}
+        requireIdComparison={!!idImageBase64}
+      />
+    );
   };
 
   const ProfileMenuList = () => {
@@ -1105,29 +1170,32 @@ const Profile: React.FC = () => {
                 <TouchableOpacity
                   onPress={() => setActiveModal("profileImage")}
                   className="relative"
+                  disabled={completionPercentage < 80}
                 >
                   <View className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary">
-                    {profileData?.profileImage ? (
-                      <Image
-                        source={{ uri: profileData.profileImage }}
-                        className="w-full h-full"
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View className="w-full h-full bg-primary justify-center items-center">
-                        <Text className="font-pbold text-2xl text-white">
-                          {getInitials(profileData?.firstname || "")}
-                        </Text>
-                      </View>
-                    )}
+                  {profileData?.profileImage ? (
+                    <Image
+                    source={{ uri: profileData.profileImage }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                    />
+                  ) : (
+                    <View className="w-full h-full bg-primary justify-center items-center">
+                    <Text className="font-pbold text-2xl text-white">
+                      {getInitials(profileData?.firstname || "")}
+                    </Text>
+                    </View>
+                  )}
                   </View>
+                  {completionPercentage >= 80 && (
                   <View className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow">
                     <Image
-                      source={icons.pencil}
-                      className="w-3 h-3"
-                      tintColor="#4B5563"
+                    source={icons.pencil}
+                    className="w-3 h-3"
+                    tintColor="#4B5563"
                     />
                   </View>
+                  )}
                 </TouchableOpacity>
 
                 {/* Name and Badges */}

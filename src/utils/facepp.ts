@@ -163,7 +163,7 @@ export const detectFace = async (
 
     // Check mouth status - mouth should be closed
     if (face.attributes?.mouthstatus) {
-      const mouthOpen = face.attributes.mouthstatus.open > 0.7;
+      const mouthOpen = face.attributes.mouthstatus.open > 0.1;
 
       console.log(
         "Mouth status - Open:",
@@ -233,7 +233,7 @@ export const detectFace = async (
 
     // Mouth status contribution (20 points max)
     if (face.attributes?.mouthstatus) {
-      const mouthOpen = face.attributes.mouthstatus.open > 0.5;
+      const mouthOpen = face.attributes.mouthstatus.open > 0.3;
 
       if (!mouthOpen) {
         qualityScore += 20;
@@ -275,7 +275,7 @@ export const detectFace = async (
     // Success criteria - all checks must pass
     if (
       !hasEyeIssue &&
-      !hasMouthIssue &&
+      // !hasMouthIssue &&
       !hasPoseIssue &&
       !hasBlurIssue &&
       qualityScore >= 70
@@ -356,6 +356,94 @@ export const detectFace = async (
       details: "Unable to analyze the photo. Please try again.",
       suggestions: ["Try taking a new photo", "Ensure good lighting"],
       failureCount: failureCount + 1,
+    };
+  }
+};
+
+export interface FaceComparisonResult {
+  success: boolean;
+  confidence: number;
+  message: string;
+  details: string;
+  type?: "success" | "warning" | "error";
+}
+
+export const compareFaces = async (
+  image1Base64: string,
+  image2Base64: string
+): Promise<FaceComparisonResult> => {
+  try {
+    if (!image1Base64 || !image2Base64) {
+      return {
+        success: false,
+        confidence: 0,
+        message: "Missing image data",
+        details: "Both images are required for comparison",
+        type: "error",
+      };
+    }
+
+    // Face++ Compare API endpoint
+    const response = await fetch(
+      "https://api-us.faceplusplus.com/facepp/v3/compare",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          api_key: FACE_PLUS_PLUS_API_KEY,
+          api_secret: FACE_PLUS_PLUS_API_SECRET,
+          image_base64_1: image1Base64,
+          image_base64_2: image2Base64,
+        }).toString(),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || data.error_message) {
+      return {
+        success: false,
+        confidence: 0,
+        message: data.error_message || "Face comparison failed",
+        details:
+          data.error_message ||
+          "Unable to compare faces. Please ensure both images contain clear faces.",
+        type: "error",
+      };
+    }
+
+    // Confidence threshold (0-100)
+    // Face++ returns confidence as a percentage
+    const CONFIDENCE_THRESHOLD = 65; // Adjust based on your security requirements
+    const confidence = data.confidence || 0;
+
+    if (confidence >= CONFIDENCE_THRESHOLD) {
+      return {
+        success: true,
+        confidence,
+        message: "✅ Faces Match!",
+        details: `The faces match with ${confidence.toFixed(1)}% confidence.`,
+        type: "success",
+      };
+    } else {
+      return {
+        success: false,
+        confidence,
+        message: "Faces Don't Match",
+        details: "The profile image and ID don't appear to be the same person. Please retake your photos.",
+        type: "warning",
+      };
+    }
+  } catch (error) {
+    console.error("Face comparison error:", error);
+    return {
+      success: false,
+      confidence: 0,
+      message: "❌ Comparison Error",
+      details: "An error occurred while comparing faces. Please try again.",
+      type: "error",
     };
   }
 };

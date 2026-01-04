@@ -13,11 +13,15 @@ import { CustomCamera } from "@/components/CustomCamera";
 interface ProfileImageContentProps {
   onSave: (imageUri: string) => void;
   loading?: boolean;
+  idImageBase64?: string; // Add this
+  requireIdComparison?: boolean; // Add this
 }
 
 export const ProfileImageContent = ({
   onSave,
   loading,
+  idImageBase64,
+  requireIdComparison = false,
 }: ProfileImageContentProps) => {
   const [image, setImage] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -139,6 +143,8 @@ export const ProfileImageContent = ({
         <CustomCamera
           onPhotoTaken={handlePhotoTaken}
           onCancel={() => setShowCamera(false)}
+          idImageBase64={idImageBase64}
+          requireIdComparison={requireIdComparison}
         />
       </Modal>
     </>
