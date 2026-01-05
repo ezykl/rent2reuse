@@ -87,12 +87,13 @@ const RentRequestMessage = ({
         const baseTotal = basePrice * rentalDays;
         const depositAmount = (baseTotal * securityDepositPercentage) / 100;
         const totalWithDeposit = baseTotal + depositAmount;
+        const dueBalance = totalWithDeposit - depositAmount;
 
         const requestData = {
           name: chatData.itemDetails?.name || "Unknown Item",
           itemImage: chatData.itemDetails?.image || "",
           price: basePrice,
-          totalPrice: totalWithDeposit, // ✅ CHANGE: Include security deposit in total
+          totalPrice: totalWithDeposit - depositAmount, // ✅ CHANGE: Include security deposit in total
           baseTotal: baseTotal, // ✅ NEW: Store base rental total separately
           rentalDays: rentalDays,
           downpaymentPercentage: securityDepositPercentage, // ✅ CHANGE: Use this variable name
@@ -104,6 +105,7 @@ const RentRequestMessage = ({
           endDate: chatData.itemDetails?.endDate?.toDate() || new Date(),
           message: chatData.itemDetails?.message || "",
           status: chatData.status || "pending",
+          dueBalance: dueBalance,
 
           // Additional chat-level fields
           requesterId: chatData.requesterId,
@@ -317,8 +319,7 @@ const RentRequestMessage = ({
                   <>
                     <View className="flex-row justify-between py-2 border-t border-gray-200 mb-2">
                       <Text className="text-sm font-pregular text-gray-700">
-                        Security Deposit (
-                        {rentRequestData.downpaymentPercentage}
+                        Downpayment ({rentRequestData.downpaymentPercentage}
                         %)
                       </Text>
                       <Text className="text-sm font-pmedium text-orange-600">
@@ -339,8 +340,8 @@ const RentRequestMessage = ({
                     {/* Info Note */}
                     <View className="mt-2 bg-orange-50 p-2 rounded border border-orange-200">
                       <Text className="text-xs font-pregular text-orange-700">
-                        💡 Security deposit will be collected at pickup and
-                        refunded upon safe return.
+                        💡 Amount Due will be collected at pickup and refunded
+                        upon safe return.
                       </Text>
                     </View>
                   </>
@@ -351,7 +352,7 @@ const RentRequestMessage = ({
                       Total Amount Due
                     </Text>
                     <Text className="text-base font-pbold text-primary">
-                      ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
+                      ₱{(rentRequestData.dueBalance || 0).toLocaleString()}
                     </Text>
                   </View>
                 )}

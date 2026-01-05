@@ -607,6 +607,11 @@ const PlanSubscription: React.FC<PlanSubscriptionProps> = ({
                     : plan.planType.charAt(0).toUpperCase() +
                       plan.planType.slice(1)}
                 </Text>
+
+                <Text className="text-lg text-white font-pregular opacity-80">
+                  {" "}
+                  + 12% VAT
+                </Text>
               </View>
 
               {/* Price */}

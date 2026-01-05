@@ -569,8 +569,8 @@ const AddListing = () => {
         radius: 0,
       },
       owner: { id: "", fullname: "" },
-      securityDepositPercentage: "",
-      enableSecurityDeposit: false,
+      securityDepositPercentage: "10", // ✅ Change from "" to "10"
+      enableSecurityDeposit: true, // ✅ Change from true to false
     });
 
     const titleSearch = initialData?.label || "";
@@ -973,48 +973,48 @@ const AddListing = () => {
       handleImageChange(newImages);
     };
 
-    const handleSumbitAlert = () => {
-      Alert.alert(
-        "Submit Listing",
-        "Are you sure you want to submit this listing?",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Yes", onPress: () => handleSubmit() },
-        ]
-      );
-    };
+    // const handleSumbitAlert = () => {
+    //   Alert.alert(
+    //     "Submit Listing",
+    //     "Are you sure you want to submit this listing?",
+    //     [
+    //       { text: "Cancel", style: "cancel" },
+    //       { text: "Yes", onPress: () => handleSubmit() },
+    //     ]
+    //   );
+    // };
 
     // Final submit function
     const handleSubmit = async () => {
       setIsLoading(true);
 
-      Alert.alert(
-        "Submit Listing",
-        "Are you sure you want to submit this listing?",
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-            onPress: () => {
-              return;
-            },
-          },
-          {
-            text: "Yes",
-            onPress: () => {
-              if (!validateStep2()) {
-                Toast.show({
-                  type: ALERT_TYPE.DANGER,
-                  title: "Validation Error",
-                  textBody: "Please complete all required fields",
-                });
-                setIsLoading(false);
-                return;
-              }
-            },
-          },
-        ]
-      );
+      // Alert.alert(
+      //   "Submit Listing",
+      //   "Are you sure you want to submit this listing?",
+      //   [
+      //     {
+      //       text: "Cancel",
+      //       style: "cancel",
+      //       onPress: () => {
+      //         return;
+      //       },
+      //     },
+      //     {
+      //       text: "Yes",
+      //       onPress: () => {
+      //         if (!validateStep2()) {
+      //           Toast.show({
+      //             type: ALERT_TYPE.DANGER,
+      //             title: "Validation Error",
+      //             textBody: "Please complete all required fields",
+      //           });
+      //           setIsLoading(false);
+      //           return;
+      //         }
+      //       },
+      //     },
+      //   ]
+      // );
 
       if (!validateStep2()) {
         Toast.show({
@@ -1628,32 +1628,22 @@ const AddListing = () => {
           </View>
 
           <View className="mt-6">
-            <Text className="text-secondary-400 font-psemibold text-lg mb-3">
-              Payment Options
-            </Text>
-
             {/* Rental Security Deposit */}
             <View className="bg-gray-50 rounded-xl p-4 mb-3">
               <View className="flex-row items-center justify-between mb-2">
-                <View className="flex-1">
-                  <Text className="text-secondary-400 font-pmedium">
-                    Require Security Deposit
-                  </Text>
-                  <Text className="text-secondary-300 font-pregular text-xs">
-                    Protects your item and is refunded after safe return at end
-                    of rental
-                  </Text>
-                </View>
-                <Switch
+                {/* <Switch
                   value={formData.enableSecurityDeposit}
+                  disabled={true}
                   onValueChange={(value) => {
                     setFormData((prev) => ({
                       ...prev,
                       enableSecurityDeposit: value,
+                      // ✅ Keep percentage at 10 when toggling, don't clear it
                       securityDepositPercentage: value
-                        ? prev.securityDepositPercentage || "30"
-                        : "",
+                        ? prev.securityDepositPercentage || "10"
+                        : prev.securityDepositPercentage,
                     }));
+                    // ✅ Don't clear errors when toggling
                     if (!value) {
                       setErrors((prev) => ({
                         ...prev,
@@ -1665,7 +1655,7 @@ const AddListing = () => {
                   thumbColor={
                     formData.enableSecurityDeposit ? "#ffffff" : "#f4f3f4"
                   }
-                />
+                /> */}
               </View>
 
               {formData.enableSecurityDeposit && (
@@ -1673,7 +1663,7 @@ const AddListing = () => {
                   {/* Percentage Input */}
                   <View className="mb-3">
                     <Text className="text-secondary-400 font-pmedium mb-2">
-                      Security Deposit Amount
+                      Downpayment Amount
                     </Text>
                     <View className="flex-row gap-2 mb-2">
                       {/* Quick Select Buttons */}
@@ -1739,9 +1729,9 @@ const AddListing = () => {
                           </View>
                           <View className="border-t border-blue-300 my-2" />
                           <View className="flex-row justify-between">
-                            <Text className="text-blue-600 font-pregular text-sm">
-                              Security Deposit (
-                              {formData.securityDepositPercentage}% of rental):
+                            <Text className="text-blue-600 font-pbold text-sm">
+                              Downpayment ({formData.securityDepositPercentage}%
+                              - Upfront):
                             </Text>
                             <Text className="text-blue-700 font-psemibold text-sm">
                               ₱
@@ -1762,7 +1752,7 @@ const AddListing = () => {
                               ₱
                               {(
                                 Number(formData.price) *
-                                  Number(formData.minimumDays) +
+                                  Number(formData.minimumDays) -
                                 Math.round(
                                   (Number(formData.price) *
                                     Number(formData.minimumDays) *
@@ -1775,10 +1765,11 @@ const AddListing = () => {
                             </Text>
                           </View>
                         </View>
-                        <Text className="text-blue-500 font-pregular text-xs mt-3">
-                          ℹ️ Security deposit is refundable upon safe return of
-                          the item in agreed condition
-                        </Text>
+                        {/* <Text className="text-blue-500 font-pregular text-xs mt-3">
+                          ℹ️ Downpayment is paid upfront and non-refundable for
+                          security. Rental fee is due after successful deposit
+                          confirmation.
+                        </Text> */}
                       </View>
                     )}
                 </View>
@@ -1790,17 +1781,14 @@ const AddListing = () => {
               <View className="flex-row items-center mb-2">
                 <Text className="text-2xl mr-2">💡</Text>
                 <Text className="text-green-700 font-psemibold">
-                  Why require a security deposit?
+                  Why require a downpayment?
                 </Text>
               </View>
               <Text className="text-green-600 font-pregular text-sm mb-1">
-                • Ensures serious renters only
+                • Confirms serious rental intent
               </Text>
               <Text className="text-green-600 font-pregular text-sm mb-1">
-                • Protects against damage or loss
-              </Text>
-              <Text className="text-green-600 font-pregular text-sm">
-                • Fully refundable after safe return
+                • Secures your reservation
               </Text>
             </View>
           </View>
@@ -1942,7 +1930,22 @@ const AddListing = () => {
             <View className="items-center">
               <Text className="text-xl font-psemibold">Create Listing</Text>
             </View>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  "Discard Listing",
+                  "Are you sure you want to close? Any unsaved changes will be lost.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Discard",
+                      onPress: onClose,
+                      style: "destructive",
+                    },
+                  ]
+                );
+              }}
+            >
               <Image source={icons.close} className="w-7 h-7" />
             </TouchableOpacity>
           </View>
@@ -2121,12 +2124,6 @@ const AddListing = () => {
 
               {/* Classification Results */}
               {isLoading ? null : (
-                // <View className="items-center justify-center py-8">
-                //   <ActivityIndicator size="large" color="#5C6EF6" />
-                //   <Text className="text-secondary-300 mt-4 font-pregular">
-                //     Analyzing your image...
-                //   </Text>
-                // </View>
                 <>
                   {apiPrediction && apiPrediction.length > 0 ? (
                     <View className="mb-4">
@@ -2186,7 +2183,7 @@ const AddListing = () => {
               )}
             </View>
           )}
-          {!imageUri && (
+          {!imageUri && !showManualModal && (
             <LargeButton
               title="Use Manual Listing"
               handlePress={() => {
@@ -2297,8 +2294,6 @@ const AddListing = () => {
             facing={facing}
           >
             <View style={styles.cameraContainer}>
-              {/* ID Type indicator */}
-
               <TouchableOpacity
                 onPress={capturePhoto}
                 className="w-20 h-20 rounded-full bg-white items-center justify-center mb-4"
@@ -2320,23 +2315,7 @@ const AddListing = () => {
       {/* Manual Listing Modal */}
       <ManualListingModal
         visible={showManualModal}
-        onClose={() =>
-          Alert.alert(
-            "Discard Listing",
-            "Are you sure you want to discard this listing?",
-            [
-              {
-                text: "Cancel",
-                style: "cancel",
-              },
-              {
-                text: "Discard",
-                style: "destructive",
-                onPress: () => setShowManualModal(false),
-              },
-            ]
-          )
-        }
+        onClose={() => setShowManualModal(false)}
         initialData={selectedItem}
         useAI={useAI}
         initialImage={imageUri || undefined}

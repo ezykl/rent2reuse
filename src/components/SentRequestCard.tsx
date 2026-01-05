@@ -127,7 +127,7 @@ const SentRequestCard = ({
   // Get total with deposit
   const getTotalWithDeposit = (): number => {
     const depositAmount = calculateDepositAmount();
-    return request.totalPrice + depositAmount;
+    return request.totalPrice - depositAmount;
   };
 
   // Get card styles based on status and expiry
@@ -138,9 +138,9 @@ const SentRequestCard = ({
       request.status === "rejected" ||
       request.status === "cancelled"
     ) {
-      return "border-gray-200 bg-gray-50"; // Faded look for expired
+      return "border-gray-200 bg-gray-50";
     }
-    return "border-gray-100 bg-white"; // Normal look
+    return "border-gray-100 bg-white";
   };
 
   const getStatusColor = (status: string) => {
@@ -307,7 +307,7 @@ const SentRequestCard = ({
                 </View>
                 <View className="flex-row justify-between items-center mb-2">
                   <Text className="text-xs text-orange-600">
-                    Security Deposit ({securityDepositPercentage}%):
+                    Downpayment ({securityDepositPercentage}%):
                   </Text>
                   <Text className="text-xs font-psemibold text-orange-600">
                     ₱{calculateDepositAmount().toLocaleString()}
@@ -316,7 +316,7 @@ const SentRequestCard = ({
                 <View className="border-t border-orange-200 pt-1">
                   <View className="flex-row justify-between items-center">
                     <Text className="text-sm font-pbold text-gray-800">
-                      Total:
+                      Total Amount Due at Pickup:
                     </Text>
                     <Text className="text-sm font-pbold text-primary">
                       ₱{getTotalWithDeposit().toLocaleString()}

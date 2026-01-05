@@ -19,6 +19,12 @@ import { icons, images } from "@/constant";
 import * as FileSystem from "expo-file-system";
 import { captureRef } from "react-native-view-shot";
 import { TransactionData } from "../types/api";
+
+// Extend TransactionData type to include VAT fields
+type ExtendedTransactionData = TransactionData & {
+  vatAmount?: string;
+  subtotal?: string;
+};
 import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
 import { useLoader } from "@/context/LoaderContext";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
@@ -262,10 +268,12 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       listLimit: number;
       rentLimit: number;
     };
+    vatAmount?: string;
+    subtotal?: string;
   }
 
   const [transactionDetails, setTransactionDetails] =
-    useState<TransactionData | null>(null);
+    useState<ExtendedTransactionData | null>(null);
 
   // Animation values
   const fadeAnim = new Animated.Value(0);
@@ -354,8 +362,12 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       const token = await getPayPalAccessToken(clientId, clientSecret);
       setAccessToken(token);
 
-      // Create order with plan details
-      const order = await createPayPalOrder(token, plan.price, "USD", {
+      // ✅ Calculate total with VAT
+      const vatAmount = calculateVAT(plan.price);
+      const totalAmountWithVAT = plan.price + vatAmount;
+
+      // Create order with plan details and VAT included
+      const order = await createPayPalOrder(token, totalAmountWithVAT, "USD", {
         description: orderDetails.description,
         customId: orderDetails.customId,
         invoiceId: orderDetails.invoiceId,
@@ -370,13 +382,11 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       const approvalUrl = order.links.find(
         (link: PayPalOrderLink) => link.rel === "approve"
       )?.href;
-      // if (!approvalUrl) throw new Error("No approval URL found");
 
       setOrderId(order.id);
       setPaymentUrl(approvalUrl);
       setShowWebView(true);
     } catch (error) {
-      // console.log("Payment error:", error);
       setLoading(false);
       onPaymentError(error);
     } finally {
@@ -450,14 +460,18 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       const captureResult = await capturePayPalOrder(accessToken, orderId);
 
       if (captureResult.status === "COMPLETED") {
-        const transactionData: TransactionData = {
+        // ✅ Calculate VAT for transaction record
+        const vatAmount = calculateVAT(plan.price);
+        const totalWithVAT = plan.price + vatAmount;
+
+        const transactionData: ExtendedTransactionData = {
           transactionId,
           paypalOrderId: orderId,
           planId: plan.id,
           planType: plan.planType,
-          amount: plan.price,
+          amount: totalWithVAT, // ✅ Include VAT in total amount
           currency: "PHP" as const,
-          phpAmount: DatabaseHelper.convertToPhp(plan.price),
+          phpAmount: DatabaseHelper.convertToPhp(totalWithVAT), // ✅ VAT included
           status: "completed",
           paypalTransactionId:
             captureResult.purchase_units[0]?.payments?.captures[0]?.id,
@@ -467,6 +481,9 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
             listLimit: plan.list,
             rentLimit: plan.rent,
           },
+          // ✅ Add VAT breakdown to transaction record
+          vatAmount: DatabaseHelper.convertToPhp(vatAmount),
+          subtotal: DatabaseHelper.convertToPhp(plan.price),
         };
 
         await createPlanActivatedNotification();
@@ -478,6 +495,8 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
           ...captureResult,
           customTransactionId: transactionId,
           planDetails: plan,
+          vatAmount: vatAmount, // ✅ Pass VAT to parent
+          totalWithVAT: totalWithVAT, // ✅ Pass total with VAT
         });
       }
     } catch (error) {
@@ -505,49 +524,17 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
 
   const ResultModal = () => {
     const receiptRef = useRef<View>(null);
-
-    const saveReceipt = async () => {
-      try {
-        // Request permissions first
-        const permissions =
-          await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (!permissions.granted) {
-          Alert.alert(
-            "Permission Required",
-            "Storage permission is needed to save receipt"
-          );
-          return;
-        }
-
-        // Capture receipt view as image
-        const uri = await captureRef(receiptRef, {
-          format: "png",
-          quality: 1,
-        });
-
-        // Save to downloads directory
-        const filename = `receipt-${transactionId}.png`;
-        const downloadPath = `${FileSystem.documentDirectory}receipts/`;
-
-        await FileSystem.makeDirectoryAsync(downloadPath, {
-          intermediates: true,
-        });
-        await FileSystem.copyAsync({
-          from: uri,
-          to: `${downloadPath}${filename}`,
-        });
-
-        Alert.alert("Success", "Receipt saved successfully!");
-      } catch (error) {
-        console.log("Error saving receipt:", error);
-        Alert.alert("Error", "Failed to save receipt");
-      }
-    };
-
     return null;
   };
 
-  const usdAmount = DatabaseHelper.convertToUsd(plan.price);
+  // Add this helper function near the DatabaseHelper object
+  const calculateVAT = (amount: number, vatPercentage: number = 12) => {
+    return (amount * vatPercentage) / 100;
+  };
+
+  const usdAmount = DatabaseHelper.convertToUsd(
+    plan.price + calculateVAT(plan.price)
+  );
 
   const getDisplayPlanType = (planType: string | undefined): string => {
     if (!planType) return "Plan";
@@ -648,26 +635,40 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
               <View className="flex-row justify-between">
                 <Text className="text-gray-600 font-pregular">Subtotal</Text>
                 <Text className="font-pmedium text-gray-900">
-                  ₱{plan.price}.00
+                  ₱{plan.price.toFixed(2)}
                 </Text>
               </View>
+
+              {/* VAT Line Item */}
+              <View className="flex-row justify-between">
+                <Text className="text-gray-600 font-pregular">VAT (12%)</Text>
+                <Text className="font-pmedium text-gray-900">
+                  ₱{calculateVAT(plan.price).toFixed(2)}
+                </Text>
+              </View>
+
               <View className="flex-row justify-between">
                 <Text className="text-gray-600 font-pregular">
                   Processing Fee
                 </Text>
                 <Text className="font-pmedium text-gray-900">₱0.00</Text>
               </View>
+
               <View className="border-t border-gray-200 pt-3">
                 <View className="flex-row justify-between">
                   <Text className="text-lg font-psemibold text-gray-900">
-                    Total
+                    Total Amount to Pay
                   </Text>
                   <Text className="text-lg font-pbold text-gray-900">
-                    ₱{plan.price}.00
+                    ₱{(plan.price + calculateVAT(plan.price)).toFixed(2)}
                   </Text>
                 </View>
                 <Text className="text-right font-pregular text-sm text-gray-500 mt-1">
-                  ≈ ${usdAmount} USD
+                  ≈ $
+                  {DatabaseHelper.convertToUsd(
+                    plan.price + calculateVAT(plan.price)
+                  )}{" "}
+                  USD
                 </Text>
               </View>
             </View>

@@ -554,9 +554,9 @@ const PlansScreen: React.FC = () => {
   };
 
   const ReceiptComponent = () => (
-    <View className="bg-white m-4 rounded-2xl shadow-lg border- border-gray-100 ">
+    <View className="bg-white m-4 rounded-2xl shadow-lg border border-gray-100">
       {/* Header */}
-      <View className="items-center mb-6 p-4  border-b-2 border-dashed  border-gray-200">
+      <View className="items-center mb-6 p-4 border-b-2 border-dashed border-gray-200">
         <View className="w-16 h-16 bg-green-100 rounded-full items-center justify-center mb-3">
           <Text className="text-green-600 text-2xl font-bold">✓</Text>
         </View>
@@ -567,13 +567,14 @@ const PlansScreen: React.FC = () => {
           Subscription Activated
         </Text>
 
-        <View className="relative  w-full"></View>
+        <View className="relative w-full"></View>
       </View>
+
       <View className="px-4">
-        {/* Receipt Details - Add conditional rendering */}
+        {/* Receipt Details */}
         {receiptData && (
           <View className="space-y-4">
-            <View className="bg-gray-50 p-4 rounded-xl">
+            <View className="bg-gray-50 px-4 rounded-xl">
               <Text className="text-gray-600 text-sm font-pmedium mb-1">
                 Transaction ID
               </Text>
@@ -582,7 +583,7 @@ const PlansScreen: React.FC = () => {
               </Text>
             </View>
 
-            <View className="flex-row justify-between items-center py-2 px-4">
+            <View className="flex-row justify-between items-center px-4">
               <Text className="text-gray-600 font-pmedium">Plan Type</Text>
               <Text className="text-gray-800 font-pbold text-lg">
                 {receiptData?.planType
@@ -599,16 +600,42 @@ const PlansScreen: React.FC = () => {
               </Text>
             </View>
 
-            <View className="flex-row justify-between items-center py-2 px-4">
-              <Text className="text-gray-600 font-pmedium">Amount</Text>
-              <Text className="text-gray-800 font-pbold text-xl">
-                ₱{receiptData?.amount ?? 0}
-              </Text>
+            {/* ✅ NEW: Payment Breakdown Section */}
+            <View className="px-4">
+              <Text className=" font-psemibold mb-1">Payment Breakdown</Text>
+
+              {/* Subtotal */}
+              <View className="flex-row justify-between items-center">
+                <Text className="text-gray-600 font-pregular">Subtotal</Text>
+                <Text className="text-gray-800 font-pmedium">
+                  ₱{receiptData?.amount ?? 0}
+                </Text>
+              </View>
+
+              {/* VAT (12%) */}
+              <View className="flex-row justify-between items-center py-2">
+                <Text className="text-gray-600 font-pregular">VAT (12%)</Text>
+                <Text className="text-red-600 font-pregular">
+                  + ₱{(((receiptData?.amount ?? 0) * 12) / 100).toFixed(2)}
+                </Text>
+              </View>
+
+              {/* Total Amount */}
+              <View className="flex-row justify-between items-center py-2">
+                <Text className=" font-pbold">Total Amount</Text>
+                <Text className="font-pbold text-lg text-green-600 ">
+                  ₱
+                  {(
+                    (receiptData?.amount ?? 0) +
+                    ((receiptData?.amount ?? 0) * 12) / 100
+                  ).toFixed(2)}
+                </Text>
+              </View>
             </View>
 
             <View className="flex-row justify-between items-center py-2 px-4">
               <Text className="text-gray-600 font-pmedium">Payment Method</Text>
-              <Text className="text-blue-600  font-pbold">PayPal</Text>
+              <Text className="text-blue-600 font-pbold">PayPal</Text>
             </View>
 
             <View className="flex-row justify-between items-center py-2 px-4">
@@ -638,7 +665,7 @@ const PlansScreen: React.FC = () => {
           </View>
         )}
         {/* Footer */}
-        <View className="py-4  items-center">
+        <View className="py-4 items-center">
           <Text className="text-gray-500 text-xs text-center">
             Thank you for your subscription!
           </Text>

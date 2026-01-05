@@ -1149,7 +1149,7 @@ export default function ItemDetails() {
                       <View className="flex-row items-center">
                         <View className="w-2 h-2 bg-orange-500 rounded-full mr-3" />
                         <Text className="text-gray-700 font-pmedium">
-                          Security Deposit
+                          Downpayment Percentage
                         </Text>
                       </View>
                       <Text className="font-psemibold text-orange-600">
@@ -2009,10 +2009,12 @@ const RentRequestForm = ({
               <View className="flex-row justify-between items-center mb-3 bg-orange-50 p-3 rounded-lg border border-orange-200">
                 <View>
                   <Text className="text-orange-700 font-pmedium text-sm">
-                    Security Deposit ({securityDepositPercentage}%)
+                    Down Payment ({securityDepositPercentage}%)
                   </Text>
                   <Text className="text-orange-600 text-xs mt-1">
-                    Refundable upon safe return
+                    Deducted from total rental amount upon pickup.
+                    {"\n"}
+                    Non-refundable on cancellation.
                   </Text>
                 </View>
                 <Text className="font-psemibold text-orange-600">
@@ -2035,7 +2037,10 @@ const RentRequestForm = ({
               </Text>
               <Text className="text-xs text-gray-500 mt-1">
                 {securityDepositPercentage
-                  ? "Rental fee + Security deposit"
+                  ? `Rental fee (₱${calculateTotalPrice()}) - Downpayment (₱${(
+                      calculateTotalPrice() *
+                      (securityDepositPercentage / 100)
+                    ).toFixed(2)})`
                   : "Rental fee"}
               </Text>
             </View>
@@ -2043,8 +2048,8 @@ const RentRequestForm = ({
               ₱
               {securityDepositPercentage
                 ? (
-                    calculateTotalPrice() *
-                    ((100 + securityDepositPercentage) / 100)
+                    calculateTotalPrice() -
+                    calculateTotalPrice() * (securityDepositPercentage / 100)
                   ).toFixed(2)
                 : calculateTotalPrice().toFixed(2)}
             </Text>
@@ -2053,20 +2058,20 @@ const RentRequestForm = ({
           {securityDepositPercentage && (
             <View className="mt-3 bg-blue-50 border border-blue-200 p-3 rounded-lg">
               <Text className="text-blue-700 text-xs leading-5">
-                <Text className="font-psemibold">Note:</Text> The security
-                deposit of ₱
+                <Text className="font-psemibold">Note:</Text> The down payment
+                of ₱
                 {(
                   calculateTotalPrice() *
                   (securityDepositPercentage / 100)
                 ).toFixed(2)}{" "}
-                will be collected during pickup and refunded during the return
-                process.
+                is non-refundable and will be deducted from your total rental
+                amount.
               </Text>
             </View>
           )}
         </View>
 
-        <View className="mb-6 p-4 border border-gray-200 rounded-xl">
+        <View className="mb-6 p-4 border border-gray-200   rounded-xl">
           <Text className="text-lg font-psemibold text-gray-700 mb-3">
             Agreement
           </Text>
