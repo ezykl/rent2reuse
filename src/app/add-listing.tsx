@@ -500,13 +500,13 @@ const AddListing = () => {
             ) : null}
           </View>
         </View>
-        <Text
+        {/* <Text
           className={`font-pregular ml-2 ${
             isProhibitedItem ? "text-red-500" : "text-secondary-300"
           }`}
         >
           {confidence}
-        </Text>
+        </Text> */}
       </TouchableOpacity>
     );
   };

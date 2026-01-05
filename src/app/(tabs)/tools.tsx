@@ -343,6 +343,68 @@ const Tools = () => {
     }
   };
 
+  const fetchRentedItems = async () => {
+    if (!auth.currentUser) return;
+
+    try {
+      setIsLoading(true);
+
+      // ✅ Query the rentals collection instead of rentRequests
+      const rentalsRef = collection(db, "rentals");
+      const q = query(
+        rentalsRef,
+        where("renterId", "==", auth.currentUser.uid),
+        where("status", "==", "active") // Only show active rentals
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      const rented = await Promise.all(
+        querySnapshot.docs.map(async (docSnap) => {
+          const rentalData = docSnap.data();
+
+          // Fetch the item details for images and description
+          const itemRef = doc(db, "items", rentalData.itemId);
+          const itemSnap = await getDoc(itemRef);
+          const itemData = itemSnap.exists() ? itemSnap.data() : null;
+
+          return {
+            id: docSnap.id, // Use rental document ID
+            itemId: rentalData.itemId,
+            title: rentalData.itemName || itemData?.itemName || "Unknown Item",
+            description: itemData?.itemDesc || "No description",
+            thumbnails:
+              itemData?.images?.[0] || require("../../assets/thumbnail.png"),
+            owner: rentalData.ownerName || "Unknown Owner",
+            rentedUntil:
+              rentalData.endDate?.toDate?.()?.toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              }) || "N/A",
+            startDate: rentalData.startDate,
+            endDate: rentalData.endDate,
+            totalPrice: rentalData.totalAmount || 0,
+            status: rentalData.status,
+            chatId: rentalData.chatId,
+            rentalId: rentalData.rentalId,
+          };
+        })
+      );
+
+      setRentedTools(rented);
+    } catch (error) {
+      console.log("Error fetching rented items:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to fetch rented items",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const initializeData = async () => {
       setIsDataReady(false);
@@ -350,6 +412,7 @@ const Tools = () => {
         fetchUserPlan(),
         fetchUserListings(),
         fetchSentRequests(),
+        fetchRentedItems(),
       ]);
       setIsDataReady(true);
     };
@@ -366,7 +429,8 @@ const Tools = () => {
         await Promise.all([
           fetchUserPlan(),
           fetchUserListings(),
-          fetchSentRequests(), // Add this
+          fetchSentRequests(),
+          fetchRentedItems(),
         ]);
       } catch (error) {
         console.log("Error refreshing data:", error);
