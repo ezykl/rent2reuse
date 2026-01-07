@@ -1173,28 +1173,28 @@ const Profile: React.FC = () => {
                   disabled={completionPercentage < 80}
                 >
                   <View className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary">
-                  {profileData?.profileImage ? (
-                    <Image
-                    source={{ uri: profileData.profileImage }}
-                    className="w-full h-full"
-                    resizeMode="cover"
-                    />
-                  ) : (
-                    <View className="w-full h-full bg-primary justify-center items-center">
-                    <Text className="font-pbold text-2xl text-white">
-                      {getInitials(profileData?.firstname || "")}
-                    </Text>
-                    </View>
-                  )}
+                    {profileData?.profileImage ? (
+                      <Image
+                        source={{ uri: profileData.profileImage }}
+                        className="w-full h-full"
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View className="w-full h-full bg-primary justify-center items-center">
+                        <Text className="font-pbold text-2xl text-white">
+                          {getInitials(profileData?.firstname || "")}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   {completionPercentage >= 80 && (
-                  <View className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow">
-                    <Image
-                    source={icons.pencil}
-                    className="w-3 h-3"
-                    tintColor="#4B5563"
-                    />
-                  </View>
+                    <View className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow">
+                      <Image
+                        source={icons.pencil}
+                        className="w-3 h-3"
+                        tintColor="#4B5563"
+                      />
+                    </View>
                   )}
                 </TouchableOpacity>
 

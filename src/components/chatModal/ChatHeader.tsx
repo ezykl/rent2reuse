@@ -42,7 +42,6 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
   };
 
-  // ✅ NEW: Get the current stage in the rental flow
   const getRentalStage = (): {
     stage: string;
     stageNumber: number;
@@ -52,12 +51,16 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       case "pending":
         return { stage: "Request", stageNumber: 1, color: "#FCD34D" }; // Yellow
       case "accepted":
+        return { stage: "Accepted", stageNumber: 1, color: "#60A5FA" }; // Blue
       case "initial_payment_paid":
+        return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" }; // Blue
       case "assessment_submitted":
         return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" }; // Blue
-      case "pickup": // ✅ ADD THIS CASE
-        return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" };
+      case "pickup":
+        return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" }; // Blue
       case "pickedup":
+        return { stage: "Renting", stageNumber: 3, color: "#34D399" }; // Green
+      case "renting": // ✅ ADD THIS CASE
         return { stage: "Renting", stageNumber: 3, color: "#34D399" }; // Green
       case "completed":
         return { stage: "Return", stageNumber: 4, color: "#A78BFA" }; // Purple

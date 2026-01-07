@@ -14,6 +14,7 @@ import { useLocalSearchParams } from "expo-router";
 import React, { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
 import { router } from "expo-router";
+import { format } from "date-fns"; // ✅ Add this import
 import { icons, images } from "../../constant";
 import LottieActivityIndicator from "@/components/LottieActivityIndicator";
 import { checkAndUpdateLimits } from "@/utils/planLimits";
@@ -45,6 +46,7 @@ import RequestedItemCard from "@/components/RequestedItemCard";
 import SentRequestCard from "@/components/SentRequestCard";
 import { useLoader } from "@/context/LoaderContext";
 import LottieView from "lottie-react-native";
+import { useTimeConverter } from "@/hooks/useTimeConverter";
 
 interface UserPlan {
   listLimit: number;
@@ -132,6 +134,66 @@ const Tools = () => {
 
     return () => unsubscribe();
   }, [auth.currentUser]);
+
+  const rentedItemsQuery = query(
+    collection(db, "rentRequests"),
+    where("requesterId", "==", auth.currentUser?.uid),
+    where("status", "in", ["accepted", "pickup", "renting"])
+  );
+
+  const unsubscribeRentedItems = onSnapshot(
+    rentedItemsQuery,
+    async (snapshot) => {
+      console.log("Rented items listener triggered, count:", snapshot.size);
+
+      const rented = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const requestData = docSnap.data();
+
+          // Fetch owner details
+          let ownerName = "Unknown Owner";
+          try {
+            if (requestData.ownerId) {
+              const ownerRef = doc(db, "users", requestData.ownerId);
+              const ownerSnap = await getDoc(ownerRef);
+              if (ownerSnap.exists()) {
+                const ownerData = ownerSnap.data();
+                ownerName = `${ownerData.firstName || ""} ${
+                  ownerData.lastName || ""
+                }`.trim();
+              }
+            }
+          } catch (error) {
+            console.log("Error fetching owner details:", error);
+          }
+
+          return {
+            id: docSnap.id,
+            itemId: requestData.itemId,
+            itemName: requestData.itemName,
+            itemImage: requestData.itemImage || "",
+            itemDesc: requestData.itemDesc || "Rented item",
+            ownerName: requestData.ownerName,
+            ownerId: requestData.ownerId,
+            status: requestData.status,
+            startDate: requestData.startDate,
+            endDate: requestData.endDate,
+            pickupTime: requestData.pickupTime || 480,
+            baseTotal: requestData.baseTotal || 0,
+            depositAmount: requestData.depositAmount || 0,
+            dueBalance: requestData.dueBalance || 0,
+            rentalDays: requestData.rentalDays || 0,
+            itemLocation: requestData.itemLocation,
+            chatId: requestData.chatId,
+            createdAt: requestData.createdAt?.toDate(),
+          };
+        })
+      );
+
+      console.log("Processed rented items from listener:", rented);
+      setRentedTools(rented);
+    }
+  );
 
   const handleEditRequest = async (requestId: string) => {
     try {
@@ -349,49 +411,62 @@ const Tools = () => {
     try {
       setIsLoading(true);
 
-      // ✅ Query the rentals collection instead of rentRequests
-      const rentalsRef = collection(db, "rentals");
+      // ✅ Query rentRequests where user is the requester and status is accepted/pickup/renting
+      const rentRequestsRef = collection(db, "rentRequests");
       const q = query(
-        rentalsRef,
-        where("renterId", "==", auth.currentUser.uid),
-        where("status", "==", "active") // Only show active rentals
+        rentRequestsRef,
+        where("requesterId", "==", auth.currentUser.uid),
+        where("status", "in", ["accepted", "pickup", "renting"])
       );
 
       const querySnapshot = await getDocs(q);
+      console.log("Rented items found:", querySnapshot.size);
 
       const rented = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
-          const rentalData = docSnap.data();
+          const requestData = docSnap.data();
 
-          // Fetch the item details for images and description
-          const itemRef = doc(db, "items", rentalData.itemId);
-          const itemSnap = await getDoc(itemRef);
-          const itemData = itemSnap.exists() ? itemSnap.data() : null;
+          // Fetch owner details
+          let ownerName = "Unknown Owner";
+          try {
+            if (requestData.ownerId) {
+              const ownerRef = doc(db, "users", requestData.ownerId);
+              const ownerSnap = await getDoc(ownerRef);
+              if (ownerSnap.exists()) {
+                const ownerData = ownerSnap.data();
+                ownerName = `${ownerData.firstName || ""} ${
+                  ownerData.lastName || ""
+                }`.trim();
+              }
+            }
+          } catch (error) {
+            console.log("Error fetching owner details:", error);
+          }
 
           return {
-            id: docSnap.id, // Use rental document ID
-            itemId: rentalData.itemId,
-            title: rentalData.itemName || itemData?.itemName || "Unknown Item",
-            description: itemData?.itemDesc || "No description",
-            thumbnails:
-              itemData?.images?.[0] || require("../../assets/thumbnail.png"),
-            owner: rentalData.ownerName || "Unknown Owner",
-            rentedUntil:
-              rentalData.endDate?.toDate?.()?.toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-              }) || "N/A",
-            startDate: rentalData.startDate,
-            endDate: rentalData.endDate,
-            totalPrice: rentalData.totalAmount || 0,
-            status: rentalData.status,
-            chatId: rentalData.chatId,
-            rentalId: rentalData.rentalId,
+            id: docSnap.id,
+            itemId: requestData.itemId,
+            itemName: requestData.itemName,
+            itemImage: requestData.itemImage || "",
+            itemDesc: requestData.itemDesc || "Rented item",
+            ownerName: ownerName,
+            ownerId: requestData.ownerId,
+            status: requestData.status,
+            startDate: requestData.startDate,
+            endDate: requestData.endDate,
+            pickupTime: requestData.pickupTime || 480,
+            baseTotal: requestData.baseTotal || 0,
+            depositAmount: requestData.depositAmount || 0,
+            dueBalance: requestData.dueBalance || 0,
+            rentalDays: requestData.rentalDays || 0,
+            itemLocation: requestData.itemLocation,
+            chatId: requestData.chatId,
+            createdAt: requestData.createdAt?.toDate(),
           };
         })
       );
 
+      console.log("Processed rented items:", rented);
       setRentedTools(rented);
     } catch (error) {
       console.log("Error fetching rented items:", error);
@@ -682,14 +757,24 @@ const Tools = () => {
 
   interface RentedItem {
     id: string;
-    title: string;
-    description: string;
-    thumbnails: any[];
-    owner: string;
-    rentedUntil: string;
-    [key: string]: any; // For other potential properties
+    itemId: string;
+    itemName: string;
+    itemImage: string;
+    itemDesc?: string;
+    ownerName: string;
+    ownerId: string;
+    status: string;
+    startDate: any;
+    endDate: any;
+    pickupTime: number;
+    baseTotal: number;
+    depositAmount: number;
+    dueBalance: number;
+    rentalDays: number;
+    itemLocation?: any;
+    chatId: string;
+    createdAt?: Date;
   }
-
   interface RequestItem {
     id: string;
     [key: string]: any; // For other potential properties
@@ -834,37 +919,163 @@ const Tools = () => {
     );
   };
 
-  const RentedItem = ({ item }: { item: RentedItem }) => (
-    <TouchableOpacity
-      className="w-[100%] bg-white rounded-xl shadow-md mb-4"
-      onPress={() => handleItemPress(item, "rented")}
-    >
-      <View className="border border-secondary-200 rounded-xl overflow-hidden">
-        <Image
-          source={item.thumbnails}
-          className="w-full h-36"
-          resizeMode="cover"
-          defaultSource={icons.location}
-        />
-        <View className="p-3">
-          <Text className="text-lg font-psemibold text-secondary-400">
-            {item.title}
-          </Text>
-          <Text className="text-sm font-pregular text-secondary-300">
-            {item.description}
-          </Text>
-          <View className="flex-row justify-between mt-2">
-            <Text className="text-sm font-pregular text-secondary-300">
-              Owner: {item.owner}
-            </Text>
-            <Text className="text-sm font-psemibold text-primary">
-              Until {item.rentedUntil}
+  const RentedItem = ({ item }: { item: RentedItem }) => {
+    const { minutesToTime } = useTimeConverter(); // Add this hook
+
+    // Format date
+    const formatRentalDate = (date: any) => {
+      if (!date) return "N/A";
+      try {
+        if (date?.toDate && typeof date.toDate === "function") {
+          return format(date.toDate(), "MMM d, yyyy");
+        }
+        if (date instanceof Date) {
+          return format(date, "MMM d, yyyy");
+        }
+        if (typeof date === "number") {
+          return format(new Date(date), "MMM d, yyyy");
+        }
+        return "N/A";
+      } catch (error) {
+        return "N/A";
+      }
+    };
+
+    // Calculate remaining days
+    const calculateRemainingDays = (endDate: any) => {
+      if (!endDate) return 0;
+      try {
+        const end = endDate?.toDate ? endDate.toDate() : new Date(endDate);
+        const now = new Date();
+        const diffTime = end.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return Math.max(0, diffDays);
+      } catch (error) {
+        return 0;
+      }
+    };
+
+    const endDate = formatRentalDate(item.endDate);
+    const startDate = formatRentalDate(item.startDate);
+    const remainingDays = calculateRemainingDays(item.endDate);
+    const pickupTimeFormatted = minutesToTime(item.pickupTime);
+
+    // Status badge color
+    const getStatusColor = () => {
+      switch (item.status) {
+        case "accepted":
+          return "bg-blue-500";
+        case "pickup":
+          return "bg-orange-500";
+        case "renting":
+          return "bg-green-500";
+        default:
+          return "bg-gray-500";
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        className="w-full bg-white rounded-2xl shadow-sm mb-4 overflow-hidden border border-gray-100"
+        onPress={() => router.push(`/chat/${item.chatId}`)}
+        activeOpacity={0.7}
+      >
+        {/* Image Container */}
+        <View className="relative">
+          <Image
+            source={
+              item.itemImage
+                ? { uri: item.itemImage }
+                : require("../../assets/thumbnail.png")
+            }
+            className="w-full h-40"
+            resizeMode="cover"
+          />
+          {/* Status Badge */}
+          <View
+            className={`absolute top-3 right-3 ${getStatusColor()} px-3 py-1 rounded-full`}
+          >
+            <Text className="text-white text-xs font-psemibold capitalize">
+              {item.status}
             </Text>
           </View>
+
+          {/* Remaining Days Badge */}
+          {remainingDays > 0 && (
+            <View className="absolute top-3 left-3 bg-black/70 px-3 py-1 rounded-full">
+              <Text className="text-white text-xs font-psemibold">
+                {remainingDays} {remainingDays === 1 ? "day" : "days"} left
+              </Text>
+            </View>
+          )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        {/* Content Container */}
+        <View className="p-4">
+          {/* Title */}
+          <Text
+            className="text-lg font-pbold text-gray-900 mb-1"
+            numberOfLines={1}
+          >
+            {item.itemName}
+          </Text>
+
+          {/* Description */}
+          <Text
+            className="text-sm font-pregular text-gray-600 mb-3"
+            numberOfLines={2}
+          >
+            {item.itemDesc}
+          </Text>
+
+          {/* Owner Info */}
+          <View className="flex-row items-center mb-3 pb-3 border-b border-gray-100">
+            <Image
+              source={icons.profile}
+              className="w-4 h-4 mr-2"
+              tintColor="#6B7280"
+            />
+            <Text className="text-sm font-pmedium text-gray-700">
+              Owner: {item.ownerName}
+            </Text>
+          </View>
+
+          {/* Rental Details Grid */}
+          <View className="space-y-2 mb-3">
+            {/* Dates Row */}
+            <View className="flex-row justify-between items-center">
+              <View className="flex-1">
+                <Text className="text-xs font-pmedium text-gray-500 mb-1">
+                  Start Date
+                </Text>
+                <Text className="text-sm font-psemibold text-gray-800">
+                  {startDate}
+                </Text>
+              </View>
+              <View className="flex-1 items-end">
+                <Text className="text-xs font-pmedium text-gray-500 mb-1">
+                  Return Date
+                </Text>
+                <Text className="text-sm font-psemibold text-primary">
+                  {endDate}
+                </Text>
+              </View>
+            </View>
+
+            {/* Pickup Time - Moved to end */}
+            <View className="flex-row items-center justify-between pt-3 border-t border-gray-100 mt-3">
+              <Text className="text-xs font-pmedium text-gray-500">
+                Return at:{" "}
+              </Text>
+              <Text className="text-sm font-psemibold text-gray-800">
+                {pickupTimeFormatted}
+              </Text>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const RequestItem = ({ item }: { item: RequestItem }) => (
     <TouchableOpacity
@@ -968,12 +1179,75 @@ const Tools = () => {
       });
     });
 
+    // ✅ NEW: Listener for rented items
+    const rentedItemsQuery = query(
+      collection(db, "rentedItems"),
+      where("renterId", "==", auth.currentUser.uid),
+      where("status", "in", ["renting", "active"])
+    );
+
+    const unsubscribeRentedItems = onSnapshot(
+      rentedItemsQuery,
+      async (snapshot) => {
+        console.log("Rented items listener triggered, count:", snapshot.size);
+
+        const rented = await Promise.all(
+          snapshot.docs.map(async (docSnap) => {
+            const rentalData = docSnap.data();
+
+            // Fetch the chat to get item details
+            let itemName = rentalData.itemId || "Unknown Item";
+            let itemImage = "";
+
+            try {
+              if (rentalData.chatId) {
+                const chatRef = doc(db, "chat", rentalData.chatId);
+                const chatSnap = await getDoc(chatRef);
+                if (chatSnap.exists()) {
+                  const chatData = chatSnap.data();
+                  itemName = chatData.itemDetails?.name || rentalData.itemId;
+                  itemImage = chatData.itemDetails?.image || "";
+                }
+              }
+            } catch (chatError) {
+              console.log("Error fetching chat details:", chatError);
+            }
+
+            return {
+              id: docSnap.id,
+              itemId: rentalData.itemId,
+              itemName: itemName,
+              itemImage: itemImage || "https://placehold.co/200x200",
+              itemDesc: rentalData.itemDesc || "Rented item",
+              ownerName: rentalData.ownerName || "Unknown Owner",
+              ownerId: rentalData.ownerId,
+              status: rentalData.status,
+              startDate: rentalData.rentalStartDate,
+              endDate: rentalData.rentalEndDate,
+              pickupTime: rentalData.pickupTime || 480,
+              baseTotal: rentalData.baseTotal || 0,
+              depositAmount: rentalData.depositAmount || 0,
+              dueBalance: rentalData.dueBalance || 0,
+              rentalDays: rentalData.rentalDays || 0,
+              itemLocation: rentalData.itemLocation,
+              chatId: rentalData.chatId,
+              createdAt: rentalData.createdAt?.toDate(),
+            };
+          })
+        );
+
+        console.log("Processed rented items from listener:", rented);
+        setRentedTools(rented);
+      }
+    );
+
     setIncomingRequestsListener(() => unsubscribeIncoming);
     setOutgoingRequestsListener(() => unsubscribeOutgoing);
 
     return () => {
       unsubscribeIncoming();
       unsubscribeOutgoing();
+      unsubscribeRentedItems();
     };
   }, [auth.currentUser, handleRequestUpdates]);
 

@@ -241,6 +241,7 @@ const ChatScreen = () => {
     ownerRatedAt?: any;
     renterRatedAt?: any;
     downpaymentSent?: boolean;
+    hasOwnerResponded?: boolean;
   } | null>(null);
 
   const [showCamera, setShowCamera] = useState(false);
@@ -553,7 +554,7 @@ const ChatScreen = () => {
       if (paymentType === "initial") {
         // ✅ Initial payment = Security Deposit (downpayment)
         amount = downpaymentAmount;
-        paymentDescription = `Security Deposit (${downpaymentPercentage}%) - Required to Confirm Rental`;
+        paymentDescription = `Downpayment (${downpaymentPercentage}%) - Required to Confirm Rental`;
         messagePaymentType = "downpayment";
       } else {
         // ✅ Full payment = TOTAL RENTAL - DOWNPAYMENT (already paid)
@@ -912,6 +913,8 @@ const ChatScreen = () => {
           return "✅ Confirm that renter has received the item";
         case "pickup":
           return "📦 Assess the item and pay the remaining amount at pickup";
+        case "renting":
+          return "📦 Item is with renter - return on agreed date";
         case "completed":
           return "⭐ Send your verdict/review about the renter";
         default:
@@ -927,6 +930,8 @@ const ChatScreen = () => {
           return "⏳ Waiting for owner to confirm item receipt...";
         case "pickup":
           return "📦 Prepare the item and verify the remaining balance at pickup";
+        case "renting":
+          return "📦 Item is with renter - return on agreed date";
         case "completed":
           return "⭐ Send your verdict/review about the owner";
         default:
@@ -1670,33 +1675,24 @@ const ChatScreen = () => {
         if (snapshot.exists()) {
           const data = snapshot.data();
 
-          console.log("✅ Chat Status Updated:", data.status);
+          console.log("✅ Chat Status Updated:", data.status); // ✅ DEBUG LOG
 
-          // ✅ FETCH securityDepositPercentage FROM FIRESTORE but use as downpaymentPercentage
-          const securityDepositPercentage =
-            data.itemDetails?.securityDepositPercentage || 0;
-          const basePrice = data.itemDetails?.price || 0;
-          const rentalDays = data.itemDetails?.rentalDays || 0;
-          const baseTotal = basePrice * rentalDays;
-          const depositAmount = (baseTotal * securityDepositPercentage) / 100;
-          const totalWithDeposit = baseTotal + depositAmount;
-
-          console.log("Chat updated - New status:", data.status); // ✅ DEBUG LOG
-
+          // ✅ MAKE SURE status is being read correctly
           setChatData({
             requesterId: data.requesterId,
             ownerId: data.ownerId,
-            status: data.status, // ✅ THIS SHOULD UPDATE
+            status: data.status, // ✅ THIS SHOULD BE "renting"
             rentRequestId: data.rentRequestId,
             itemDetails: {
-              downpaymentPercentage: securityDepositPercentage,
+              downpaymentPercentage:
+                data.itemDetails?.securityDepositPercentage || 0,
               name: data.itemDetails?.name,
-              price: basePrice,
+              price: data.itemDetails?.price,
               image: data.itemDetails?.image,
               itemId: data.itemDetails?.itemId,
-              totalPrice: totalWithDeposit,
+              totalPrice: data.itemDetails?.totalPrice,
               startDate: data.itemDetails?.startDate,
-              rentalDays: rentalDays,
+              rentalDays: data.itemDetails?.rentalDays,
               endDate: data.itemDetails?.endDate,
               pickupTime: data.itemDetails?.pickupTime,
             },
@@ -1708,8 +1704,7 @@ const ChatScreen = () => {
             renterRatingSubmitted: data.renterRatingSubmitted,
             ownerRatedAt: data.ownerRatedAt,
             renterRatedAt: data.renterRatedAt,
-
-            downpaymentSent: data.downpaymentSent, // ✅ ADD THIS
+            downpaymentSent: data.downpaymentSent,
           });
         }
       },
@@ -2143,6 +2138,7 @@ const ChatScreen = () => {
               msg.status === "paid"
           );
 
+          const hasOwnerAccepted = chatData?.hasOwnerResponded === true;
           const hasPendingDownpaymentMsg = messages.some(
             (msg) =>
               msg.type === "payment" &&
@@ -2150,19 +2146,8 @@ const ChatScreen = () => {
               msg.status === "pending"
           );
 
-          if (hasDownpaymentPaidAfterAccept) {
-            // ✅ Downpayment paid - show assessment option
-            actions.push({
-              id: "initiate_assessment",
-              icon: icons.box,
-              label: "Initiate Pickup Assessment",
-              description: "Verify item condition before pickup",
-              action: handleInitiatePickupAssessment,
-              bgColor: "#D1FAE5",
-              iconColor: "#10B981",
-            });
-          } else if (hasPendingDownpaymentMsg) {
-            // ✅ Downpayment pending - show waiting status
+          if (hasOwnerAccepted && hasPendingDownpaymentMsg) {
+            // ✅ Owner already accepted and sent downpayment - show waiting status
             actions.push({
               id: "downpayment_pending",
               icon: icons.clock,
@@ -2178,6 +2163,7 @@ const ChatScreen = () => {
               iconColor: "#F59E0B",
             });
           }
+          // ✅ If not accepted yet, no actions (waiting for accept button on rent request message)
           break;
         case "pickup":
           // ✅ Pickup status: Check if downpayment has been paid
@@ -2209,54 +2195,78 @@ const ChatScreen = () => {
             hasDownpaymentPaid
           );
 
-          // ✅ OWNER ACTIONS ON PICKUP
           if (isOwner) {
-            // ✅ If downpayment paid, show full payment request
             if (hasDownpaymentPaid) {
-              // Show request full payment option
-              const basePrice = chatData.itemDetails?.price || 0;
-              const rentalDays = chatData.itemDetails?.rentalDays || 0;
-              const baseTotal = basePrice * rentalDays;
-              const depositAmount = (baseTotal * downpaymentPercentage) / 100;
-              const remainingAmount = baseTotal - depositAmount;
-
-              // ✅ Check if there's already a pending full payment request
-              const hasPendingFullPayment = messages.some(
+              // ✅ CHECK: Has renter submitted assessment?
+              const hasRenterSubmittedAssessment = messages.some(
                 (msg) =>
-                  msg.type === "payment" &&
-                  msg.paymentType === "remaining" &&
-                  msg.status === "pending"
+                  msg.type === "conditionalAssessment" &&
+                  msg.assessmentType === "pickup" &&
+                  msg.senderId !== currentUserId && // From renter
+                  msg.status === "submitted"
               );
 
-              if (!hasPendingFullPayment) {
+              // ✅ BLOCK remaining payment if no assessment
+              if (!hasRenterSubmittedAssessment) {
                 actions.push({
-                  id: "request_full_payment",
-                  icon: icons.card,
-                  label: "Request Full Payment",
-                  description: `Remaining: ₱${remainingAmount.toLocaleString()}`,
-                  action: handleFullPayment,
-                  bgColor: "#FEE2E2",
-                  iconColor: "#DC2626",
-                });
-              } else {
-                // ✅ Full payment already pending
-                actions.push({
-                  id: "full_payment_pending",
+                  id: "awaiting_assessment",
                   icon: icons.clock,
-                  label: "Full Payment Pending",
-                  description: "Waiting for renter's payment",
+                  label: "Awaiting Pickup Assessment",
+                  description: "Renter must submit condition assessment first",
                   action: () => {
                     Alert.alert(
-                      "Payment Pending",
-                      "A full payment request has been sent to the renter. Waiting for payment..."
+                      "Assessment Required",
+                      "The renter must submit the pickup condition assessment before you can request the remaining payment."
                     );
                   },
                   bgColor: "#FEF3C7",
                   iconColor: "#F59E0B",
                 });
+              } else {
+                // ✅ Assessment done, allow remaining payment request
+                const hasPendingFullPayment = messages.some(
+                  (msg) =>
+                    msg.type === "payment" &&
+                    msg.paymentType === "remaining" &&
+                    msg.status === "pending"
+                );
+
+                if (!hasPendingFullPayment) {
+                  const basePrice = chatData?.itemDetails?.price || 0;
+                  const rentalDays = chatData?.itemDetails?.rentalDays || 0;
+                  const baseTotal = basePrice * rentalDays;
+                  const depositAmount =
+                    (baseTotal * downpaymentPercentage) / 100;
+                  const remainingAmount = baseTotal - depositAmount;
+
+                  actions.push({
+                    id: "request_full_payment",
+                    icon: icons.card,
+                    label: "Request Remaining Payment",
+                    description: `Remaining: ₱${remainingAmount.toLocaleString()}`,
+                    action: handleFullPayment,
+                    bgColor: "#FEE2E2",
+                    iconColor: "#DC2626",
+                  });
+                } else {
+                  actions.push({
+                    id: "full_payment_pending",
+                    icon: icons.clock,
+                    label: "Remaining Payment Pending",
+                    description: "Waiting for renter's payment",
+                    action: () => {
+                      Alert.alert(
+                        "Payment Pending",
+                        "Waiting for renter to complete the remaining payment..."
+                      );
+                    },
+                    bgColor: "#FEF3C7",
+                    iconColor: "#F59E0B",
+                  });
+                }
               }
             } else if (hasPendingDownpayment) {
-              // ✅ Downpayment pending, show waiting status
+              // Downpayment pending
               actions.push({
                 id: "downpayment_pending",
                 icon: icons.clock,
@@ -2265,46 +2275,15 @@ const ChatScreen = () => {
                 action: () => {
                   Alert.alert(
                     "Awaiting Downpayment",
-                    "The downpayment request has been sent to the renter. Once they complete payment, you can proceed with the pickup assessment."
+                    "Waiting for renter to pay the downpayment..."
                   );
                 },
                 bgColor: "#FEF3C7",
                 iconColor: "#F59E0B",
               });
-            } else {
-              // ✅ Show downpayment action if no pending payment exists
-              if (downpaymentPercentage > 0) {
-                const basePrice = chatData.itemDetails?.price || 0;
-                const rentalDays = chatData.itemDetails?.rentalDays || 0;
-                const baseTotal = basePrice * rentalDays;
-                const depositAmount = (baseTotal * downpaymentPercentage) / 100;
-
-                actions.push({
-                  id: "request_downpayment",
-                  icon: icons.card,
-                  label: "Request Downpayment",
-                  description: `₱${depositAmount.toLocaleString()} (${downpaymentPercentage}%) - Downpayment`,
-                  action: handleInitialPayment,
-                  bgColor: "#FEE2E2",
-                  iconColor: "#DC2626",
-                });
-              } else {
-                // ✅ FALLBACK: If no downpayment percentage, show action anyway
-                actions.push({
-                  id: "request_downpayment_fallback",
-                  icon: icons.card,
-                  label: "Request Downpayment",
-                  description: "Send payment request to renter",
-                  action: handleInitialPayment,
-                  bgColor: "#FEE2E2",
-                  iconColor: "#DC2626",
-                });
-              }
             }
-          }
-          // ✅ RENTER ACTIONS ON PICKUP - NOW IN ELSE BLOCK
-          else {
-            // ✅ Check if renter has already submitted pickup assessment
+          } else {
+            // ✅ RENTER: Show assessment action on pickup status
             const hasRenterSubmittedAssessment = messages.some(
               (msg) =>
                 msg.type === "conditionalAssessment" &&
@@ -2312,31 +2291,30 @@ const ChatScreen = () => {
                 msg.senderId === currentUserId
             );
 
-            if (hasRenterSubmittedAssessment) {
-              // ✅ Renter already submitted - show waiting state
+            if (!hasRenterSubmittedAssessment) {
+              actions.push({
+                id: "pickup_assessment",
+                icon: icons.box,
+                label: "Submit Pickup Assessment (Required)",
+                description: "Inspect item condition before pickup",
+                action: () => setShowPickupAssessmentModal(true),
+                bgColor: "#FED7AA",
+                iconColor: "#D97706",
+              });
+            } else {
               actions.push({
                 id: "assessment_submitted",
                 icon: icons.check,
                 label: "Assessment Submitted",
+                description: "Waiting for owner to proceed",
                 action: () => {
                   Alert.alert(
                     "Assessment Submitted",
-                    "You have already submitted your item condition assessment. Waiting for owner to confirm..."
+                    "You have submitted the pickup assessment. Waiting for owner to request remaining payment."
                   );
                 },
                 bgColor: "#D1FAE5",
                 iconColor: "#10B981",
-              });
-            } else {
-              // ✅ Renter MUST submit conditional assessment on pickup
-              actions.push({
-                id: "pickup_assessment",
-                icon: icons.box,
-                label: "Verify Item Condition (Required)",
-                description: "Take photos and confirm item condition",
-                action: () => setShowPickupAssessmentModal(true),
-                bgColor: "#FED7AA", // Orange = Required
-                iconColor: "#D97706",
               });
             }
           }
@@ -2703,43 +2681,69 @@ const ChatScreen = () => {
           break;
 
         case "pickup":
-          // ✅ Renter: Check if downpayment payment is pending
-          const hasPendingDownpaymentMsg = messages.some(
+          // ✅ Renter: Check if DOWNPAYMENT (not remaining) has been paid
+          const hasDownpaymentPaid = messages.some(
             (msg) =>
               msg.type === "payment" &&
-              msg.paymentType === "remaining" &&
-              msg.status === "pending"
+              msg.paymentType === "downpayment" &&
+              msg.status === "paid"
           );
 
-          if (hasPendingDownpaymentMsg) {
+          // ✅ Check if renter already submitted assessment
+          const hasRenterSubmittedAssessment = messages.some(
+            (msg) =>
+              msg.type === "conditionalAssessment" &&
+              msg.assessmentType === "pickup" &&
+              msg.senderId === currentUserId
+          );
+
+          if (hasDownpaymentPaid) {
+            if (!hasRenterSubmittedAssessment) {
+              // ✅ Show assessment action - UNCOMMENTED
+              actions.push({
+                id: "pickup_assessment",
+                icon: icons.box,
+                label: "Submit Pickup Assessment (Required)",
+                description: "Inspect item condition before pickup",
+                action: () => setShowPickupAssessmentModal(true),
+                bgColor: "#FED7AA",
+                iconColor: "#D97706",
+              });
+            } else {
+              // ✅ Already submitted - show confirmation
+              actions.push({
+                id: "assessment_submitted",
+                icon: icons.check,
+                label: "Assessment Submitted",
+                description: "Waiting for owner to proceed",
+                action: () => {
+                  Alert.alert(
+                    "Assessment Submitted",
+                    "You have submitted the pickup assessment. Waiting for owner to request remaining payment."
+                  );
+                },
+                bgColor: "#D1FAE5",
+                iconColor: "#10B981",
+              });
+            }
+          } else {
+            // ✅ Downpayment not yet paid - show message
             actions.push({
-              id: "downpayment_pending",
-              icon: icons.card,
-              label: "Downpayment Payment Pending",
-              description: "Complete your downpayment to proceed",
+              id: "awaiting_downpayment_payment",
+              icon: icons.clock,
+              label: "Awaiting Downpayment Confirmation",
+              description: "Payment must be completed first",
               action: () => {
                 Alert.alert(
                   "Payment Required",
-                  "Please scroll down to find the payment message and complete your downpayment."
+                  "Please complete the downpayment first before submitting the pickup assessment."
                 );
               },
-              bgColor: "#FED7AA",
-              iconColor: "#D97706",
+              bgColor: "#FEF3C7",
+              iconColor: "#F59E0B",
             });
-          } else {
-            // ✅ Downpayment paid, show conditional assessment option
-            // actions.push({
-            //   id: "pickup_assessment",
-            //   icon: icons.box,
-            //   label: "Submit Item Condition Assessment",
-            //   description: "Verify and confirm item condition before pickup",
-            //   action: handleInitiatePickupAssessment,
-            //   bgColor: "#E3F2FD",
-            //   iconColor: "#2196F3",
-            // });
           }
           break;
-
         case "accepted":
           // ✅ Renter: Waiting for owner to send payment request or proceed
           // No actions needed - waiting for owner to take action
@@ -2838,6 +2842,37 @@ const ChatScreen = () => {
             bgColor: "#FEF3C7",
             iconColor: "#F59E0B",
           });
+          break;
+
+        case "renting":
+          // ✅ ADD THIS: Renter during rental period (after receiving the item)
+          if (!isReturnDateToday()) {
+            // Show countdown instead
+            const formattedDate = formatEndDate();
+            actions.push({
+              id: "rental_in_progress",
+              icon: icons.clock,
+              label: `Return Due: ${formattedDate}`,
+              action: () => {
+                Alert.alert(
+                  "Rental In Progress",
+                  "Item is currently rented. Return action will be available on or after the return date."
+                );
+              },
+              bgColor: "#E3F2FD",
+              iconColor: "#2196F3",
+            });
+          } else {
+            // ✅ Renter: Prepare return when return date is today or passed
+            actions.push({
+              id: "prepare_return",
+              icon: icons.refresh,
+              label: "Prepare Item Return",
+              action: handlePrepareReturn,
+              bgColor: "#F3E5F5",
+              iconColor: "#9C27B0",
+            });
+          }
           break;
 
         case "pickedup":
@@ -3018,134 +3053,106 @@ const ChatScreen = () => {
         throw new Error("Recipient ID not found");
       }
 
-      // ✅ Calculate downpayment amount
+      // ✅ Calculate downpayment amount - Use fallback from chatData if needed
       const downpaymentPercentage =
-        acceptedRequestData.downpaymentPercentage || 0;
-      const basePrice = acceptedRequestData.itemPrice || 0;
-      const rentalDays = acceptedRequestData.rentalDays || 1;
+        acceptedRequestData.downpaymentPercentage ||
+        chatData?.itemDetails?.downpaymentPercentage ||
+        0;
+      const basePrice =
+        acceptedRequestData.itemPrice || chatData?.itemDetails?.price || 0;
+      const rentalDays =
+        acceptedRequestData.rentalDays ||
+        chatData?.itemDetails?.rentalDays ||
+        1;
       const baseTotal = basePrice * rentalDays;
       const downpaymentAmount = (baseTotal * downpaymentPercentage) / 100;
       const remainingAmount = baseTotal - downpaymentAmount;
 
+      // ✅ Debug log to check values
+      console.log("Downpayment Calculation:", {
+        downpaymentPercentage,
+        basePrice,
+        rentalDays,
+        baseTotal,
+        downpaymentAmount,
+      });
+
       const messagesRef = collection(db, "chat", String(chatId), "messages");
       const chatRef = doc(db, "chat", String(chatId));
 
-      // ✅ AUTO-SEND DOWNPAYMENT PAYMENT REQUEST
-      if (downpaymentPercentage > 0 && downpaymentAmount > 0) {
-        // ✅ Create downpayment payment message
-        const downpaymentMessageData = {
-          senderId: currentUserId,
-          type: "payment",
-          paymentType: "downpayment", // ✅ NEW TYPE
-          amount: downpaymentAmount,
-          totalAmount: baseTotal,
-          downpaymentPercentage: downpaymentPercentage,
-          downpaymentAmount: downpaymentAmount,
-          remainingAmount: remainingAmount, // ✅ Store remaining for pickup
-          paymentDescription: `Security Deposit (${downpaymentPercentage}%) - Required to Confirm Rental`,
-          status: "pending",
-          recipientPayPalEmail: currentUserPayPalEmail,
-          recipientId: recipientId,
-          rentRequestId: requestId,
-          itemName: acceptedRequestData.itemName,
-          itemId: acceptedRequestData.itemId,
-          usdAmount: DatabaseHelper.convertToUsd(downpaymentAmount),
-          createdAt: serverTimestamp(),
-          read: false,
-          readAt: null,
-        };
+      // ✅ Create downpayment payment message
+      const downpaymentMessageData = {
+        senderId: currentUserId,
+        type: "payment",
+        paymentType: "downpayment", // ✅ NEW TYPE
+        amount: downpaymentAmount,
+        totalAmount: baseTotal,
+        downpaymentPercentage: downpaymentPercentage,
+        downpaymentAmount: downpaymentAmount,
+        remainingAmount: remainingAmount, // ✅ Store remaining for pickup
+        paymentDescription: `Downpayment (${downpaymentPercentage}%) - Required to Confirm Rental`,
+        status: "pending",
+        recipientPayPalEmail: currentUserPayPalEmail,
+        recipientId: recipientId,
+        rentRequestId: requestId,
+        itemName: acceptedRequestData.itemName,
+        itemId: acceptedRequestData.itemId,
+        usdAmount: DatabaseHelper.convertToUsd(downpaymentAmount),
+        createdAt: serverTimestamp(),
+        read: false,
+        readAt: null,
+      };
 
-        // ✅ Add downpayment message
-        await addDoc(messagesRef, downpaymentMessageData);
+      // ✅ Add downpayment message
+      await addDoc(messagesRef, downpaymentMessageData);
 
-        // ✅ KEEP STATUS AS PENDING - Status will change to "pickup" when renter pays the downpayment
-        await updateDoc(chatRef, {
-          status: "pending", // Status stays pending - will change to "pickup" when renter pays
-          rentRequestId: requestId, // ✅ STORE: Rent request ID
-          downpaymentSent: true,
-          downpaymentStatus: "pending",
-          lastMessage: `Payment request: Security Deposit (${downpaymentPercentage}%) - Required to confirm rental`,
-          lastMessageTime: serverTimestamp(),
-          lastSender: currentUserId,
-          [`unreadCounts.${recipientId}`]: increment(1),
-          hasOwnerResponded: true,
-        });
+      // ✅ KEEP STATUS AS PENDING - Status will change to "pickup" when renter pays the downpayment
+      await updateDoc(chatRef, {
+        rentRequestId: requestId,
+        downpaymentSent: true,
+        downpaymentStatus: "pending",
+        lastMessage: `Payment request: Downpayment (${downpaymentPercentage}%) - Required to confirm rental`,
+        lastMessageTime: serverTimestamp(),
+        lastSender: currentUserId,
+        [`unreadCounts.${recipientId}`]: increment(1),
+        hasOwnerResponded: true,
+        ownerAcceptedAt: serverTimestamp(),
+      });
 
-        // Add status message
-        await addDoc(messagesRef, {
-          type: "statusUpdate",
-          text: `Owner accepted request. Waiting for downpayment process...`,
-          senderId: currentUserId,
-          createdAt: serverTimestamp(),
-          read: false,
-        });
+      // Add status message
+      await addDoc(messagesRef, {
+        type: "statusUpdate",
+        text: `Owner accepted request. Downpayment payment required to proceed.`, // ✅ Updated text
+        senderId: currentUserId,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
 
-        // ✅ Update rent request to accepted
-        await updateDoc(acceptedRequestRef, {
-          status: "accepted",
-          acceptedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+      // ✅ Update rent request to accepted
+      await updateDoc(acceptedRequestRef, {
+        status: "accepted",
+        acceptedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
 
-        // Create in-app notification for renter
-        if (recipientId) {
-          await createInAppNotification(recipientId, {
-            type: "RENT_REQUEST_ACCEPTED_PAYMENT_REQUIRED",
-            title: "Rental Accepted - Payment Required",
-            message: `Your rental request was accepted! Please pay the security deposit of ₱${downpaymentAmount.toLocaleString()} to confirm.`,
-            data: {
-              route: "/chat",
-              params: { id: String(chatId), requestId: requestId },
-            },
-          });
-        }
-
-        Toast.show({
-          type: ALERT_TYPE.SUCCESS,
-          title: "Request Accepted",
-          textBody: `Security deposit request sent to renter (₱${downpaymentAmount.toLocaleString()})`,
-        });
-      } else {
-        // ✅ NO security deposit - Accept and set status to pickup
-        await updateDoc(chatRef, {
-          status: "pickup", // Move directly to pickup if no downpayment needed
-          lastMessage: "Owner accepted the request. Proceeding to pickup...",
-          lastMessageTime: serverTimestamp(),
-          hasOwnerResponded: true,
-        });
-
-        await updateDoc(acceptedRequestRef, {
-          status: "accepted",
-          acceptedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-
-        await addDoc(messagesRef, {
-          type: "statusUpdate",
-          text: "Owner accepted request. Proceeding to pickup...",
-          senderId: currentUserId,
-          createdAt: serverTimestamp(),
-          read: false,
-        });
-
-        if (recipientId) {
-          await createInAppNotification(recipientId, {
-            type: "RENT_REQUEST_ACCEPTED",
-            title: "Rental Accepted",
-            message: `Your rental request was accepted!`,
-            data: {
-              route: "/chat",
-              params: { id: String(chatId), requestId: requestId },
-            },
-          });
-        }
-
-        Toast.show({
-          type: ALERT_TYPE.SUCCESS,
-          title: "Request Accepted",
-          textBody: "Rental request accepted",
+      // Create in-app notification for renter
+      if (recipientId) {
+        await createInAppNotification(recipientId, {
+          type: "RENT_REQUEST_ACCEPTED_PAYMENT_REQUIRED",
+          title: "Rental Accepted - Payment Required",
+          message: `Your rental request was accepted! Please pay the security deposit of ₱${downpaymentAmount.toLocaleString()} to confirm.`,
+          data: {
+            route: "/chat",
+            params: { id: String(chatId), requestId: requestId },
+          },
         });
       }
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Request Accepted",
+        textBody: `Security deposit request sent to renter (₱${downpaymentAmount.toLocaleString()})`,
+      });
 
       // ✅ HANDLE OTHER PENDING REQUESTS FOR SAME ITEM
       try {
@@ -3862,6 +3869,7 @@ const ChatScreen = () => {
                     chatId={String(chatId)}
                     currentUserId={currentUserId}
                     itemDetails={chatData?.itemDetails}
+                    chatData={chatData}
                     clientId={PAYPAL_CLIENT_ID}
                     clientSecret={PAYPAL_CLIENT_SECRET}
                     onCancelPayment={handleCancelPaymentRequest}
@@ -3909,8 +3917,8 @@ const ChatScreen = () => {
                   <RentRequestMessage
                     item={item}
                     isOwner={currentUserId === chatData?.ownerId}
-                    onAccept={() => memoizedHandleAccept(item.rentRequestId!)}
-                    onCancel={() => memoizedHandleCancel(item.rentRequestId!)}
+                    onAccept={() => handleAcceptRequest(item.rentRequestId!)}
+                    onCancel={() => handleCancelRequest(item.rentRequestId!)}
                     chatData={chatData}
                     chatId={String(chatId)}
                     messages={messages}

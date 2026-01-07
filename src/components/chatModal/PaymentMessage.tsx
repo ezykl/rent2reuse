@@ -66,6 +66,7 @@ interface PaymentMessageProps {
   };
   clientId: string;
   clientSecret: string;
+  chatData?: any;
   onCancelPayment?: (messageId: string) => void;
   onPaymentCompleted?: () => Promise<void>;
 }
@@ -210,6 +211,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   chatId,
   currentUserId,
   itemDetails,
+  chatData,
   clientId,
   clientSecret,
   onPaymentCompleted,
@@ -403,6 +405,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           paidAt: serverTimestamp(),
           transactionId: transactionId,
           paypalOrderId: orderId,
+          paypalCaptureId: captureResult.id,
         });
 
         const chatRef = doc(db, "chat", chatId);
@@ -418,32 +421,70 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
             updatedAt: serverTimestamp(),
           });
 
-          await addDoc(collection(db, "chat", chatId, "messages"), {
-            type: "statusUpdate",
-            text: "Downpayment confirmed! Ready to proceed with pickup assessment.",
-            senderId: currentUserId,
-            createdAt: serverTimestamp(),
-            read: false,
-            status: "pickup",
-          });
-
           if (onPaymentCompleted) {
             await onPaymentCompleted();
           }
-        }
-        // ✅ REMAINING/FULL PAYMENT: Update to "renting"
-        else if (
+        } else if (
           item.paymentType === "remaining" ||
           item.paymentType === "full"
         ) {
-          await updateDoc(chatRef, {
-            status: "renting", // ✅ Move to renting
+          // ✅ FIX: Make sure we're updating ALL necessary fields
+          const updatePayload = {
+            status: "renting", // ✅ Set to renting
             fullPaymentStatus: "completed",
             fullPaymentPaidAt: serverTimestamp(),
+            fullPaymentSent: true, // ✅ ADD THIS
+            initialPaymentStatus: "completed", // ✅ ENSURE this is set
             lastMessage: "Remaining payment confirmed. Item rental started.",
             lastMessageTime: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          });
+          };
+
+          console.log("Updating chat to renting with payload:", updatePayload); // ✅ DEBUG
+
+          await updateDoc(chatRef, updatePayload);
+
+          // ✅ WAIT a moment to ensure Firestore writes before creating rented item
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          // ✅ NEW: Add item to rented items collection
+          try {
+            const rentedItemData = {
+              itemId: item.itemName || "Unknown Item",
+              chatId: chatId,
+              renterId: currentUserId,
+              ownerId: item.senderId,
+              rentalStartDate: serverTimestamp(),
+              rentalEndDate: chatData?.itemDetails?.endDate || null,
+              rentalDays: chatData?.itemDetails?.rentalDays || 0,
+              totalPrice: chatData?.itemDetails?.totalPrice || item.amount,
+              basePrice: chatData?.itemDetails?.price || 0,
+              downpaymentPercentage:
+                chatData?.itemDetails?.downpaymentPercentage || 0,
+              status: "renting",
+              paymentType: item.paymentType,
+              amount: item.amount,
+              currency: "PHP",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            };
+
+            const rentedItemsRef = collection(db, "rentedItems");
+            const rentedItemDocRef = await addDoc(
+              rentedItemsRef,
+              rentedItemData
+            );
+
+            console.log("Rented item created:", rentedItemDocRef.id);
+
+            // ✅ Also update chat with rentedItemId for reference
+            await updateDoc(chatRef, {
+              rentedItemId: rentedItemDocRef.id,
+            });
+          } catch (rentalError) {
+            console.log("Error creating rented item record:", rentalError);
+            // Don't fail the payment if rented item creation fails
+          }
 
           await addDoc(collection(db, "chat", chatId, "messages"), {
             type: "statusUpdate",
@@ -565,7 +606,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
             </View>
             {item.totalAmount < item.amount && (
               <View className="flex-row justify-between">
-                <Text className="text-xs text-gray-600">Security Deposit:</Text>
+                <Text className="text-xs text-gray-600">Downpayment:</Text>
                 <Text className="text-xs font-pmedium text-gray-900">
                   ₱{(item.amount - item.totalAmount).toFixed(2)}
                 </Text>
