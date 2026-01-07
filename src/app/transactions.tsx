@@ -116,14 +116,16 @@ const TransactionsScreen = () => {
   const getTransactionType = (transaction: Transaction) => {
     // ✅ NEW: Check for rental payments
     if (transaction.type === "rental_payment") {
+      const paymentTypeLabel =
+        transaction.paymentType === "initial" ||
+        transaction.paymentType === "downpayment"
+          ? "Downpayment"
+          : "Remaining";
+
       if (transaction.recipientId === auth.currentUser?.uid) {
-        return `Payment Received - ${
-          transaction.paymentType === "initial" ? "Initial" : "Final"
-        }`;
+        return `Payment Received - ${paymentTypeLabel}`;
       } else {
-        return `Payment Sent - ${
-          transaction.paymentType === "initial" ? "Initial" : "Final"
-        }`;
+        return `Payment Sent - ${paymentTypeLabel}`;
       }
     }
 
@@ -241,7 +243,11 @@ const TransactionsScreen = () => {
             <View>
               <Text className="text-xs text-gray-500">Payment Type</Text>
               <Text className="text-sm font-pmedium text-gray-700 capitalize">
-                {item.paymentType} Payment
+                {item.paymentType === "initial" ||
+                item.paymentType === "downpayment"
+                  ? "Downpayment"
+                  : "Remaining"}{" "}
+                Payment
               </Text>
             </View>
             <View className="items-end">

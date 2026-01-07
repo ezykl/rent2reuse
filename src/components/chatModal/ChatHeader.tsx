@@ -55,6 +55,8 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
       case "initial_payment_paid":
       case "assessment_submitted":
         return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" }; // Blue
+      case "pickup": // ✅ ADD THIS CASE
+        return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" };
       case "pickedup":
         return { stage: "Renting", stageNumber: 3, color: "#34D399" }; // Green
       case "completed":

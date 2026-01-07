@@ -1,34 +1,45 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import Message from "@/types/message";
-import { icons } from "@/constant";
 import { format, isToday, isYesterday } from "date-fns";
 import { auth, db } from "@/lib/firebaseConfig";
-import { doc, onSnapshot } from "firebase/firestore";
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  serverTimestamp,
+  addDoc,
+  collection,
+} from "firebase/firestore";
+import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 
 interface OwnerConfirmationMessageProps {
   item: Message;
   isCurrentUser: boolean;
-  onConfirm: () => void;
   onDecline: () => void;
   isLoading?: boolean;
   chatId?: string;
-  rentRequestDetails?: any; 
+  chatData?: any;
 }
 
 const OwnerConfirmationMessage: React.FC<OwnerConfirmationMessageProps> = ({
   item,
   isCurrentUser,
-  onConfirm,
   onDecline,
   isLoading = false,
   chatId,
-  rentRequestDetails, 
+  chatData,
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [liveStatus, setLiveStatus] = useState<string | undefined>(item.status); // Add live status
+  const [liveStatus, setLiveStatus] = useState<string | undefined>(item.status);
+  const [autoSentDownpayment, setAutoSentDownpayment] = useState(false);
   const isSender = item.senderId === auth.currentUser?.uid;
-
 
   useEffect(() => {
     if (!chatId || !item.id) return;
@@ -39,11 +50,187 @@ const OwnerConfirmationMessage: React.FC<OwnerConfirmationMessageProps> = ({
       if (snapshot.exists()) {
         const messageData = snapshot.data();
         setLiveStatus(messageData.status);
+
+        // ✅ AUTO-SEND DOWNPAYMENT MESSAGE when renter confirms
+        // Only send once, and only if we're the owner (sender receives confirmation)
+        if (
+          messageData.status === "accepted" &&
+          isSender &&
+          !autoSentDownpayment &&
+          !isProcessing
+        ) {
+          handleAutoSendDownpaymentMessage(messageData);
+          setAutoSentDownpayment(true);
+        }
       }
     });
 
     return () => unsubscribe();
-  }, [chatId, item.id]);
+  }, [chatId, item.id, isSender, autoSentDownpayment, isProcessing]);
+
+  // ✅ AUTO-SEND DOWNPAYMENT MESSAGE
+  const handleAutoSendDownpaymentMessage = async (confirmationData: any) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      if (!chatId || !chatData) return;
+
+      const downpaymentPercentage =
+        chatData?.itemDetails?.downpaymentPercentage ||
+        chatData?.itemDetails?.securityDepositPercentage ||
+        0;
+      const basePrice = chatData?.itemDetails?.price || 0;
+      const rentalDays = chatData?.itemDetails?.rentalDays || 0;
+      const baseTotal = basePrice * rentalDays;
+      const downpaymentAmount = (baseTotal * downpaymentPercentage) / 100 || 0;
+
+      // ✅ Check if downpayment message already exists
+      const messagesRef = collection(db, "chat", String(chatId), "messages");
+      const existingPaymentMsg = await new Promise((resolve) => {
+        const unsubscribe = onSnapshot(messagesRef, (snapshot) => {
+          const msgs = snapshot.docs.find(
+            (doc) =>
+              doc.data().type === "payment" &&
+              doc.data().paymentType === "downpayment" &&
+              doc.data().status === "pending"
+          );
+          resolve(msgs);
+          unsubscribe();
+        });
+      });
+
+      if (existingPaymentMsg) {
+        // Payment message already sent, don't create another
+        setIsProcessing(false);
+        return;
+      }
+
+      // ✅ CREATE AND SEND DOWNPAYMENT MESSAGE AUTOMATICALLY
+      const downpaymentMessage = {
+        type: "payment",
+        paymentType: "downpayment",
+        amount: downpaymentAmount,
+        totalAmount: baseTotal,
+        downpaymentPercentage: downpaymentPercentage,
+        downpaymentAmount: downpaymentAmount,
+        remainingAmount: baseTotal - downpaymentAmount,
+        status: "pending",
+        senderId: chatData.ownerId, // Owner sends the payment request
+        recipientId: auth.currentUser?.uid, // Renter receives it
+        recipientPayPalEmail: chatData.renterPayPalEmail || "",
+        itemName: chatData?.itemDetails?.name || "Item",
+        rentRequestId: chatData?.rentRequestId,
+        createdAt: serverTimestamp(),
+        read: false,
+      };
+
+      await addDoc(messagesRef, downpaymentMessage);
+
+      // ✅ UPDATE CHAT STATUS
+      const chatRef = doc(db, "chat", String(chatId));
+      await updateDoc(chatRef, {
+        status: "awaiting_downpayment",
+        lastMessage: "Downpayment request sent automatically",
+        lastMessageTime: serverTimestamp(),
+      });
+
+      console.log("Downpayment message auto-sent successfully");
+    } catch (error) {
+      console.log("Error auto-sending downpayment message:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ✅ HANDLE CONFIRM (RENTER CONFIRMS THE CONFIRMATION MESSAGE)
+  const handleConfirm = async () => {
+    try {
+      setIsProcessing(true);
+
+      if (!chatId || !item.id) {
+        throw new Error("Missing chatId or messageId");
+      }
+
+      // Update confirmation message status to accepted
+      const messageRef = doc(db, "chat", String(chatId), "messages", item.id);
+      await updateDoc(messageRef, {
+        status: "accepted",
+        confirmedAt: serverTimestamp(),
+      });
+
+      // ✅ Auto-create downpayment payment message immediately (so renter sees it)
+      try {
+        if (chatData) {
+          const downpaymentPercentage =
+            chatData?.itemDetails?.downpaymentPercentage ||
+            chatData?.itemDetails?.securityDepositPercentage ||
+            0;
+          const basePrice = chatData?.itemDetails?.price || 0;
+          const rentalDays = chatData?.itemDetails?.rentalDays || 0;
+          const baseTotal = basePrice * rentalDays;
+          const downpaymentAmount =
+            (baseTotal * downpaymentPercentage) / 100 || 0;
+
+          const messagesRef = collection(
+            db,
+            "chat",
+            String(chatId),
+            "messages"
+          );
+
+          // create payment message
+          const downpaymentMessage = {
+            type: "payment",
+            paymentType: "downpayment",
+            amount: downpaymentAmount,
+            totalAmount: baseTotal,
+            downpaymentPercentage: downpaymentPercentage,
+            downpaymentAmount: downpaymentAmount,
+            remainingAmount: baseTotal - downpaymentAmount,
+            status: "pending",
+            senderId: chatData.ownerId || item.senderId,
+            recipientId: auth.currentUser?.uid,
+            recipientPayPalEmail: chatData.renterPayPalEmail || "",
+            itemName: chatData?.itemDetails?.name || "Item",
+            rentRequestId: chatData?.rentRequestId,
+            createdAt: serverTimestamp(),
+            read: false,
+          };
+
+          await addDoc(messagesRef, downpaymentMessage);
+
+          // update chat status
+          const chatRef = doc(db, "chat", String(chatId));
+          await updateDoc(chatRef, {
+            status: "awaiting_downpayment",
+            lastMessage: "Downpayment request sent",
+            lastMessageTime: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          setAutoSentDownpayment(true);
+        }
+      } catch (err) {
+        console.log("Error creating downpayment message on confirm:", err);
+      }
+
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Confirmed",
+        textBody: "Rental confirmation accepted. Payment request sent.",
+      });
+    } catch (error) {
+      console.log("Error confirming:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to confirm. Please try again.",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const displayStatus = liveStatus || item.status || "pending";
 
@@ -313,7 +500,7 @@ const OwnerConfirmationMessage: React.FC<OwnerConfirmationMessageProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={onConfirm}
+            onPress={handleConfirm}
             disabled={isLoading || isProcessing}
             className={`flex-1 rounded-lg py-3 items-center justify-center ${
               isLoading || isProcessing

@@ -86,17 +86,17 @@ const RentRequestMessage = ({
         const rentalDays = chatData.itemDetails?.rentalDays || 0;
         const baseTotal = basePrice * rentalDays;
         const depositAmount = (baseTotal * securityDepositPercentage) / 100;
-        const totalWithDeposit = baseTotal + depositAmount;
-        const dueBalance = totalWithDeposit - depositAmount;
+        // ✅ FIX: Deposit is consumable/deducted, NOT added to total
+        const totalPrice = baseTotal; // Total rental only, deposit is separate
 
         const requestData = {
           name: chatData.itemDetails?.name || "Unknown Item",
           itemImage: chatData.itemDetails?.image || "",
           price: basePrice,
-          totalPrice: totalWithDeposit - depositAmount, // ✅ CHANGE: Include security deposit in total
+          totalPrice: totalPrice, // ✅ FIX: Just the rental total (deposit deducted separately)
           baseTotal: baseTotal, // ✅ NEW: Store base rental total separately
           rentalDays: rentalDays,
-          downpaymentPercentage: securityDepositPercentage, // ✅ CHANGE: Use this variable name
+          downpaymentPercentage: (baseTotal * securityDepositPercentage) / 100, // ✅ CHANGE: Use this variable name
           securityDepositPercentage: securityDepositPercentage, // ✅ NEW: Also store original name
           depositAmount: depositAmount, // ✅ NEW: Store deposit amount for display
           itemLocation: chatData.itemDetails?.itemLocation || null,
@@ -105,7 +105,7 @@ const RentRequestMessage = ({
           endDate: chatData.itemDetails?.endDate?.toDate() || new Date(),
           message: chatData.itemDetails?.message || "",
           status: chatData.status || "pending",
-          dueBalance: dueBalance,
+          dueBalance: baseTotal - (baseTotal * securityDepositPercentage) / 100,
 
           // Additional chat-level fields
           requesterId: chatData.requesterId,
@@ -152,6 +152,7 @@ const RentRequestMessage = ({
     switch (status?.toLowerCase()) {
       case "approved":
       case "accepted":
+      case "pickup":
         return {
           bgColor: "bg-green-100",
           textColor: "text-green-700",
@@ -319,7 +320,7 @@ const RentRequestMessage = ({
                   <>
                     <View className="flex-row justify-between py-2 border-t border-gray-200 mb-2">
                       <Text className="text-sm font-pregular text-gray-700">
-                        Downpayment ({rentRequestData.downpaymentPercentage}
+                        Downpayment ({rentRequestData.securityDepositPercentage}
                         %)
                       </Text>
                       <Text className="text-sm font-pmedium text-orange-600">
@@ -327,21 +328,21 @@ const RentRequestMessage = ({
                       </Text>
                     </View>
 
-                    {/* Total with Deposit */}
+                    {/* Total to Pay */}
                     <View className="flex-row justify-between pt-2 border-t border-gray-200">
                       <Text className="text-sm font-pbold text-gray-900">
-                        Total Amount Due
+                        Amount to Pay on Pickup
                       </Text>
                       <Text className="text-base font-pbold text-primary">
-                        ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
+                        ₱{(rentRequestData.dueBalance || 0).toLocaleString()}
                       </Text>
                     </View>
 
                     {/* Info Note */}
                     <View className="mt-2 bg-orange-50 p-2 rounded border border-orange-200">
                       <Text className="text-xs font-pregular text-orange-700">
-                        💡 Amount Due will be collected at pickup and refunded
-                        upon safe return.
+                        💡 Security deposit is deductible and will be collected
+                        at pickup.
                       </Text>
                     </View>
                   </>
@@ -349,10 +350,10 @@ const RentRequestMessage = ({
                   // No security deposit
                   <View className="flex-row justify-between pt-2 border-t border-gray-200">
                     <Text className="text-sm font-pbold text-gray-900">
-                      Total Amount Due
+                      Total to Pay
                     </Text>
                     <Text className="text-base font-pbold text-primary">
-                      ₱{(rentRequestData.dueBalance || 0).toLocaleString()}
+                      ₱{(rentRequestData.totalPrice || 0).toLocaleString()}
                     </Text>
                   </View>
                 )}
@@ -364,8 +365,8 @@ const RentRequestMessage = ({
         {/* Status Display */}
         {getStatusDisplay()}
 
-        {/* Action buttons - Only show if status is pending */}
-        {effectiveStatus === "pending" && (
+        {/* Action buttons - Only show if status is pending AND no confirmation pending */}
+        {effectiveStatus === "pending" && !hasPendingConfirmation && (
           <>
             {isOwner ? (
               <View className="flex-row gap-2 mt-4">
@@ -373,29 +374,17 @@ const RentRequestMessage = ({
                   <>
                     <TouchableOpacity
                       onPress={onAccept}
-                      disabled={
-                        isLoading ||
-                        hasPendingConfirmation ||
-                        effectiveStatus !== "pending"
-                      }
+                      disabled={isLoading}
                       className={`flex-1 rounded-lg py-3 items-center justify-center ${
-                        isLoading ||
-                        hasPendingConfirmation ||
-                        effectiveStatus !== "pending"
-                          ? "bg-gray-300"
-                          : "bg-green-500"
+                        isLoading ? "bg-gray-300" : "bg-green-500"
                       }`}
                     >
                       <Text
                         className={`font-psemibold ${
-                          isLoading || hasPendingConfirmation
-                            ? "text-gray-600"
-                            : "text-white"
+                          isLoading ? "text-gray-600" : "text-white"
                         }`}
                       >
-                        {hasPendingConfirmation
-                          ? "Confirmation Sent"
-                          : "Accept"}
+                        Accept
                       </Text>
                     </TouchableOpacity>
                   </>
@@ -413,11 +402,9 @@ const RentRequestMessage = ({
                 {!isRequestExpired(rentRequestData.startDate) ? (
                   <TouchableOpacity
                     onPress={onCancel}
-                    disabled={hasPendingConfirmation || isLoading} // ✅ ADD DISABLED STATE
+                    disabled={isLoading}
                     className={`py-3 rounded-xl ${
-                      hasPendingConfirmation || isLoading
-                        ? "bg-gray-300" // ✅ GREY OUT WHEN DISABLED
-                        : "bg-red-400"
+                      isLoading ? "bg-gray-300" : "bg-red-400"
                     }`}
                   >
                     <Text

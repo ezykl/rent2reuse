@@ -53,10 +53,12 @@ export default interface Message {
   paypalOrderId?: string;
   paypalApprovalUrl?: string;
   paypalCaptureId?: string;
-  paymentType?: "initial" | "full";
+  paymentType?: "downpayment" | "remaining" | "deposit_refund";
   amount?: number;
   totalAmount?: number;
   downpaymentPercentage?: number;
+  downpaymentAmount?: number;
+  remainingAmount?: number;
   paymentId?: string;
   paypalCheckoutUrl?: string;
   usdAmount?: string;

@@ -10,7 +10,10 @@ type RentalStatus =
   | "completed"
   | "declined"
   | "cancelled"
-  | "rated";
+  | "rated"
+  | "downpayment_paid"
+  | "pickup"
+  | "renting";
 
 interface RentalProgressIndicatorProps {
   currentStatus: RentalStatus;
@@ -23,14 +26,20 @@ const RentalProgressIndicator: React.FC<RentalProgressIndicatorProps> = ({
   isOwner,
   compact = false,
 }) => {
-  // ✅ Updated to 5 stages
+  // ✅ Updated to 5 stages with new status names
   const stages = [
     { name: "Request", status: ["pending"] },
     {
       name: "Pick-Up",
-      status: ["accepted", "initial_payment_paid", "assessment_submitted"],
+      status: [
+        "accepted",
+        "initial_payment_paid",
+        "assessment_submitted",
+        "downpayment_paid",
+        "pickup",
+      ],
     },
-    { name: "Renting", status: ["pickedup"] },
+    { name: "Renting", status: ["pickedup", "renting"] },
     { name: "Return", status: ["completed"] },
     { name: "Rate", status: ["rated"] },
   ];
@@ -149,6 +158,12 @@ const getStatusMessage = (status: RentalStatus, isOwner: boolean): string => {
     accepted: isOwner
       ? "Ready for payment and pickup"
       : "Request accepted! Prepare for payment",
+    downpayment_paid: isOwner
+      ? "Downpayment received, ready for pickup assessment"
+      : "Downpayment confirmed, ready for assessment",
+    pickup: isOwner
+      ? "Completing pickup assessment"
+      : "Completing pickup assessment",
     initial_payment_paid: isOwner
       ? "Initial payment received"
       : "Initial payment confirmed",
@@ -156,6 +171,7 @@ const getStatusMessage = (status: RentalStatus, isOwner: boolean): string => {
       ? "Renter submitted item condition"
       : "Item condition assessment submitted",
     pickedup: isOwner ? "Item with renter" : "You're renting this item",
+    renting: isOwner ? "Item being rented out" : "You're renting this item",
     completed: isOwner ? "Ready for return inspection" : "Return the item",
     declined: "Request was declined",
     cancelled: "Request was cancelled",

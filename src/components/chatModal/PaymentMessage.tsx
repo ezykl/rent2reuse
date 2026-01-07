@@ -28,10 +28,17 @@ interface PaymentMessageProps {
     id: string;
     senderId: string;
     type: "payment";
-    paymentType: "initial" | "full";
+    paymentType:
+      | "initial"
+      | "full"
+      | "downpayment"
+      | "remaining"
+      | "deposit_refund";
     amount: number;
     totalAmount: number;
     downpaymentPercentage?: number;
+    downpaymentAmount?: number;
+    remainingAmount?: number;
     status: "pending" | "pending_approval" | "paid" | "failed" | "cancelled";
     createdAt: any;
     recipientPayPalEmail?: string;
@@ -45,6 +52,9 @@ interface PaymentMessageProps {
     paymentId?: string;
     paypalCheckoutUrl?: string;
     usdAmount?: string;
+    rentRequestId?: string;
+    itemName?: string;
+    recipientId?: string;
   };
   isCurrentUser: boolean;
   isOwner: boolean;
@@ -57,6 +67,7 @@ interface PaymentMessageProps {
   clientId: string;
   clientSecret: string;
   onCancelPayment?: (messageId: string) => void;
+  onPaymentCompleted?: () => Promise<void>;
 }
 
 // Exchange rate helper
@@ -201,6 +212,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   itemDetails,
   clientId,
   clientSecret,
+  onPaymentCompleted,
 }) => {
   const [loading, setLoading] = useState(false);
   const [showPayPalWebView, setShowPayPalWebView] = useState(false);
@@ -209,20 +221,35 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState("");
 
+  useEffect(() => {
+    // When payment status changes to paid
+    if (item.status === "paid" && item.paymentType === "downpayment") {
+      // Call the parent handler to update chat status
+      // This assumes you pass the handler as a prop
+      console.log("Downpayment completed, chat status should update to pickup");
+    }
+  }, [item.status]);
+
   const getPaymentTypeLabel = () => {
-    if (item.paymentType === "initial") {
+    if (item.paymentType === "initial" || item.paymentType === "downpayment") {
       const percentage = item.downpaymentPercentage || 0;
-      return `Payment`;
+      return `Downpayment (${percentage}%)`;
+    }
+    if (item.paymentType === "remaining" || item.paymentType === "full") {
+      return "Remaining Payment";
     }
     return "Security Deposit Refund";
   };
 
   const getPaymentDescription = () => {
     const itemName = itemDetails?.name || "Item";
-    if (item.paymentType === "initial") {
-      return `Full payment for renting ${itemName}`;
+    if (item.paymentType === "initial" || item.paymentType === "downpayment") {
+      return `Downpayment for renting ${itemName} - Required to confirm rental`;
     }
-    return `Full payment for renting ${itemName}`;
+    if (item.paymentType === "remaining" || item.paymentType === "full") {
+      return `Remaining payment for renting ${itemName}`;
+    }
+    return `Payment for renting ${itemName}`;
   };
 
   const handleSendInvoice = async () => {
@@ -366,8 +393,10 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       const captureResult = await capturePayPalOrder(accessToken, orderId);
 
       if (captureResult.status === "COMPLETED") {
-        // ✅ SAVE TRANSACTION TO FIRESTORE
+        // ✅ SAVE TRANSACTION
         await saveRentalTransaction(captureResult, transactionId, orderId);
+
+        // ✅ Update payment message
         const messageRef = doc(db, "chat", chatId, "messages", item.id);
         await updateDoc(messageRef, {
           status: "paid",
@@ -376,28 +405,58 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           paypalOrderId: orderId,
         });
 
-        // ✅ UPDATE CHAT STATUS BASED ON PAYMENT TYPE
         const chatRef = doc(db, "chat", chatId);
 
-        if (item.paymentType === "initial") {
-          // ✅ If there's an initial payment, mark as initial_payment_paid
-          // This allows renter to submit conditional assessment before pickup
+        // ✅ DOWNPAYMENT: Update to "pickup"
+        if (item.paymentType === "downpayment") {
           await updateDoc(chatRef, {
-            status: "initial_payment_paid", // ✅ NEW STATUS
-            initialPaymentStatus: "completed",
-            lastMessage: "Initial payment confirmed",
+            status: "pickup",
+            downpaymentStatus: "completed",
+            downpaymentPaidAt: serverTimestamp(),
+            lastMessage: "Downpayment confirmed. Ready for pickup assessment.",
             lastMessageTime: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
-        } else {
-          // Full payment - move to pickedup
+
+          await addDoc(collection(db, "chat", chatId, "messages"), {
+            type: "statusUpdate",
+            text: "Downpayment confirmed! Ready to proceed with pickup assessment.",
+            senderId: currentUserId,
+            createdAt: serverTimestamp(),
+            read: false,
+            status: "pickup",
+          });
+
+          if (onPaymentCompleted) {
+            await onPaymentCompleted();
+          }
+        }
+        // ✅ REMAINING/FULL PAYMENT: Update to "renting"
+        else if (
+          item.paymentType === "remaining" ||
+          item.paymentType === "full"
+        ) {
           await updateDoc(chatRef, {
-            status: "pickedup",
+            status: "renting", // ✅ Move to renting
             fullPaymentStatus: "completed",
-            lastMessage: "Full payment confirmed",
+            fullPaymentPaidAt: serverTimestamp(),
+            lastMessage: "Remaining payment confirmed. Item rental started.",
             lastMessageTime: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
+
+          await addDoc(collection(db, "chat", chatId, "messages"), {
+            type: "statusUpdate",
+            text: "Remaining payment confirmed! Item rental has started.",
+            senderId: currentUserId,
+            createdAt: serverTimestamp(),
+            read: false,
+            status: "renting",
+          });
+
+          if (onPaymentCompleted) {
+            await onPaymentCompleted();
+          }
         }
 
         Toast.show({

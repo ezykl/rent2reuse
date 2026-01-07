@@ -239,7 +239,12 @@ const ChatList = () => {
       setCurrentUserId(userId);
 
       // loadAllUsers(userId);
-      loadExistingChats(userId);
+      const unsubscribeChats = loadExistingChats(userId);
+
+      // Return cleanup function for both auth and chat listeners
+      return () => {
+        unsubscribeChats();
+      };
     });
 
     return () => unsubscribeAuth();
@@ -272,7 +277,7 @@ const ChatList = () => {
     }
   };
 
-  const loadExistingChats = async (userId: string) => {
+  const loadExistingChats = (userId: string) => {
     try {
       const chatsRef = collection(db, "chat");
       const q = query(
@@ -281,49 +286,96 @@ const ChatList = () => {
         orderBy("lastMessageTime", "desc")
       );
 
-      const snapshot = await getDocs(q);
+      // ✅ CHANGE: Use onSnapshot for real-time updates instead of getDocs
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        try {
+          const chatList = await Promise.all(
+            snapshot.docs.map(async (docSnap) => {
+              const chatData = docSnap.data();
+              const chatId = docSnap.id;
 
-      const chatList = await Promise.all(
-        snapshot.docs.map(async (docSnap) => {
-          const chatData = docSnap.data();
-          const chatId = docSnap.id;
+              // ✅ FIX: Get recipientId safely and handle missing data
+              const recipientId =
+                chatData.participants?.find((id: string) => id !== userId) ||
+                chatData.requesterId ||
+                chatData.ownerId; // Fallback to requesterId or ownerId
 
-          const recipientId = chatData.participants.find(
-            (id: string) => id !== userId
+              if (!recipientId) {
+                console.log("Warning: No recipient ID found for chat:", chatId);
+                return null; // Skip this chat
+              }
+
+              let recipient = null;
+              try {
+                const userDoc = await getDoc(doc(db, "users", recipientId));
+                recipient = userDoc.exists() ? userDoc.data() : null;
+              } catch (error) {
+                console.log(
+                  "Error fetching recipient for chat:",
+                  chatId,
+                  error
+                );
+              }
+
+              if (!recipient) {
+                console.log(
+                  "Warning: Recipient not found for chat:",
+                  chatId,
+                  "recipientId:",
+                  recipientId
+                );
+                // Return a default recipient object instead of failing
+                recipient = {
+                  firstname: "Unknown",
+                  lastname: "User",
+                  profileImage: "https://via.placeholder.com/50",
+                };
+              }
+
+              return {
+                id: chatId,
+                recipientId,
+                recipientName: {
+                  firstname: recipient?.firstname || "Unknown",
+                  lastname: recipient?.lastname || "User",
+                  middlename: recipient?.middlename || "",
+                },
+                recipientProfileImage:
+                  recipient?.profileImage || "https://via.placeholder.com/50",
+                lastMessage: chatData.lastMessage || "No messages yet",
+                lastMessageTime: chatData.lastMessageTime?.toDate() || null,
+                isCurrentUserLastSender: chatData.lastSender === userId,
+                lastSender: chatData.lastSender,
+                unreadCounts: chatData.unreadCounts || {},
+                isRentRequest: !!chatData.itemDetails,
+                requestStatus: chatData.status || "pending",
+                itemDetails: chatData.itemDetails || null,
+                status: chatData.status || "pending",
+                requesterId: chatData.requesterId,
+                ownerId: chatData.ownerId,
+              } as Chat;
+            })
           );
-          const userDoc = await getDoc(doc(db, "users", recipientId));
-          const recipient = userDoc.exists() ? userDoc.data() : null;
 
-          return {
-            id: chatId,
-            recipientId,
-            recipientName: {
-              firstname: recipient?.firstname || "",
-              lastname: recipient?.lastname || "",
-              middlename: recipient?.middlename || "",
-            },
-            recipientProfileImage:
-              recipient?.profileImage || "https://via.placeholder.com/50",
-            lastMessage: chatData.lastMessage || "No messages yet",
-            lastMessageTime: chatData.lastMessageTime?.toDate() || null,
-            isCurrentUserLastSender: chatData.lastSender === userId,
-            lastSender: chatData.lastSender,
-            unreadCounts: chatData.unreadCounts || {},
-            isRentRequest: !!chatData.itemDetails,
-            requestStatus: chatData.status || "pending", // ✅ ENSURE STATUS IS SET
-            itemDetails: chatData.itemDetails || null,
-            status: chatData.status || "pending", // ✅ ENSURE STATUS IS SET
-            requesterId: chatData.requesterId,
-            ownerId: chatData.ownerId,
-          } as Chat;
-        })
-      );
+          // ✅ Filter out null values (skipped chats)
+          const validChatList = chatList.filter(
+            (chat) => chat !== null
+          ) as Chat[];
 
-      setChats(chatList);
-      setLoading(false);
+          setChats(validChatList);
+          setLoading(false);
+        } catch (error) {
+          console.log("Error processing chat snapshot:", error);
+          setLoading(false);
+        }
+      });
+
+      // Return unsubscribe function for cleanup
+      return unsubscribe;
     } catch (error) {
-      console.log("Error setting up chat query:", error);
+      console.log("Error setting up chat listener:", error);
       setLoading(false);
+      return () => {}; // Return empty unsubscribe function
     }
   };
 
