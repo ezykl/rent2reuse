@@ -18,7 +18,8 @@ import Header from "@/components/Header";
 import { icons } from "@/constant";
 import { useLoader } from "@/context/LoaderContext";
 import { auth, db, storage } from "@/lib/firebaseConfig";
-import { signOut, sendEmailVerification, getAuth } from "firebase/auth";
+import { sendEmailVerification, getAuth } from "firebase/auth";
+import { useAuth } from "@/context/AuthContext";
 import {
   doc,
   getDoc,
@@ -52,6 +53,7 @@ import { User, Plan, PaymentTransaction, PayPalPaymentResult } from "@/types";
 
 const Profile: React.FC = () => {
   const { isLoading, setIsLoading } = useLoader();
+  const { logout } = useAuth();
   const insets = useSafeAreaInsets();
   const [verified, setVerified] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -272,7 +274,10 @@ const Profile: React.FC = () => {
       setProfileData(null);
       setCurrentUserId(null);
 
-      await signOut(auth);
+      // Routes through AuthContext.logout() rather than signOut(auth)
+      // directly, so the userSessions doc actually gets marked inactive
+      // (see the single-active-session enforcement fix).
+      await logout();
       Toast.show({
         type: ALERT_TYPE.SUCCESS,
         title: "Success",
@@ -849,10 +854,6 @@ const Profile: React.FC = () => {
               setRefreshFlag((prev) => prev + 1);
             }}
           />
-        );
-      case "location":
-        return (
-          <LocationModalContent onSave={handleLocationSave} loading={loading} />
         );
       case "idVerification":
         return (

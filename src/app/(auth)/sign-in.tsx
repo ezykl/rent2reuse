@@ -87,7 +87,7 @@ const SignIn = () => {
   const [suspendedModalVisible, setSuspendedModalVisible] =
     useState<boolean>(false);
   const { expoPushToken } = usePushNotifications();
-  const { setSignupMode } = useAuth();
+  const { setSignupMode, attachSessionListener } = useAuth();
 
   // Email validation function
   const validateEmail = (email: string): string => {
@@ -247,6 +247,10 @@ const SignIn = () => {
           throw new Error(sessionResult.error);
         }
 
+        if (sessionResult.sessionId) {
+          attachSessionListener(sessionResult.sessionId);
+        }
+
         Toast.show({
           type: ALERT_TYPE.SUCCESS,
           title: "Success",
@@ -267,8 +271,16 @@ const SignIn = () => {
         setIsLoading(false);
       }
     } else {
-      // User chose not to proceed
+      // User chose not to proceed. signInWithEmailAndPassword already
+      // completed before this conflict check ran, so this device is
+      // genuinely authenticated right now — sign it back out, or "Cancel"
+      // silently leaves the app usable on two devices at once.
       setPendingAuth(null);
+      try {
+        await auth.signOut();
+      } catch (error) {
+        console.error("Error signing out after cancelled login:", error);
+      }
       Toast.show({
         type: ALERT_TYPE.INFO,
         title: "Login Cancelled",
@@ -291,7 +303,10 @@ const SignIn = () => {
         setActiveSessionFound(true);
       } else {
         // No active sessions, create a new one
-        await createUserSession(userCredential.user.uid);
+        const sessionResult = await createUserSession(userCredential.user.uid);
+        if (sessionResult.sessionId) {
+          attachSessionListener(sessionResult.sessionId);
+        }
 
         // Register the push token for this user
         await manageUserToken(userCredential.user.uid, expoPushToken?.data);

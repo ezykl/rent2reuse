@@ -94,7 +94,12 @@ yarn-error.\*
 # local env files
 
 .env\*.local
-.env
+# .env is intentionally NOT excluded here — EAS Build's remote workers need
+# it to inline @env values via babel-plugin-react-native-dotenv, the same
+# way `expo start --dev-client` already does from local disk. Excluding it
+# silently produced a release bundle with every @env value (including all
+# Firebase config) resolved to undefined, since babel.config.js allows
+# undefined env vars rather than failing the build.
 
 # typescript
 

@@ -86,4 +86,14 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# AI dev-workflow instructions — local-only, not shared via git
+AGENTS.md
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
 # @end expo-cli

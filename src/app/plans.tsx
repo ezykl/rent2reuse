@@ -28,7 +28,6 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanSubscription from "@/components/PlanSubscription";
 import PayPalPayment from "@/components/PaypalPayment";
-import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "@env";
 import { User, Plan } from "@/types";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
@@ -131,7 +130,7 @@ const PlansScreen: React.FC = () => {
           });
         }
       } catch (error) {
-        console.log("Error fetching profile data:", error);
+        console.error("Error fetching profile data:", error);
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
@@ -179,7 +178,7 @@ const PlansScreen: React.FC = () => {
         }
       },
       (error) => {
-        console.log("Error in profile snapshot:", error);
+        console.error("Error in profile snapshot:", error);
       }
     );
 
@@ -200,7 +199,7 @@ const PlansScreen: React.FC = () => {
           setSubscriptionDetails(subDoc.data() as SubscriptionDetails);
         }
       } catch (error) {
-        console.log("Error fetching subscription details:", error);
+        console.error("Error fetching subscription details:", error);
       }
     };
 
@@ -224,7 +223,7 @@ const PlansScreen: React.FC = () => {
       const normalizedDuration = duration.toLowerCase().trim();
       return DURATION_MAP[normalizedDuration as keyof typeof DURATION_MAP] || 0;
     } catch (error) {
-      console.log(
+      console.error(
         "Error parsing duration:",
         error,
         "Duration value:",
@@ -331,24 +330,26 @@ const PlansScreen: React.FC = () => {
       // REMOVED: setShowPaymentModal(false) - Modal stays open
       // REMOVED: Success toast - No automatic toast
     } catch (error) {
-      console.log("Error processing payment:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody:
-          error instanceof Error ? error.message : "Failed to process payment",
-      });
+      console.error("Error processing payment:", error);
+      // Alert.alert, not Toast.show — this fires while the full-screen
+      // payment <Modal> is open, and RN Modal presents in its own native
+      // layer that the app-root-level Toast overlay doesn't composite
+      // above, so a Toast here is real but invisible to the user.
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Failed to process payment"
+      );
     }
   };
 
   const handlePaymentError = (error: unknown) => {
-    console.log("Payment error:", error);
-    Toast.show({
-      type: ALERT_TYPE.DANGER,
-      title: "Error",
-      textBody:
-        error instanceof Error ? error.message : "Unknown error occurred",
-    });
+    console.error("Payment error:", error);
+    // See note above — Alert.alert instead of Toast.show while the
+    // payment Modal is open.
+    Alert.alert(
+      "Error",
+      error instanceof Error ? error.message : "Unknown error occurred"
+    );
   };
 
   const handlePaymentCancel = () => {
@@ -435,7 +436,7 @@ const PlansScreen: React.FC = () => {
         textBody: "Receipt has been saved to your photo gallery!",
       });
     } catch (error) {
-      console.log("Error saving receipt:", error);
+      console.error("Error saving receipt:", error);
       Alert.alert(
         "Save Failed",
         "Could not save receipt to gallery. Please check permissions and try again."
@@ -457,7 +458,7 @@ const PlansScreen: React.FC = () => {
         message: "Payment Receipt - Subscription Activated",
       });
     } catch (error) {
-      console.log("Error sharing receipt:", error);
+      console.error("Error sharing receipt:", error);
       Alert.alert("Error", "Failed to share receipt. Please try again.");
     }
   };
@@ -507,7 +508,7 @@ const PlansScreen: React.FC = () => {
         }
       }
     } catch (error) {
-      console.log("Refresh error:", error);
+      console.error("Refresh error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -523,7 +524,7 @@ const PlansScreen: React.FC = () => {
     try {
       return format(timestamp.toDate(), "MMMM dd, yyyy");
     } catch (error) {
-      console.log("Error formatting date:", error);
+      console.error("Error formatting date:", error);
       return "Invalid Date";
     }
   };
@@ -533,7 +534,7 @@ const PlansScreen: React.FC = () => {
       console.log("Receipt ref current:", receiptRef.current);
 
       if (!receiptRef.current) {
-        console.log("Receipt ref is null");
+        console.error("Receipt ref is null");
         return;
       }
 
@@ -549,7 +550,7 @@ const PlansScreen: React.FC = () => {
       const fileInfo = await FileSystem.getInfoAsync(uri);
       console.log("File info:", fileInfo);
     } catch (error) {
-      console.log("Debug capture error:", error);
+      console.error("Debug capture error:", error);
     }
   };
 
@@ -912,8 +913,6 @@ const PlansScreen: React.FC = () => {
             ) : (
               <PayPalPayment
                 plan={selectedPlan}
-                clientId={PAYPAL_CLIENT_ID}
-                clientSecret={PAYPAL_CLIENT_SECRET}
                 onPaymentSuccess={handlePaymentSuccess}
                 onPaymentError={handlePaymentError}
                 onPaymentCancel={handlePaymentCancel}

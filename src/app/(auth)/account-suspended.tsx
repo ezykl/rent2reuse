@@ -6,8 +6,11 @@ import LargeButton from "@/components/LargeButton";
 import { auth } from "@/lib/firebaseConfig";
 import { router } from "expo-router";
 import * as Linking from "expo-linking";
+import { useAuth } from "@/context/AuthContext";
 
 const AccountSuspendedScreen = () => {
+  const { logout } = useAuth();
+
   // Prevent navigation back
   useEffect(() => {
     // This ensures we can't go back from this screen
@@ -16,7 +19,10 @@ const AccountSuspendedScreen = () => {
 
   const handleSignOut = async () => {
     try {
-      await auth.signOut();
+      // Routes through AuthContext.logout() rather than auth.signOut()
+      // directly, so the userSessions doc actually gets marked inactive
+      // (see the single-active-session enforcement fix).
+      await logout();
       router.replace("/(auth)/sign-in");
     } catch (error) {
       console.log("Error signing out:", error);

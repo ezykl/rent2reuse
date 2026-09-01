@@ -1,23 +1,12 @@
-import { AssessmentData } from "../components/chatModal/ConditionalAssessmentMessage";
-
 type MessageType =
   | "message"
   | "rentRequest"
   | "statusUpdate"
   | "image"
   | "paymentRequest"
-  | "ownerConfirmation"
-  | "itemUnavailable"
-  | "conditionalAssessment"
-  | "rating"
   | "payment";
 
 export default interface Message {
-  rating(rating: any): import("react").ReactNode;
-
-  assessmentType?: "pickup" | "return";
-  assessment?: AssessmentData;
-  
   isDeleted?: boolean;
   deletedAt?: any;
   isEdited?: boolean;
@@ -35,44 +24,41 @@ export default interface Message {
   imageWidth?: number;
   imageHeight?: number;
   rentRequestDetails?: {
-    startDate?: any;
-    endDate?: any;
-    rentalDays?: number;
-    pickupTime?: number;
-    itemLocation?: string | { address?: string };
-    itemId?: string;
-    itemName?: string;
-    totalPrice?: number;
+    itemId: string;
+    itemName: string;
+    itemImage: string;
+    totalPrice: number;
+    startDate: any;
+    endDate: any;
+    rentalDays: number;
+    ownerId: string;
+    ownerName: string;
+    requesterId: string;
+    requesterName: string;
+    pickupTime: number;
+    message: string;
+    status: string;
   };
-
-  transactionId?: string;
-  paidAt?: any;
-  confirmedByOwner?: boolean;
-  confirmedAt?: any;
-  recipientPayPalEmail?: string;
-  paypalOrderId?: string;
-  paypalApprovalUrl?: string;
-  paypalCaptureId?: string;
   paymentType?: "initial" | "full";
   amount?: number;
   totalAmount?: number;
   downpaymentPercentage?: number;
-  paymentId?: string;
-  paypalCheckoutUrl?: string;
-  usdAmount?: string;
-  confirmedAmount?: string;
-  sentAt?: any;
-
-  confirmationRequestId?: string;
-  itemDetails?: {
-    name?: string;
-    price?: number;
-    image?: string;
-    downpaymentPercentage?: number;
-    startDate?: any;
-    endDate?: any;
-    rentalDays?: number;
-    pickupTime?: number;
-  };
-
+  // Owner's payout destination, captured when the payment request is created
+  // (see payment-options.tsx / chat/[id].tsx sendPaymentMessage).
+  ownerPayPalEmail?: string;
+  // The renter/payer's uid — who owes this payment.
+  recipientId?: string;
+  paypalOrderId?: string;
+  transactionId?: string;
+  paidAt?: any;
+  // Server-set outcome of the platform's payout to the owner (see
+  // paypalCaptureOrder in functions/src/index.ts). "failed" surfaces the
+  // manual "Mark as Received" fallback in PaymentMessage.tsx.
+  payoutStatus?: "success" | "failed";
+  payoutBatchId?: string;
+  payoutError?: string;
+  // Manual fallback: the owner self-reports having received the money
+  // outside of the automated payout (e.g. after a payout failure).
+  confirmedByOwner?: boolean;
+  confirmedAt?: any;
 }

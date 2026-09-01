@@ -24,55 +24,18 @@ import { useLoader } from "@/context/LoaderContext";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
 import { db, auth as firebaseAuth } from "@/lib/firebaseConfig";
+import {
+  createPlanSubscriptionOrder,
+  capturePlanSubscriptionOrder,
+} from "@/utils/paypalClient";
+import { estimateUsd, estimatePhp } from "@/utils/exchangeRate";
 const { width, height } = Dimensions.get("window");
 
-import { PAYPAL_BASE_URL } from "@env";
-
-let currentRate = 56.5;
-
-async function fetchExchangeRate() {
-  try {
-    const res = await fetch(
-      "https://api.frankfurter.app/latest?amount=1&from=USD&to=PHP"
-    );
-    const data = await res.json();
-
-    if (data?.rates?.PHP) {
-      currentRate = data.rates.PHP;
-      console.log("Fetched exchange rate:", currentRate);
-    } else {
-      console.log("API response invalid, keeping fallback:", data);
-    }
-  } catch (err) {
-    console.log("Error fetching rate, using fallback:", err);
-  }
+function generateTransactionId(): string {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 10000);
+  return `TXN-${timestamp}-${random}`;
 }
-
-function getExchangeRate() {
-  return currentRate;
-}
-
-// Refresh every 30 minutes
-setInterval(fetchExchangeRate, 30 * 60 * 1000);
-fetchExchangeRate();
-
-const DatabaseHelper = {
-  generateTransactionId: () => {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 10000);
-    return `TXN-${timestamp}-${random}`;
-  },
-
-  // Convert USD to PHP (you can update exchange rate dynamically)
-  convertToPhp: (usdAmount: string | number) => {
-    return (parseFloat(usdAmount.toString()) * getExchangeRate()).toFixed(2);
-  },
-
-  // Convert PHP to USD
-  convertToUsd: (phpAmount: number) => {
-    return (parseFloat(phpAmount.toString()) / getExchangeRate()).toFixed(2);
-  },
-};
 
 // Replace the getGradientColors function with getPlanColor
 const getPlanColor = (planType: string): string => {
@@ -87,124 +50,6 @@ const getPlanColor = (planType: string): string => {
   return colors[normalizedType as keyof typeof colors] || colors.free;
 };
 
-// Function to get access token
-export const getPayPalAccessToken = async (
-  clientId: string,
-  clientSecret: string
-) => {
-  try {
-    const auth = btoa(`${clientId}:${clientSecret}`);
-
-    const response = await fetch(`${PAYPAL_BASE_URL}/v1/oauth2/token`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Accept-Language": "en_US",
-        Authorization: `Basic ${auth}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: "grant_type=client_credentials",
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
-      return data.access_token;
-    } else {
-      throw new Error(data.error_description || "Failed to get access token");
-    }
-  } catch (error) {
-    console.log("Error getting PayPal access token:", error);
-    throw error;
-  }
-};
-
-// Function to create payment order
-export const createPayPalOrder = async (
-  accessToken: string,
-  phpAmount: number,
-  currency = "USD",
-  orderDetails?: {
-    description?: string;
-    customId?: string;
-    invoiceId?: string;
-  }
-) => {
-  try {
-    // Convert PHP to USD for PayPal
-    const usdAmount = DatabaseHelper.convertToUsd(phpAmount);
-
-    const orderData = {
-      intent: "CAPTURE",
-      purchase_units: [
-        {
-          amount: {
-            currency_code: "USD",
-            value: usdAmount,
-          },
-          description: orderDetails?.description || "Plan Subscription Payment",
-        },
-      ],
-      application_context: {
-        return_url:
-          "https://www.paypal.com/checkoutnow/error?paymentId=success",
-        cancel_url: "https://www.paypal.com/checkoutnow/error?paymentId=cancel",
-        user_action: "PAY_NOW",
-      },
-    };
-
-    const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(orderData),
-    });
-
-    const data = await response.json();
-
-    if (response.ok) {
-      return data;
-    } else {
-      throw new Error(data.message || "Failed to create PayPal order");
-    }
-  } catch (error) {
-    console.log("Error creating PayPal order:", error);
-    throw error;
-  }
-};
-
-// Function to capture payment after approval
-export const capturePayPalOrder = async (
-  accessToken: string,
-  orderId: string
-) => {
-  try {
-    const response = await fetch(
-      `${PAYPAL_BASE_URL}/v2/checkout/orders/${orderId}/capture`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-
-    const data = await response.json();
-
-    if (response.ok) {
-      return data;
-    } else {
-      throw new Error(data.message || "Failed to capture PayPal payment");
-    }
-  } catch (error) {
-    console.log("Error capturing PayPal payment:", error);
-    throw error;
-  }
-};
-
 interface PayPalPaymentProps {
   plan: {
     id: string;
@@ -214,8 +59,6 @@ interface PayPalPaymentProps {
     list: number;
     rent: number;
   };
-  clientId: string;
-  clientSecret: string;
   onPaymentSuccess: (result: any) => void;
   onPaymentError: (error: any) => void;
   onPaymentCancel: () => void;
@@ -223,15 +66,13 @@ interface PayPalPaymentProps {
 
 const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   plan,
-  clientId,
-  clientSecret,
   onPaymentSuccess,
   onPaymentError,
   onPaymentCancel,
 }) => {
   useEffect(() => {
     if (!plan?.planType || !plan?.duration) {
-      console.log("Missing required plan fields:", plan);
+      if (__DEV__) console.error("Missing required plan fields:", plan);
     }
   }, [plan]);
 
@@ -240,8 +81,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
   const [showResultModal, setShowResultModal] = useState(false);
   const [resultType, setResultType] = useState("");
   const [paymentUrl, setPaymentUrl] = useState("");
-  const [orderId, setOrderId] = useState(null);
-  const [accessToken, setAccessToken] = useState(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const { isLoading, setIsLoading } = useLoader();
@@ -286,13 +126,13 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
         createdAt: serverTimestamp(),
       });
     } catch (error) {
-      console.log("Error creating welcome notification:", error);
+      if (__DEV__) console.error("Error creating welcome notification:", error);
     }
   };
 
   const getDurationInMs = (duration: string | undefined): number => {
     if (!duration) {
-      console.warn("Duration is undefined");
+      if (__DEV__) console.warn("Duration is undefined");
       return 0;
     }
 
@@ -307,7 +147,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       const normalizedDuration = duration.toLowerCase().trim();
       return DURATION_MAP[normalizedDuration as keyof typeof DURATION_MAP] || 0;
     } catch (error) {
-      console.log(
+      if (__DEV__) console.error(
         "Error parsing duration:",
         error,
         "Duration value:",
@@ -338,46 +178,22 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
     }
   }, [showResultModal]);
 
-  const orderDetails = {
-    description: `${plan.planType} Plan Subscription`,
-    customId: `PLAN_${plan.id}_${Date.now()}`,
-    invoiceId: `INV_${Date.now()}`,
-  };
-
   const handlePayment = async () => {
     try {
       setLoading(true);
-      const newTransactionId = DatabaseHelper.generateTransactionId();
+      const newTransactionId = generateTransactionId();
       setTransactionId(newTransactionId);
 
-      // Get access token
-      const token = await getPayPalAccessToken(clientId, clientSecret);
-      setAccessToken(token);
+      // Order creation (and the PayPal secret it requires) happens entirely
+      // server-side now — the client only gets back an order id + approval URL.
+      const order = await createPlanSubscriptionOrder(plan.id);
+      if (!order.approvalUrl) throw new Error("No approval URL found");
 
-      // Create order with plan details
-      const order = await createPayPalOrder(token, plan.price, "USD", {
-        description: orderDetails.description,
-        customId: orderDetails.customId,
-        invoiceId: orderDetails.invoiceId,
-      });
-
-      interface PayPalOrderLink {
-        href: string;
-        rel: string;
-        method: string;
-      }
-
-      const approvalUrl = order.links.find(
-        (link: PayPalOrderLink) => link.rel === "approve"
-      )?.href;
-      // if (!approvalUrl) throw new Error("No approval URL found");
-
-      setOrderId(order.id);
-      setPaymentUrl(approvalUrl);
+      setOrderId(order.orderId);
+      setPaymentUrl(order.approvalUrl);
       setShowWebView(true);
     } catch (error) {
-      // console.log("Payment error:", error);
-      setLoading(false);
+      if (__DEV__) console.error("Payment error:", error);
       onPaymentError(error);
     } finally {
       setLoading(false);
@@ -396,24 +212,17 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
     navState: WebViewNavigationState
   ): Promise<void> => {
     const { url } = navState;
+    if (__DEV__) console.log("WebView URL:", url);
 
     // Check if user completed payment (success)
     if (url.includes("paymentId=success")) {
-      console.log("Payment success detected!");
-      setLoading(true);
+      if (__DEV__) console.log("Payment success detected!");
       setShowWebView(false);
-      try {
-        setIsLoading(true);
-        setLoading(true);
-        await capturePayment();
-      } finally {
-        setLoading(false);
-        setIsLoading(false);
-      }
+      await capturePayment();
     }
     // Check if user cancelled payment
     else if (url.includes("paymentId=cancel")) {
-      console.log("Payment cancel detected!");
+      if (__DEV__) console.log("Payment cancel detected!");
       setShowWebView(false);
       setResultType("cancel");
       setShowResultModal(true);
@@ -426,30 +235,25 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
       url.includes("paypal.com") &&
       (url.includes("success") || url.includes("approved"))
     ) {
-      console.log("PayPal success pattern detected!");
-      setLoading(true);
+      if (__DEV__) console.log("PayPal success pattern detected!");
       setShowWebView(false);
-      try {
-        setIsLoading(true);
-        setLoading(true);
-        await capturePayment();
-      } finally {
-        setLoading(false);
-        setIsLoading(false);
-      }
+      await capturePayment();
     }
   };
 
   const capturePayment = async () => {
     try {
-      if (!accessToken || !orderId) {
-        throw new Error("Missing access token or order ID");
+      if (!orderId) {
+        throw new Error("Missing order ID");
       }
       setLoading(true);
       setIsLoading(true);
-      const captureResult = await capturePayPalOrder(accessToken, orderId);
+      // The server re-verifies the captured amount against the plan's
+      // authoritative price before returning "paid" — see
+      // capturePlanSubscription in functions/src/index.ts.
+      const captureResult = await capturePlanSubscriptionOrder(plan.id, orderId);
 
-      if (captureResult.status === "COMPLETED") {
+      if (captureResult.status === "paid") {
         const transactionData: TransactionData = {
           transactionId,
           paypalOrderId: orderId,
@@ -457,10 +261,9 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
           planType: plan.planType,
           amount: plan.price,
           currency: "PHP" as const,
-          phpAmount: DatabaseHelper.convertToPhp(plan.price),
+          phpAmount: estimatePhp(plan.price),
           status: "completed",
-          paypalTransactionId:
-            captureResult.purchase_units[0]?.payments?.captures[0]?.id,
+          paypalTransactionId: captureResult.transactionId ?? undefined,
           timestamp: new Date().toISOString(),
           planDetails: {
             duration: plan.duration,
@@ -474,14 +277,25 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
         setResultType("success");
         setIsLoading(true);
         setShowResultModal(true);
+        // Kept in the shape plans.tsx's handlePaymentSuccess already expects
+        // (PayPalResult), so that Firestore write logic didn't need to change.
         onPaymentSuccess({
-          ...captureResult,
+          id: orderId,
           customTransactionId: transactionId,
+          purchase_units: [
+            {
+              payments: {
+                captures: [
+                  { id: captureResult.transactionId ?? "", status: "COMPLETED" },
+                ],
+              },
+            },
+          ],
           planDetails: plan,
         });
       }
     } catch (error) {
-      console.log("Payment capture error:", error);
+      if (__DEV__) console.error("Payment capture error:", error);
       onPaymentError(error);
     } finally {
       setLoading(false);
@@ -539,7 +353,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
 
         Alert.alert("Success", "Receipt saved successfully!");
       } catch (error) {
-        console.log("Error saving receipt:", error);
+        if (__DEV__) console.error("Error saving receipt:", error);
         Alert.alert("Error", "Failed to save receipt");
       }
     };
@@ -547,7 +361,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
     return null;
   };
 
-  const usdAmount = DatabaseHelper.convertToUsd(plan.price);
+  const usdAmount = estimateUsd(plan.price);
 
   const getDisplayPlanType = (planType: string | undefined): string => {
     if (!planType) return "Plan";
@@ -848,7 +662,7 @@ const PayPalPayment: React.FC<PayPalPaymentProps> = ({
             className="flex-1"
             onError={(syntheticEvent) => {
               const { nativeEvent } = syntheticEvent;
-              console.warn("WebView error: ", nativeEvent);
+              if (__DEV__) console.warn("WebView error: ", nativeEvent);
             }}
             javaScriptEnabled={true}
             domStorageEnabled={true}

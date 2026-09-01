@@ -1,0 +1,8 @@
+node_modules
+dist
+web-build
+functions/lib
+functions/node_modules
+android
+credentials
+package-lock.json

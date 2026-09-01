@@ -20,7 +20,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { icons, images } from "@/constant";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
-import { R2R_MODEL } from "@/constant/api";
+import { classifyImageOnDevice } from "@/utils/r2rModel";
 import { useItemSearch } from "@/hooks/useItemSearch";
 import { useItemViews } from "@/hooks/useItemViews";
 import { Item } from "@/types/item";
@@ -66,26 +66,15 @@ const Search = () => {
     watchLocation: false,
   });
 
-  // Handle image processing - same as before
+  // Classify the photo entirely on-device (see src/utils/r2rModel.ts) — no
+  // network call, no server to keep alive.
   const handleImageProcess = async (uri: string) => {
     setIsLoading(true);
     try {
-      const formData = new FormData();
-      formData.append("image", {
-        uri,
-        name: "image.jpg",
-        type: "image/jpeg",
-      } as any);
-
-      const response = await fetch(R2R_MODEL, {
-        method: "POST",
-        body: formData,
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      const result = await response.json();
-      await handlePredictionResult(result);
+      const predictions = await classifyImageOnDevice(uri);
+      await handlePredictionResult(predictions);
     } catch (error) {
+      if (__DEV__) console.error("On-device classification error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -96,9 +85,12 @@ const Search = () => {
     }
   };
 
-  // Handle AI prediction result - same as before
-  const handlePredictionResult = async (prediction: any) => {
-    if (!prediction || !Array.isArray(prediction)) {
+  // Handle the on-device prediction result — same downstream behavior as
+  // before (search using the top predicted item's name).
+  const handlePredictionResult = async (
+    predictions: Awaited<ReturnType<typeof classifyImageOnDevice>>
+  ) => {
+    if (!predictions || predictions.length === 0) {
       Toast.show({
         type: ALERT_TYPE.WARNING,
         title: "Warning",
@@ -107,8 +99,7 @@ const Search = () => {
       return;
     }
 
-    const topPrediction = prediction[0];
-    const predictedItem = topPrediction["Predicted Item"];
+    const predictedItem = predictions[0].label;
 
     // Update search query state
     setSearchQuery(predictedItem);

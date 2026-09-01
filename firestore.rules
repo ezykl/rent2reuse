@@ -1,0 +1,298 @@
+// ============================================================================
+// ⚠️  READ BEFORE DEPLOYING ⚠️
+//
+// This ruleset replaces the wide-open dev catch-all
+// (`allow read, write: if true`) that is currently LIVE in production. It
+// also serves the Admin-Rent2Reuse-website app, which shares this Firebase
+// project (`petshelapp`) — do not tighten this without testing that app's
+// flows too.
+//
+// Rollout order (see the plan doc's Phase A.4 for full detail):
+//   1. Pull the actual live rules from the console and diff against this
+//      file before touching anything.
+//   2. Deploy the `syncAdminLookup` Cloud Function (functions/src/
+//      adminLookupSync.ts) FIRST and let it settle (or run the one-time
+//      backfill script) before relying on `isApprovedAdmin()` below —
+//      admin_lookup/{uid} must already be populated for real admins, or
+//      every admin action will start failing the moment this deploys.
+//   3. Test against the Firestore emulator with fixtures covering: a
+//      legacy auto-ID `admin` doc, a UID-keyed `admin` doc, a `pending`
+//      admin, a normal user, an item, and a chat with a payment message
+//      plus an `admin_notification` message.
+//   4. Deploy Firestore and Storage rules as separate deploys, not
+//      simultaneously, so a problem is easier to isolate.
+//
+// Rollback: Firebase Console's Rules tab keeps one-click version history.
+// This is metadata-only — always safely reversible.
+// ============================================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // admin_lookup/{uid} is maintained by syncAdminLookup — always
+    // correctly keyed, unlike admin/{docId} whose doc ID isn't reliably
+    // the user's uid (see that function's header comment for why).
+    function isApprovedAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admin_lookup/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admin_lookup/$(request.auth.uid)).data.accountStatus == 'approved';
+    }
+
+    function isChatParticipant(chatId) {
+      let chat = get(/databases/$(database)/documents/chat/$(chatId));
+      return isSignedIn() &&
+        (chat.data.ownerId == request.auth.uid || chat.data.requesterId == request.auth.uid);
+    }
+
+    // ---- admin identity (see functions/src/adminLookupSync.ts) ----
+    match /admin/{adminDocId} {
+      // TEMPORARY: public read. The admin website's pre-auth existence
+      // check (checkAdminExists in signin/page.tsx) queries this collection
+      // by email BEFORE request.auth exists, so no isSignedIn()-gated rule
+      // can ever satisfy it; other admin lookups there also query by field
+      // (uid/email) rather than by doc ID, which the doc-ID-based check
+      // below only happened to satisfy for one specific account. Write
+      // access is untouched and still locked to isApprovedAdmin() only, so
+      // the actual hole this rules rewrite closed (arbitrary
+      // self-vivification writes) stays closed. Revisit once the admin
+      // website's checkAdminExists is fixed to fail open on
+      // permission-denied instead of relying on public read here.
+      allow read: if true;
+      // Only an already-approved admin may create/update admin docs — this
+      // intentionally closes the admin-website's "self-vivification" write
+      // hole where any authenticated user (including mobile end-users,
+      // since it's one shared Auth pool) could create their own admin doc.
+      allow create: if isApprovedAdmin();
+      allow update: if isApprovedAdmin();
+      allow delete: if false;
+    }
+
+    match /admin_lookup/{uid} {
+      allow read, write: if false; // Cloud-Function-owned only
+    }
+
+    // ---- users ----
+    match /users/{userId} {
+      // The rating flow's transaction (see ratingUtils.ts) updates the
+      // RATED user's aggregate fields via transaction.set(..., {merge:true})
+      // — scope this exception tightly to just those fields.
+      function touchesOnlyRatingAggregateFields() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['averageRating', 'totalRatings', 'ratingCount']);
+      }
+
+      allow read: if isSignedIn() || isApprovedAdmin();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isApprovedAdmin() ||
+        (isSignedIn() && touchesOnlyRatingAggregateFields());
+      allow delete: if false;
+
+      // Written by OTHER users too (e.g. a requester notifying the item
+      // owner) — see notificationHelper.ts, create-ticket.tsx, report/[userId].tsx.
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow create: if isSignedIn();
+        allow update, delete: if isOwner(userId);
+      }
+    }
+
+    match /userSessions/{sessionId} {
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /userStatus/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner(userId);
+    }
+
+    // ---- items / listings ----
+    match /items/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.owner.id == request.auth.uid;
+      allow update, delete: if isApprovedAdmin() ||
+        (isSignedIn() && resource.data.owner.id == request.auth.uid);
+    }
+
+    // ---- rental requests / rentals ----
+    match /rentRequests/{requestId} {
+      allow read: if isApprovedAdmin() ||
+        (isSignedIn() &&
+          (resource.data.ownerId == request.auth.uid ||
+           resource.data.requesterId == request.auth.uid));
+      allow create: if isSignedIn() && request.resource.data.requesterId == request.auth.uid;
+      allow update: if isApprovedAdmin() ||
+        (isSignedIn() &&
+          (resource.data.ownerId == request.auth.uid ||
+           resource.data.requesterId == request.auth.uid));
+      allow delete: if false;
+    }
+
+    match /rentals/{rentalId} {
+      allow read, update: if isApprovedAdmin() ||
+        (isSignedIn() &&
+          (resource.data.ownerId == request.auth.uid ||
+           resource.data.renterId == request.auth.uid));
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // ---- chat ----
+    match /chat/{chatId} {
+      function isParticipant() {
+        return isSignedIn() &&
+          (resource.data.ownerId == request.auth.uid ||
+           resource.data.requesterId == request.auth.uid);
+      }
+
+      allow read: if isParticipant() || isApprovedAdmin();
+      allow create: if isSignedIn() && request.resource.data.requesterId == request.auth.uid;
+      allow update: if isParticipant() || isApprovedAdmin();
+
+      match /messages/{messageId} {
+        // Authoritative payment/payout state — set only by the Cloud
+        // Functions Admin SDK (paypalCaptureOrder in functions/src/index.ts).
+        // Scoped to payment-type messages only: without the type check,
+        // this blocked legitimate `status` updates on OTHER message types
+        // too (e.g. cancelling a rent request sets a rentRequest message's
+        // status to "cancelled"), since 'status' is a generic field name
+        // reused across message types, not exclusive to payments.
+        function touchesServerOnlyFields() {
+          return resource.data.type == 'payment' &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny([
+                'status', 'paidAt', 'transactionId', 'paypalOrderId',
+                'payoutStatus', 'payoutBatchId', 'payoutError'
+              ]);
+        }
+
+        allow read: if isChatParticipant(chatId) || isApprovedAdmin();
+
+        // Two distinct create paths: (1) a chat participant sending their
+        // own message, (2) the admin app's moderation "admin_notification"
+        // message, written with the literal senderId "admin" (see
+        // Admin-Rent2Reuse-website/src/app/admin/chatLogs/page.tsx), which
+        // can't satisfy senderId == auth.uid.
+        allow create: if (isChatParticipant(chatId) &&
+                            request.resource.data.senderId == request.auth.uid) ||
+                          (isApprovedAdmin() &&
+                            request.resource.data.type == 'admin_notification');
+
+        // Covers the client's own edits (text edit/soft-delete) and the
+        // "Mark as Received" fallback (confirmedByOwner/confirmedAt) —
+        // everything in touchesServerOnlyFields() above is blocked here.
+        allow update: if (isChatParticipant(chatId) && !touchesServerOnlyFields()) ||
+                          isApprovedAdmin();
+        allow delete: if false; // app only ever soft-deletes via update
+      }
+    }
+
+    // ---- ratings ----
+    match /ratings/{ratingId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.raterUserId == request.auth.uid &&
+        request.resource.data.raterUserId != request.resource.data.ratedUserId;
+      allow update: if isSignedIn() &&
+        resource.data.raterUserId == request.auth.uid &&
+        request.resource.data.raterUserId == resource.data.raterUserId &&
+        request.resource.data.ratedUserId == resource.data.ratedUserId;
+      allow delete: if false;
+    }
+
+    // ---- announcements (admin-authored, read-only to end users) ----
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+      allow write: if isApprovedAdmin();
+    }
+
+    // ---- reports / userReports (admin app's naming inconsistency — tolerated, not fixed) ----
+    match /reports/{reportId} {
+      allow create: if isSignedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read, update, delete: if isApprovedAdmin();
+    }
+    match /userReports/{reportId} {
+      allow read, write: if isApprovedAdmin();
+    }
+
+    // ---- support tickets ----
+    match /support/{ticketId} {
+      allow read: if isApprovedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isApprovedAdmin();
+      allow delete: if false;
+    }
+
+    // ---- plans / subscriptions / transactions ----
+    match /plans/{planId} {
+      allow read: if isSignedIn();
+      allow write: if isApprovedAdmin();
+    }
+
+    match /subscription/{subId} {
+      allow read, update: if isApprovedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+    // admin app's plural alternate name for the same concept — read-only
+    // tolerance, not a second writable surface.
+    match /subscriptions/{subId} {
+      allow read: if isApprovedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /transactions/{txnId} {
+      allow read: if isApprovedAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ---- legacy/unused "payments" collection (mobile client no longer writes this) ----
+    match /payments/{paymentId} {
+      allow read, write: if isApprovedAdmin();
+    }
+
+    // ---- admin-app-only collections (mobile app doesn't touch these today) ----
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if isApprovedAdmin();
+      allow delete: if false;
+    }
+
+    match /userLogs/{logId} {
+      allow read, create: if isApprovedAdmin();
+      allow update, delete: if false;
+    }
+
+    match /suspensionLogs/{logId} {
+      allow create, read: if isApprovedAdmin();
+      allow update, delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isApprovedAdmin();
+    }
+
+    // touched only by the admin repo's offline backup script (firebase-admin,
+    // bypasses rules) — deny all client access.
+    match /rentedItems/{docId} {
+      allow read, write: if false;
+    }
+
+    // ---- explicit deny for everything else — replaces the dev catch-all ----
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
