@@ -426,7 +426,7 @@ const Search = () => {
                   onPress={() => {
                     setActiveFilters(tempFilters);
                     setShowFilter(false);
-                    handleSearch();
+                    // handleSearch();
                   }}
                 >
                   <Text className="text-primary font-pregular">Apply</Text>
@@ -691,7 +691,7 @@ const Search = () => {
 
       setSearchResults(results);
     } catch (error) {
-      console.error("Search error:", error);
+      console.log("Search error:", error);
       setSearchResults([]);
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -717,7 +717,7 @@ const Search = () => {
 
       setSearchResults(results);
     } catch (error) {
-      console.error("Category search error:", error);
+      console.log("Category search error:", error);
       setSearchResults([]);
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -853,7 +853,7 @@ const Search = () => {
                           );
                           setSearchResults(availableResults);
                         } catch (error) {
-                          console.error("Popular search error:", error);
+                          console.log("Popular search error:", error);
                           Toast.show({
                             type: ALERT_TYPE.DANGER,
                             title: "Error",

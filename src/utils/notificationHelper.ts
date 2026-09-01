@@ -104,7 +104,7 @@ export const sendRentRequestNotifications = async (
       });
     }
   } catch (error) {
-    console.error("Error sending notifications:", error);
+    console.log("Error sending notifications:", error);
     // Don't throw the error to prevent breaking the rent request flow
   }
 };
@@ -165,7 +165,7 @@ export const sendRentRequestNotificationsV2 = async (
       });
     }
   } catch (error) {
-    console.error("Error sending notifications:", error);
+    console.log("Error sending notifications:", error);
   }
 };
 
@@ -190,7 +190,7 @@ export const createInAppNotification = async (
     });
     console.log(`📱 In-app notification created for user: ${userId}`);
   } catch (error) {
-    console.error("Error creating in-app notification:", error);
+    console.log("Error creating in-app notification:", error);
   }
 };
 
@@ -229,7 +229,7 @@ export const sendPushNotification = async ({
           imageResponse.headers.get("content-type")
         );
       } catch (error) {
-        console.error("Image URL test failed:", error);
+        console.log("Image URL test failed:", error);
       }
     }
 
@@ -253,13 +253,13 @@ export const sendPushNotification = async ({
 
     if (!response.ok) {
       const responseText = await response.text();
-      console.error("Push notification failed:", response.status, responseText);
+      console.log("Push notification failed:", response.status, responseText);
       throw new Error(`Push notification failed: ${response.status}`);
     }
 
     console.log("Push notification sent successfully with image:", imageUrl);
   } catch (error) {
-    console.error("Error sending push notification:", error);
+    console.log("Error sending push notification:", error);
   }
 };
 export const sendItemUnavailableNotifications = async (
@@ -314,7 +314,7 @@ export const sendItemUnavailableNotifications = async (
 
       console.log(`📱 Item unavailable notification sent to user: ${userId}`);
     } catch (error) {
-      console.error(`Error sending notification to user ${userId}:`, error);
+      console.log(`Error sending notification to user ${userId}:`, error);
     }
   });
 
@@ -378,6 +378,6 @@ export const sendRequestAcceptedNotification = async (
       `📱 Request accepted notification sent to user: ${acceptedUserId}`
     );
   } catch (error) {
-    console.error("Error sending acceptance notification:", error);
+    console.log("Error sending acceptance notification:", error);
   }
 };

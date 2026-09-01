@@ -42,8 +42,43 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
     return `${recipientName.firstname}${middleInitial} ${recipientName.lastname}`;
   };
 
+  // ✅ NEW: Get the current stage in the rental flow
+  const getRentalStage = (): {
+    stage: string;
+    stageNumber: number;
+    color: string;
+  } => {
+    switch (status) {
+      case "pending":
+        return { stage: "Request", stageNumber: 1, color: "#FCD34D" }; // Yellow
+      case "accepted":
+      case "initial_payment_paid":
+      case "assessment_submitted":
+        return { stage: "Pick-Up", stageNumber: 2, color: "#60A5FA" }; // Blue
+      case "pickedup":
+        return { stage: "Renting", stageNumber: 3, color: "#34D399" }; // Green
+      case "completed":
+        return { stage: "Return", stageNumber: 4, color: "#A78BFA" }; // Purple
+      case "declined":
+      case "cancelled":
+        return { stage: "Cancelled", stageNumber: 0, color: "#EF4444" }; // Red
+      default:
+        return { stage: "Request", stageNumber: 1, color: "#9CA3AF" }; // Gray
+    }
+  };
+
+  const currentStage = getRentalStage();
+
+  // ✅ All 5 stages
+  const stages = [
+    { name: "Request", number: 1 },
+    { name: "Pick-Up", number: 2 },
+    { name: "Renting", number: 3 },
+    { name: "Return", number: 4 },
+    { name: "Rate", number: 5 },
+  ];
+
   const isRentalConversation = itemDetails && status;
-  const isRentRequest = isOwner;
 
   return (
     <View className="bg-white border-b border-gray-300 rounded-b-xl">
@@ -65,24 +100,15 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             className="w-12 h-12 rounded-xl bg-gray-200"
             resizeMode="cover"
           />
-          {/* <Image
-            source={{
-              uri: recipientImage || "https://placehold.co/40x40@2x.png",
-            }}
-            className="w-12 h-12 rounded-xl bg-gray-200 -ml-4 mt-4 mr-3"
-            resizeMode="cover"
-          /> */}
 
           <View
             className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full items-center justify-center ${
-              isRentRequest ? "bg-green-500" : "bg-blue-500"
+              isOwner ? "bg-green-500" : "bg-blue-500"
             }`}
           >
             <Image
               source={icons.leftArrow}
-              className={`w-5 h-5 ${
-                isRentRequest ? "-inset-9rotate-90" : "rotate-90"
-              }`}
+              className={`w-5 h-5 ${isOwner ? "-rotate-90" : "rotate-90"}`}
               tintColor="#fff"
             />
           </View>
@@ -112,35 +138,71 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
             </Text>
           </TouchableOpacity>
 
-          {/* Show compact progress indicator or online status */}
-          {isRentalConversation ? (
-            <View className="mt-1">
-              <RentalProgressIndicator
-                currentStatus={status}
-                isOwner={isOwner}
-                compact={true}
-              />
+          {/* ✅ NEW: Show rental progress flow */}
+          {isRentalConversation && status && (
+            <View className="mt-2">
+              <View className="flex-row items-center justify-between relative">
+                {stages.map((stageItem, index) => (
+                  <View
+                    key={stageItem.number}
+                    className="flex-1 items-center relative"
+                  >
+                    {/* Connector Line - behind the circles */}
+                    {index < stages.length - 1 && (
+                      <View
+                        className={`absolute top-3 left-1/2 right-0 w-full h-0.5 z-0 ${
+                          stageItem.number < currentStage.stageNumber
+                            ? "bg-primary"
+                            : "bg-gray-300"
+                        }`}
+                      />
+                    )}
+
+                    {/* Stage Circle */}
+                    <View
+                      className={`w-6 h-6 rounded-full items-center justify-center mb-1 z-10 ${
+                        stageItem.number <= currentStage.stageNumber
+                          ? "bg-primary"
+                          : "bg-gray-300"
+                      }`}
+                    >
+                      <Text
+                        className={`font-pbold text-xs ${
+                          stageItem.number <= currentStage.stageNumber
+                            ? "text-white"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {stageItem.number}
+                      </Text>
+                    </View>
+
+                    {/* Stage Name - Show all stages */}
+                    <Text
+                      className={`text-[8px] font-pmedium ${
+                        stageItem.number === currentStage.stageNumber
+                          ? "text-primary font-pbold"
+                          : stageItem.number < currentStage.stageNumber
+                          ? "text-gray-700"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {stageItem.name}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          ) : (
-            <Text className="text-xs text-gray-500">
-              {recipientStatus?.isOnline ? "Online" : "Offline"}
-            </Text>
           )}
         </View>
 
         {/* Details Menu Button */}
-        <View className="flex-row items-center">
-          <TouchableOpacity
-            onPress={onShowDetails}
-            className="w-8 h-8 items-center justify-center"
-          >
-            <Image
-              source={icons.menu}
-              className="w-6 h-6"
-              tintColor="#6B7280"
-            />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={onShowDetails}
+          className="w-8 h-8 items-center justify-center"
+        >
+          <Image source={icons.menu} className="w-6 h-6" tintColor="#6B7280" />
+        </TouchableOpacity>
       </View>
     </View>
   );

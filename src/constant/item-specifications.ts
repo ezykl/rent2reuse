@@ -57,7 +57,7 @@ Included:
 
 Additional Notes: `,
 
-    Projector: `Brand: 
+    "Projector": `Brand: 
 Model: 
 Resolution: 
 Brightness (Lumens): 
@@ -67,7 +67,7 @@ Included:
 
 Additional Notes: `,
 
-    Generator: `Brand: 
+    "Generator": `Brand: 
 Model: 
 Power Output: 
 Fuel Type: 

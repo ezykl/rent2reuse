@@ -86,7 +86,7 @@ export default function EditRequest() {
       setRequestData(requestData);
       setItemData(itemData);
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -178,7 +178,7 @@ export default function EditRequest() {
           "Successfully updated both rentRequests and chat collections"
         );
       } catch (error) {
-        console.error("Error updating request:", error);
+        console.log("Error updating request:", error);
         throw error;
       }
 
@@ -190,7 +190,7 @@ export default function EditRequest() {
 
       router.back();
     } catch (error) {
-      console.error("Error:", error);
+      console.log("Error:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

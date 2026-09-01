@@ -116,7 +116,7 @@ class OpenRouteService {
 
       return null;
     } catch (error) {
-      console.error("Error calculating route:", error);
+      console.log("Error calculating route:", error);
       return null;
     }
   }
@@ -133,7 +133,7 @@ class OpenRouteService {
         ? routeResult.routeDistance.meters <= radiusInMeters
         : false;
     } catch (error) {
-      console.error("Error checking route radius:", error);
+      console.log("Error checking route radius:", error);
       // Fallback to straight-line distance
       return LocationUtils.Distance.isWithinRadius(start, end, radiusInMeters);
     }
@@ -192,7 +192,7 @@ export const useLocation = (
       }
       return null;
     } catch (error) {
-      console.error("Error fetching stored location:", error);
+      console.log("Error fetching stored location:", error);
       return null;
     }
   };
@@ -245,7 +245,7 @@ export const useLocation = (
           setError("Location not available");
         }
       } catch (err: any) {
-        console.error("Location error:", err);
+        console.log("Location error:", err);
         // Use firestore location as fallback
         if (firestoreLocation) {
           setUserLocation({
@@ -580,7 +580,7 @@ export const useItemDistances = (
         setItemsWithDistances(sortedItems);
       }
     } catch (error) {
-      console.error("Error calculating route distances:", error);
+      console.log("Error calculating route distances:", error);
     } finally {
       setIsCalculatingRoutes(false);
     }

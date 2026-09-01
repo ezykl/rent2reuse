@@ -31,7 +31,6 @@ export default function CreateTicket() {
       .padStart(3, "0");
     const ticketId = `${prefix}-${timestamp}-${random}`;
 
-  
     return ticketId;
   };
 
@@ -78,7 +77,6 @@ export default function CreateTicket() {
         },
       };
 
-
       const docRef = await addDoc(collection(db, "support"), ticketData);
 
       // Create notification in user's subcollection
@@ -108,7 +106,7 @@ export default function CreateTicket() {
 
       router.back();
     } catch (error) {
-      console.error("Error creating ticket:", error);
+      console.log("Error creating ticket:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

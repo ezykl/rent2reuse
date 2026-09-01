@@ -48,7 +48,7 @@ const getAddressFromCoordinates = async (
     console.log(JSON.stringify(data, null, 2));
     return data.results[0]?.formatted || "";
   } catch (error) {
-    console.error("Error fetching address:", error);
+    console.log("Error fetching address:", error);
     return "";
   }
 };
@@ -258,7 +258,7 @@ export const LocationModalContent = ({
         setErrorMessage("Unable to get your current location.");
       }
     } catch (error) {
-      console.error("Error getting location:", error);
+      console.log("Error getting location:", error);
       setErrorMessage(
         "Failed to get your location. Please try again or search for a location manually."
       );

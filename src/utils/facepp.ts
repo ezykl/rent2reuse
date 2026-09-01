@@ -316,7 +316,7 @@ export const detectFace = async (
       failureCount: failureCount + 1,
     };
   } catch (error: any) {
-    console.error("Face++ Error:", error.response?.data || error.message);
+    console.log("Face++ Error:", error.response?.data || error.message);
 
     if (error.code === "ECONNABORTED") {
       return {

@@ -68,7 +68,7 @@ const PaymentOptions = () => {
           setCurrentPaypalEmail(userData.paypalEmail || null);
         }
       } catch (error) {
-        console.error("Error fetching user data:", error);
+        console.log("Error fetching user data:", error);
       }
     };
 
@@ -161,7 +161,7 @@ const PaymentOptions = () => {
         textBody: "PayPal account connected successfully",
       });
     } catch (error) {
-      console.error("Error saving PayPal email:", error);
+      console.log("Error saving PayPal email:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

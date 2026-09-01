@@ -113,8 +113,8 @@ const EditListing = () => {
       radius: 0,
     },
     images: [] as string[],
-    enableDownpayment: false,
-    downpaymentPercentage: "",
+    enableSecurityDeposit: false,
+    securityDepositPercentage: "",
     enableAI: false,
   });
 
@@ -165,8 +165,9 @@ const EditListing = () => {
       currentData.price !== initialData.price ||
       currentData.minimumDays !== initialData.minimumDays ||
       currentData.condition !== initialData.condition ||
-      currentData.enableDownpayment !== initialData.enableDownpayment ||
-      currentData.downpaymentPercentage !== initialData.downpaymentPercentage;
+      currentData.enableSecurityDeposit !== initialData.enableSecurityDeposit ||
+      currentData.securityDepositPercentage !==
+        initialData.securityDepositPercentage;
 
     if (basicFieldsChanged) return true;
 
@@ -208,8 +209,9 @@ const EditListing = () => {
           condition: data.itemCondition || "",
           location: data.itemLocation || "",
           images: data.images || [],
-          enableDownpayment: data.downpaymentPercentage ? true : false,
-          downpaymentPercentage: data.downpaymentPercentage?.toString() || "",
+          enableSecurityDeposit: data.securityDepositPercentage ? true : false,
+          securityDepositPercentage:
+            data.securityDepositPercentage?.toString() || "",
           enableAI: data.enableAI || false,
         };
 
@@ -226,7 +228,7 @@ const EditListing = () => {
         setInitialFormData(initialData);
       }
     } catch (error) {
-      console.error("Error fetching listing:", error);
+      console.log("Error fetching listing:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -449,13 +451,13 @@ const EditListing = () => {
               name: updatedItemData.itemName,
               image: updatedItemData.images[0],
               price: newPrice,
-              ...(updatedItemData.enableDownpayment
+              ...(updatedItemData.enableSecurityDeposit
                 ? {
-                    downpaymentPercentage: Number(
-                      updatedItemData.downpaymentPercentage
+                    securityDepositPercentage: Number(
+                      updatedItemData.securityDepositPercentage
                     ),
                   }
-                : { downpaymentPercentage: null }),
+                : { securityDepositPercentage: null }),
               totalPrice,
               rentalDays,
             },
@@ -517,14 +519,14 @@ const EditListing = () => {
 
           console.log(`Successfully updated chat: ${chatId}`);
         } catch (error) {
-          console.error(`Error updating chat ${chatId}:`, error);
+          console.log(`Error updating chat ${chatId}:`, error);
         }
       });
 
       await Promise.allSettled(chatUpdatePromises);
       console.log("All related chats processed");
     } catch (error) {
-      console.error("Error updating related chats:", error);
+      console.log("Error updating related chats:", error);
     }
   };
 
@@ -574,7 +576,7 @@ const EditListing = () => {
       await batch.commit();
       console.log("All related rent requests updated");
     } catch (error) {
-      console.error("Error updating related rent requests:", error);
+      console.log("Error updating related rent requests:", error);
     }
   };
 
@@ -587,8 +589,8 @@ const EditListing = () => {
     minimumDays: number;
     condition: string;
     enableAI: boolean;
-    enableDownpayment: boolean;
-    downpaymentPercentage?: number;
+    enableSecurityDeposit: boolean;
+    securityDepositPercentage?: number;
     images: string[];
   };
 
@@ -720,23 +722,26 @@ const EditListing = () => {
         hasActualChanges = true;
       }
 
-      // Handle downpayment changes
-      if (formData.enableDownpayment !== initialFormData?.enableDownpayment) {
-        if (formData.enableDownpayment) {
-          updateData.downpaymentPercentage = Number(
-            formData.downpaymentPercentage
+      // Handle security deposit changes
+      if (
+        formData.enableSecurityDeposit !==
+        initialFormData?.enableSecurityDeposit
+      ) {
+        if (formData.enableSecurityDeposit) {
+          updateData.securityDepositPercentage = Number(
+            formData.securityDepositPercentage
           );
         } else {
-          updateData.downpaymentPercentage = null;
+          updateData.securityDepositPercentage = null;
         }
         hasActualChanges = true;
       } else if (
-        formData.enableDownpayment &&
-        Number(formData.downpaymentPercentage) !==
-          Number(initialFormData?.downpaymentPercentage)
+        formData.enableSecurityDeposit &&
+        Number(formData.securityDepositPercentage) !==
+          Number(initialFormData?.securityDepositPercentage)
       ) {
-        updateData.downpaymentPercentage = Number(
-          formData.downpaymentPercentage
+        updateData.securityDepositPercentage = Number(
+          formData.securityDepositPercentage
         );
         hasActualChanges = true;
       }
@@ -780,9 +785,13 @@ const EditListing = () => {
         itemMinRentDuration: Number(formData.minimumDays),
         itemCondition: formData.condition,
         enableAI: formData.enableAI,
-        ...(formData.enableDownpayment
-          ? { downpaymentPercentage: Number(formData.downpaymentPercentage) }
-          : { downpaymentPercentage: null }),
+        ...(formData.enableSecurityDeposit
+          ? {
+              securityDepositPercentage: Number(
+                formData.securityDepositPercentage
+              ),
+            }
+          : { securityDepositPercentage: null }),
         images: currentImages,
       };
 
@@ -804,7 +813,7 @@ const EditListing = () => {
 
       router.back();
     } catch (error) {
-      console.error("Error updating listing:", error);
+      console.log("Error updating listing:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -892,7 +901,7 @@ const EditListing = () => {
         setTimeout(() => uploadImageInBackground(photo.uri, newIndex), 100);
       }
     } catch (error) {
-      console.error("Camera capture error:", error);
+      console.log("Camera capture error:", error);
       setIsSubmitting(false);
       Toast.show({
         type: ALERT_TYPE.DANGER,
@@ -946,7 +955,7 @@ const EditListing = () => {
         textBody: "Image uploaded successfully",
       });
     } catch (error) {
-      console.error("Background upload error:", error);
+      console.log("Background upload error:", error);
 
       // Keep local URI but mark as failed
       setImageStates((prev) =>
@@ -1048,7 +1057,7 @@ const EditListing = () => {
 
       return downloadURL;
     } catch (error) {
-      console.error("Upload error:", error);
+      console.log("Upload error:", error);
       throw new Error("Failed to upload image");
     }
   };
@@ -1533,34 +1542,32 @@ const EditListing = () => {
                 <View className="flex-row items-center justify-between mb-2">
                   <View className="flex-1">
                     <Text className="text-secondary-400 font-pmedium">
-                      Downpayment Requirement
+                      Security Deposit Requirement
                     </Text>
                     <Text className="text-secondary-300 font-pregular text-xs">
-                      Secures rental and must be paid at pickup
+                      Protects your item and is refunded after safe return
                     </Text>
                   </View>
                   <Switch
-                    value={formData.enableDownpayment}
+                    value={formData.enableSecurityDeposit}
                     onValueChange={(value) => {
                       setFormData((prev) => ({
                         ...prev,
-                        enableDownpayment: value,
-                        downpaymentPercentage: value
-                          ? prev.downpaymentPercentage || "30"
+                        enableSecurityDeposit: value,
+                        securityDepositPercentage: value
+                          ? prev.securityDepositPercentage || "30"
                           : "",
                       }));
                     }}
                     trackColor={{ false: "#767577", true: "#5C6EF6" }}
                     thumbColor={
-                      formData.enableDownpayment ? "#ffffff" : "#f4f3f4"
+                      formData.enableSecurityDeposit ? "#ffffff" : "#f4f3f4"
                     }
                   />
                 </View>
 
-                {formData.enableDownpayment && (
+                {formData.enableSecurityDeposit && (
                   <View>
-                    {/* Percentage Input */}
-
                     {/* Quick Select Buttons */}
                     <View className="flex-row gap-2">
                       {["10", "20", "30", "40", "50"].map((percentage) => (
@@ -1569,18 +1576,18 @@ const EditListing = () => {
                           onPress={() => {
                             setFormData((prev) => ({
                               ...prev,
-                              downpaymentPercentage: percentage,
+                              securityDepositPercentage: percentage,
                             }));
                           }}
                           className={`px-3 py-2 rounded-lg border ${
-                            formData.downpaymentPercentage === percentage
+                            formData.securityDepositPercentage === percentage
                               ? "bg-primary border-primary"
                               : "bg-white border-gray-300"
                           }`}
                         >
                           <Text
                             className={`font-pmedium ${
-                              formData.downpaymentPercentage === percentage
+                              formData.securityDepositPercentage === percentage
                                 ? "text-white"
                                 : "text-secondary-400"
                             }`}

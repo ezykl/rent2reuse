@@ -124,7 +124,7 @@ const useProfileCompletion = () => {
         details,
       });
     } catch (error) {
-      console.error("Error checking profile completion:", error);
+      console.log("Error checking profile completion:", error);
     }
   };
 
@@ -154,7 +154,7 @@ const useProfileCompletion = () => {
         await checkProfileCompletion(userDoc.data());
       }
     } catch (error) {
-      console.error("Error refreshing profile status:", error);
+      console.log("Error refreshing profile status:", error);
     }
   };
 

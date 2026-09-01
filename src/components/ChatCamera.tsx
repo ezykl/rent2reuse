@@ -38,7 +38,7 @@ export const ChatCamera = ({ onPhotoTaken, onClose }: ChatCameraProps) => {
         setCapturedImage(photo.uri);
       }
     } catch (error) {
-      console.error("Error taking picture:", error);
+      console.log("Error taking picture:", error);
     }
   };
 
@@ -58,7 +58,7 @@ export const ChatCamera = ({ onPhotoTaken, onClose }: ChatCameraProps) => {
 
       onPhotoTaken(compressedImage.uri);
     } catch (error) {
-      console.error("Error processing image:", error);
+      console.log("Error processing image:", error);
     }
   };
 

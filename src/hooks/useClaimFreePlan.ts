@@ -66,7 +66,7 @@ const useClaimFreePlan = () => {
       // Update canClaimFreePlan state
       setCanClaimFreePlan(false);
     } catch (error) {
-      console.error("Error claiming free plan:", error);
+      console.log("Error claiming free plan:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",

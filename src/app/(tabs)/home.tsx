@@ -10,8 +10,15 @@ import {
   ScrollView,
   RefreshControl,
   Image as Imagex,
+  ViewToken,
 } from "react-native";
-import React, { useState, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import Carousel from "react-native-reanimated-carousel";
 import { icons, images } from "../../constant";
 import Header from "@/components/Header";
@@ -51,6 +58,9 @@ const Home = () => {
     watchLocation: false,
   });
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+
   const [refreshing, setRefreshing] = useState(false);
   const { isLoading, setIsLoading } = useLoader();
   const insets = useSafeAreaInsets();
@@ -74,6 +84,27 @@ const Home = () => {
     setModalKey((prev) => prev + 1);
     setShowProfileAlert(true);
   }, []);
+
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50,
+    minimumViewTime: 300,
+  };
+
+  const displayedItems = useMemo(() => {
+    const startIndex = currentPage * 4;
+    return recentItems.slice(startIndex, startIndex + 4);
+  }, [recentItems, currentPage]);
+
+  const totalPages = Math.ceil(recentItems.length / 4);
+
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (viewableItems.length > 0) {
+        const index = viewableItems[0].index || 0;
+        setCurrentPage(Math.floor(index / 4));
+      }
+    }
+  ).current;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -99,7 +130,7 @@ const Home = () => {
       // Refresh items using the exposed refreshItems function
       await refreshItems();
     } catch (error) {
-      console.error("Error refreshing:", error);
+      console.log("Error refreshing:", error);
     } finally {
       setRefreshing(false);
       setIsFetchingAnnouncement(false);
@@ -141,7 +172,7 @@ const Home = () => {
                 });
                 console.log("Current location:", location);
               } catch (error) {
-                console.error("Error getting location:", error);
+                console.log("Error getting location:", error);
               }
             } else {
               console.log("Location permission denied");
@@ -152,7 +183,7 @@ const Home = () => {
           console.log("Location services are disabled on the device");
         }
       } catch (error) {
-        console.error("Error checking location settings:", error);
+        console.log("Error checking location settings:", error);
       }
     };
 
@@ -246,8 +277,10 @@ const Home = () => {
     itemLocation?: {
       latitude: number;
       longitude: number;
-      address?: string; //
+      address?: string;
     };
+    //New Added
+    category?: string;
     owner: {
       id: string;
       fullname: string;
@@ -276,6 +309,8 @@ const Home = () => {
         itemLocation={
           isProfileComplete && locationData ? locationData : undefined
         }
+        // Category - Always pass it (don't gate by profile completion)
+        category={item.category}
         owner={isProfileComplete ? item.owner : undefined}
         showProtectionOverlay={!isProfileComplete}
         enableAI={item.enableAI}
@@ -297,15 +332,16 @@ const Home = () => {
         <Header />
 
         <FlatList<ItemType>
+          ref={flatListRef}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={["#4BD07F"]} // Use your primary color
+              colors={["#4BD07F"]}
               tintColor="#56D07F"
             />
           }
-          data={recentItems}
+          data={displayedItems}
           key={2}
           numColumns={2}
           columnWrapperStyle={{
@@ -314,9 +350,10 @@ const Home = () => {
             paddingHorizontal: 0,
           }}
           contentContainerStyle={{
-            paddingBottom: 20,
+            paddingBottom: 80,
             gap: 8,
           }}
+          decelerationRate="fast"
           showsVerticalScrollIndicator={false}
           renderItem={renderItemCard}
           keyExtractor={(item) => item.id}
@@ -330,13 +367,13 @@ const Home = () => {
 
               {/* Profile Completion Alert */}
               {!isProfileComplete && (
-                <View className=" mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <TouchableOpacity
+                  className=" mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl"
+                  onPress={() => setShowFullDetails(!showFullDetails)}
+                >
                   {/* Progress Header with Toggle */}
 
-                  <TouchableOpacity
-                    onPress={() => setShowFullDetails(!showFullDetails)}
-                    className="flex-row items-center justify-between mb-3"
-                  >
+                  <View className="flex-row items-center justify-between mb-3">
                     <View className="flex-row items-center flex-1">
                       <Imagex source={icons.danger} className="w-5 h-5 mr-2" />
                       <Text className="text-yellow-800 font-pbold flex-1">
@@ -356,7 +393,7 @@ const Home = () => {
                         tintColor="#92400E"
                       />
                     </View>
-                  </TouchableOpacity>
+                  </View>
 
                   {/* Progress Bar */}
                   <View className="bg-yellow-200 rounded-full h-2 mb-3">
@@ -403,7 +440,7 @@ const Home = () => {
 
                       {/* Complete Profile Button */}
                       <TouchableOpacity
-                        onPress={() => router.push("/tabs/profile")}
+                        onPress={() => router.push("profile")}
                         className="bg-yellow-600 py-3 rounded-lg"
                       >
                         <Text className="text-white text-center font-pbold">
@@ -412,7 +449,7 @@ const Home = () => {
                       </TouchableOpacity>
                     </>
                   )}
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Announcements Carousel */}
@@ -447,7 +484,7 @@ const Home = () => {
                               refreshing ? Date.now() : ""
                             }`}
                             onError={(error) => {
-                              console.error("Image loading error:", error);
+                              console.log("Image loading error:", error);
                             }}
                           />
                         ) : (
@@ -479,8 +516,86 @@ const Home = () => {
 
               <Category />
               <Text className="text-2xl text-secondary-400 font-psemibold mt-10 mb-2">
-                Recently Added
+                {recentItems.length === 0
+                  ? "No Items on the Market"
+                  : "Recently Added"}
               </Text>
+            </>
+          )}
+          ListFooterComponent={() => (
+            <>
+              {/* Page Navigation */}
+              {totalPages > 1 && (
+                <View className="mt-6 mb-4">
+                  <View className="flex-row justify-center items-center gap-2">
+                    {/* Previous Button */}
+                    <TouchableOpacity
+                      onPress={() =>
+                        setCurrentPage(Math.max(0, currentPage - 1))
+                      }
+                      disabled={currentPage === 0}
+                      className={`w-12 h-12 rounded-xl justify-center items-center border ${
+                        currentPage === 0
+                          ? "bg-gray-100 border-gray-200"
+                          : "bg-white border-gray-300"
+                      }`}
+                    >
+                      <Imagex
+                        source={icons.arrowRight}
+                        className="w-5 h-5"
+                        style={{ transform: [{ rotate: "180deg" }] }}
+                        tintColor={currentPage === 0 ? "#d1d5db" : "#374151"}
+                      />
+                    </TouchableOpacity>
+
+                    {/* Page Numbers */}
+                    {Array.from({ length: totalPages }).map((_, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => setCurrentPage(index)}
+                        className={`w-12 h-12 rounded-xl justify-center items-center ${
+                          currentPage === index
+                            ? "bg-primary"
+                            : "bg-white border border-gray-300"
+                        }`}
+                      >
+                        <Text
+                          className={`text-base font-pmedium ${
+                            currentPage === index
+                              ? "text-white"
+                              : "text-gray-700"
+                          }`}
+                        >
+                          {index + 1}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+
+                    {/* Next Button */}
+                    <TouchableOpacity
+                      onPress={() =>
+                        setCurrentPage(
+                          Math.min(totalPages - 1, currentPage + 1)
+                        )
+                      }
+                      disabled={currentPage === totalPages - 1}
+                      className={`w-12 h-12 rounded-xl justify-center items-center border ${
+                        currentPage === totalPages - 1
+                          ? "bg-gray-100 border-gray-200"
+                          : "bg-white border-gray-300"
+                      }`}
+                    >
+                      <Imagex
+                        source={icons.arrowRight}
+                        className="w-5 h-5"
+                        tintColor={
+                          currentPage === totalPages - 1 ? "#d1d5db" : "#374151"
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </>
           )}
         />

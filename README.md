@@ -1,3 +1,11 @@
+<p align="center">
+  <a href="https://maplibre.org">
+    <picture>
+      <img alt="rent2reuse-logo" src="https://raw.githubusercontent.com/ezykl/rent2reuse/refs/heads/master/src/assets/images/logo.png" width="400">
+    </picture>
+  </a>
+</p>
+
 # Rent2Reuse
 
 Rent2Reuse is a modern mobile marketplace application that enables users to rent and lend items within their community. The platform facilitates peer-to-peer rental transactions, making it easy to monetize underutilized items while providing affordable access to needed items.

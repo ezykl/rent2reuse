@@ -158,7 +158,7 @@ const Tools = () => {
         },
       });
     } catch (error) {
-      console.error("Error editing request:", error);
+      console.log("Error editing request:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -232,7 +232,7 @@ const Tools = () => {
             requestsRef,
             where("itemId", "==", doc.id),
             // where("status", "in", ["pending", "approved"])
-            where("status", "==", "pedning")
+            where("status", "==", "pending")
           );
           const requestsSnap = await getDocs(requestsQuery);
           totalIncomingRequests += requestsSnap.size;
@@ -257,6 +257,7 @@ const Tools = () => {
             itemDesc: data.itemDesc || "",
             itemPrice: data.itemPrice || 0,
             itemStatus: data.itemStatus || "Available",
+            itemCategory: data.itemCategory || "", // New Added
             images: data.images || [],
             createdAt: data.createdAt?.toDate().toLocaleDateString("en-US", {
               year: "numeric",
@@ -275,7 +276,7 @@ const Tools = () => {
       setIncomingRequestsCount(totalIncomingRequests);
       setMyListings(listings);
     } catch (error) {
-      console.error("❌ Error fetching listings:", error);
+      console.log("❌ Error fetching listings:", error);
     } finally {
       setIsLoading(false);
     }
@@ -293,7 +294,7 @@ const Tools = () => {
         setUserPlan(planData);
       }
     } catch (error) {
-      console.error("Error fetching user plan:", error);
+      console.log("Error fetching user plan:", error);
     } finally {
       setIsPlanLoading(false);
     }
@@ -336,7 +337,7 @@ const Tools = () => {
       console.log("Processed requests:", requests);
       setRentRequests((prev) => [...requests]);
     } catch (error) {
-      console.error("Error fetching sent requests:", error);
+      console.log("Error fetching sent requests:", error);
     } finally {
       setIsRequestsLoading(false);
     }
@@ -368,7 +369,7 @@ const Tools = () => {
           fetchSentRequests(), // Add this
         ]);
       } catch (error) {
-        console.error("Error refreshing data:", error);
+        console.log("Error refreshing data:", error);
       } finally {
         setRefreshing(false);
         setIsDataReady(true);
@@ -475,7 +476,7 @@ const Tools = () => {
                 }
               }
             } catch (error) {
-              console.error("Error in deletion process:", error);
+              console.log("Error in deletion process:", error);
               Toast.show({
                 type: ALERT_TYPE.DANGER,
                 title: "Error",
@@ -596,7 +597,7 @@ const Tools = () => {
                 fetchSentRequests();
               }
             } catch (error) {
-              console.error("Error cancelling request:", error);
+              console.log("Error cancelling request:", error);
               Toast.show({
                 type: ALERT_TYPE.DANGER,
                 title: "Error",
@@ -1246,7 +1247,7 @@ const Tools = () => {
                             shadowRadius: 2,
                           }}
                         >
-                          <View className="bg-white/20 rounded-full p-2">
+                          <View className="rounded-full border border-white p-1">
                             <Image
                               source={icons.bigPlus}
                               className="w-4 h-4 "

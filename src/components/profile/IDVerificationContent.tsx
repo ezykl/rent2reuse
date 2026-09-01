@@ -80,7 +80,7 @@ export const IDVerificationContent = ({
         });
       }
     } catch (error) {
-      console.error("Error fetching user data:", error);
+      console.log("Error fetching user data:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -125,7 +125,7 @@ export const IDVerificationContent = ({
       );
       return manipulatedImage.uri;
     } catch (error) {
-      console.error("Error compressing image:", error);
+      console.log("Error compressing image:", error);
       return imageUri; // Return original if compression fails
     }
   };
@@ -136,7 +136,7 @@ export const IDVerificationContent = ({
       setIdImage(compressedUri);
       setValidationError(null); // Clear any previous validation errors
     } catch (error) {
-      console.error("Error handling image:", error);
+      console.log("Error handling image:", error);
       Alert.alert("Error", "Failed to process image");
     }
   };
@@ -157,7 +157,7 @@ export const IDVerificationContent = ({
       setCameraVisible(false);
       await handleImageCreate(photo.uri);
     } catch (error) {
-      console.error("Error capturing photo:", error);
+      console.log("Error capturing photo:", error);
       Alert.alert("Error", "Failed to capture photo");
     }
   };
@@ -451,7 +451,7 @@ export const IDVerificationContent = ({
         onClose();
       }
     } catch (error) {
-      console.error("OCR error:", error);
+      console.log("OCR error:", error);
       setValidationError(
         "Unable to verify ID details. Please ensure the image is clear and try again."
       );

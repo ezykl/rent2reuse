@@ -43,7 +43,7 @@ export const useItemViews = () => {
 
       await batch.commit();
     } catch (error) {
-      console.error("Error tracking item view:", error);
+      console.log("Error tracking item view:", error);
     }
   };
 

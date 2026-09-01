@@ -86,7 +86,7 @@ export const createPayment = async (
     const docRef = await addDoc(paymentsCollection, payment);
     return docRef.id;
   } catch (error) {
-    console.error("Error creating payment:", error);
+    console.log("Error creating payment:", error);
     throw error;
   }
 };
@@ -104,7 +104,7 @@ export const updatePayment = async (
       updatedAt: Date.now(),
     });
   } catch (error) {
-    console.error("Error updating payment:", error);
+    console.log("Error updating payment:", error);
     throw error;
   }
 };
@@ -127,7 +127,7 @@ export const getPaymentHistory = async (userId: string): Promise<Payment[]> => {
         } as Payment)
     );
   } catch (error) {
-    console.error("Error getting payment history:", error);
+    console.log("Error getting payment history:", error);
     throw error;
   }
 };
@@ -149,7 +149,7 @@ export const getPaymentById = async (
 
     return null;
   } catch (error) {
-    console.error("Error getting payment:", error);
+    console.log("Error getting payment:", error);
     throw error;
   }
 };
@@ -185,7 +185,7 @@ export const createUserSession = async (userId: String) => {
 
     return { sessionId, error: null };
   } catch (error: any) {
-    console.error("Error creating session:", error);
+    console.log("Error creating session:", error);
     return { sessionId: null, error: error.message };
   }
 };
@@ -215,7 +215,7 @@ export const checkActiveSession = async (userId: String) => {
       currentSession: sessions[0], // Return the first active session
     };
   } catch (error: any) {
-    console.error("Error checking active session:", error);
+    console.log("Error checking active session:", error);
     return { hasActiveSession: false, sessions: [], error: error.message };
   }
 };
@@ -240,7 +240,7 @@ export const forceTerminateSession = async (sessionId: string) => {
 
     return { success: true };
   } catch (error: any) {
-    console.error("Error force terminating session:", error);
+    console.log("Error force terminating session:", error);
     return { success: false, error: error.message };
   }
 };
@@ -276,7 +276,7 @@ export const terminateUserSessions = async (
       terminatedCount: snapshot.docs.length,
     };
   } catch (error: any) {
-    console.error("Error terminating sessions:", error);
+    console.log("Error terminating sessions:", error);
     return { success: false, error: error.message };
   }
 };
@@ -290,7 +290,7 @@ export const updateSessionActivity = async (sessionId: string) => {
       lastActive: Date.now(),
     });
   } catch (error) {
-    console.error("Error updating session activity:", error);
+    console.log("Error updating session activity:", error);
   }
 };
 
@@ -307,7 +307,7 @@ export const terminateCurrentSession = async () => {
     }
     return { success: true, error: null };
   } catch (error: any) {
-    console.error("Error terminating current session:", error);
+    console.log("Error terminating current session:", error);
     return { success: false, error: error.message };
   }
 };

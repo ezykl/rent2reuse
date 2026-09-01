@@ -54,7 +54,7 @@ export const fetchUserRating = async (
     }
     return null;
   } catch (error) {
-    console.error("Error fetching user rating:", error);
+    console.log("Error fetching user rating:", error);
     return null;
   }
 };
@@ -76,7 +76,7 @@ export const hasUserRated = async (
     const ratingsSnap = await getDocs(ratingsQuery);
     return !ratingsSnap.empty;
   } catch (error) {
-    console.error("Error checking if user has rated:", error);
+    console.log("Error checking if user has rated:", error);
     return false;
   }
 };
@@ -199,7 +199,7 @@ export const addOrUpdateRating = async (
 
     return result;
   } catch (error) {
-    console.error("Error adding/updating rating:", error);
+    console.log("Error adding/updating rating:", error);
     return { success: false, message: "Failed to save rating" };
   }
 };
@@ -220,7 +220,7 @@ export const getUserRatings = async (userId: string): Promise<Rating[]> => {
       ...doc.data(),
     })) as Rating[];
   } catch (error) {
-    console.error("Error fetching user ratings:", error);
+    console.log("Error fetching user ratings:", error);
     return [];
   }
 };

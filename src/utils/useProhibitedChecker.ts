@@ -25,7 +25,6 @@ const prohibitedClasses = new Set([
   "Mouthguards",
   "Office Space",
   "Oral Care Products",
-  "Pet",
   "Pickup Truck",
   "Prescription Drugs & Medicine",
   "Prosthetic Equipments",
@@ -421,7 +420,7 @@ const prohibitedKeywords: Record<string, string[]> = {
     "decorative accessories",
   ],
 
-  Lighter: [
+  "Lighter": [
     "lighter",
     "cigarette lighter",
     "butane lighter",
@@ -576,31 +575,6 @@ const prohibitedKeywords: Record<string, string[]> = {
     "oral health products",
   ],
 
-  Pet: [
-    "pet",
-    "dog",
-    "cat",
-    "puppy",
-    "kitten",
-    "bird",
-    "fish",
-    "reptile",
-    "hamster",
-    "guinea pig",
-    "rabbit",
-    "ferret",
-    "chinchilla",
-    "pet supplies",
-    "pet accessories",
-    "pet food",
-    "pet toys",
-    "aquarium fish",
-    "tropical fish",
-    "exotic pets",
-    "small animals",
-    "pet care",
-    "pet services",
-  ],
 
   "Pickup Truck": [
     "pickup truck",
@@ -1312,60 +1286,96 @@ export function useProhibitedChecker() {
     return list;
   }, []);
 
-  function isProhibited(input: string): {
-    prohibited: boolean;
-    category?: string;
-    matchedKeywords?: string[];
-    similarity?: number;
-    classMatch?: string;
-  } {
-    const normalized = input.toLowerCase().trim();
-    const SIMILARITY_THRESHOLD = 0.8; // 80% similarity
+ function isProhibited(input: string): {
+  prohibited: boolean;
+  category?: string;
+  matchedKeywords?: string[];
+  similarity?: number;
+  classMatch?: string;
+} {
+const normalized = input.toLowerCase().trim();
+  const SIMILARITY_THRESHOLD = 0.85;
+  const EXACT_MATCH_MIN_LENGTH = 4;
 
     // Check direct class name matches first
-    for (const className of prohibitedClasses) {
-      const similarity = compareTwoStrings(normalized, className.toLowerCase());
+  for (const className of prohibitedClasses) {
+    const similarity = compareTwoStrings(normalized, className.toLowerCase());
+    if (similarity >= SIMILARITY_THRESHOLD) {
+      return {
+        prohibited: true,
+        category: className,
+        classMatch: className,
+        similarity,
+      };
+    }
+  }
+
+ for (const [category, keywords] of Object.entries(prohibitedKeywords)) {
+    // Exact substring matches - with word boundary awareness
+    const exactMatches = keywords.filter((word) => {
+      // Only check exact matches for words longer than minimum length
+      if (word.length < EXACT_MATCH_MIN_LENGTH) return false;
+      
+      // Use word boundary regex to avoid partial matches
+      const wordBoundaryRegex = new RegExp(`\\b${word.toLowerCase()}\\b`);
+      return wordBoundaryRegex.test(normalized);
+    });
+    
+    if (exactMatches.length > 0) {
+      return {
+        prohibited: true,
+        category,
+        matchedKeywords: [...new Set(exactMatches)],
+        similarity: 1.0,
+      };
+    }
+
+    // Fuzzy matches - only for longer keywords to avoid false positives
+    for (const keyword of keywords) {
+      // Skip fuzzy matching for very short keywords
+      if (keyword.length < 6) continue;
+      
+      const similarity = compareTwoStrings(normalized, keyword.toLowerCase());
       if (similarity >= SIMILARITY_THRESHOLD) {
         return {
           prohibited: true,
-          category: className,
-          classMatch: className,
+          category,
+          matchedKeywords: [keyword],
           similarity,
         };
       }
     }
-
-    // Check keyword matches
-    for (const [category, keywords] of Object.entries(prohibitedKeywords)) {
-      // Exact substring matches
-      const exactMatches = keywords.filter((word) =>
-        normalized.includes(word.toLowerCase())
-      );
-      if (exactMatches.length > 0) {
-        return {
-          prohibited: true,
-          category,
-          matchedKeywords: [...new Set(exactMatches)],
-          similarity: 1.0,
-        };
-      }
-
-      // Fuzzy matches
-      for (const keyword of keywords) {
-        const similarity = compareTwoStrings(normalized, keyword.toLowerCase());
-        if (similarity >= SIMILARITY_THRESHOLD) {
-          return {
-            prohibited: true,
-            category,
-            matchedKeywords: [keyword],
-            similarity,
-          };
-        }
-      }
-    }
-
-    return { prohibited: false };
   }
+
+  return { prohibited: false };
+}
+
+function checkProhibitedContent(text: string, skipTemplateFields: boolean = false): {
+  prohibited: boolean;
+  category?: string;
+  matchedKeywords?: string[];
+} {
+  if (skipTemplateFields) {
+    // Common template field names to ignore
+    const templateFields = [
+      'brand', 'model', 'type', 'features', 'specifications', 
+      'included', 'additional notes', 'power', 'capacity', 
+      'voltage', 'battery', 'speed', 'safety'
+    ];
+    
+    // Split text into words and filter out template fields
+    const words = text.toLowerCase().split(/\s+/);
+    const filteredWords = words.filter(word => 
+      !templateFields.some(field => field.includes(word) || word.includes(field))
+    );
+    
+    // Reconstruct text without template fields
+    const cleanText = filteredWords.join(' ');
+    return isProhibited(cleanText);
+  }
+  
+  return isProhibited(text);
+}
 
   function isAllowedClass(className: string): boolean {
     return allowedClasses.includes(className);
@@ -1406,6 +1416,7 @@ export function useProhibitedChecker() {
   return {
     isProhibited,
     isAllowedClass,
+    checkProhibitedContent,
     prohibitedKeywords,
     flatList,
     getProhibitedClasses,
