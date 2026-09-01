@@ -1,32 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   Image,
-  Alert,
+  Modal,
   ActivityIndicator,
 } from "react-native";
+import { WebView } from "react-native-webview";
 import { icons, images } from "@/constant";
-import { format } from "date-fns";
-import {
-  doc,
-  updateDoc,
-  serverTimestamp,
-  addDoc,
-  collection,
-} from "firebase/firestore";
+import { format, isToday, isYesterday } from "date-fns";
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebaseConfig";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import {
-  getPayPalAccessToken,
-  createPayPalInvoice,
-  sendPayPalInvoice,
-  getPayPalInvoiceStatus,
-  PAYPAL_CLIENT_ID,
-  PAYPAL_CLIENT_SECRET,
-  DatabaseHelper,
-} from "@/utils/paypalHelper";
+  createChatPaymentOrder,
+  captureChatPaymentOrder,
+} from "@/utils/paypalClient";
+import { estimateUsd } from "@/utils/exchangeRate";
 
 interface PaymentMessageProps {
   item: {
@@ -39,33 +30,45 @@ interface PaymentMessageProps {
     downpaymentPercentage?: number;
     status: "pending" | "sent" | "paid" | "failed";
     createdAt: any;
-    recipientPayPalEmail?: string;
-    paypalInvoiceId?: string;
+    ownerPayPalEmail?: string;
+    paypalOrderId?: string;
     transactionId?: string;
     paidAt?: any;
-    sentAt?: any;
+    payoutStatus?: "success" | "failed";
     confirmedByOwner?: boolean;
   };
+  // The message sender is always the item owner requesting payment (see
+  // sendPaymentMessage in chat/[id].tsx) — so isCurrentUser doubles as the
+  // owner/renter distinction: the renter is whoever is NOT the sender.
   isCurrentUser: boolean;
-  isOwner: boolean;
   chatId: string;
-  currentUserId: string;
   itemDetails?: {
     name?: string;
     image?: string;
   };
 }
 
+const formatTimestamp = (timestamp: any): string => {
+  if (!timestamp?.toDate) return "";
+  const date = timestamp.toDate();
+  if (isToday(date)) return format(date, "MMM d, h:mm a");
+  if (isYesterday(date)) return `Yesterday ${format(date, "h:mm a")}`;
+  return format(date, "MMM d, h:mm a");
+};
+
 const PaymentMessage: React.FC<PaymentMessageProps> = ({
   item,
   isCurrentUser,
-  isOwner,
   chatId,
-  currentUserId,
   itemDetails,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [showWebView, setShowWebView] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState("");
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [confirmingReceipt, setConfirmingReceipt] = useState(false);
+
+  const isOwner = isCurrentUser; // the sender of a payment request is always the owner
 
   const getPaymentTypeLabel = () => {
     if (item.paymentType === "initial") {
@@ -83,160 +86,99 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
     return `Full payment for renting ${itemName}`;
   };
 
-  // Send PayPal Invoice
-  const handleSendInvoice = async () => {
-    if (!item.recipientPayPalEmail) {
-      Alert.alert("Error", "Recipient PayPal email not found");
-      return;
-    }
-
+  // Renter taps "Pay Now" — creates a PayPal Checkout order server-side (the
+  // server looks up the authoritative amount itself) and opens the approval
+  // WebView. The client never sees a PayPal secret and never writes the
+  // resulting "paid" status itself — see functions/src/index.ts.
+  const handlePayNow = async () => {
     try {
       setLoading(true);
-
-      // Get PayPal access token
-      const token = await getPayPalAccessToken(
-        PAYPAL_CLIENT_ID,
-        PAYPAL_CLIENT_SECRET
-      );
-
-      // Create PayPal invoice
-      const invoice = await createPayPalInvoice(
-        token,
-        item.recipientPayPalEmail,
-        item.amount,
-        {
-          itemName: getPaymentTypeLabel(),
-          itemDescription: getPaymentDescription(),
-          customId: `CHAT_${chatId}_MSG_${item.id}`,
-          note: `Payment request from Rent2Reuse for ${
-            itemDetails?.name || "rental item"
-          }`,
-        }
-      );
-
-      // Send the invoice
-      await sendPayPalInvoice(
-        token,
-        invoice.id,
-        `Payment Request: ${getPaymentTypeLabel()}`,
-        `Hi! You have a payment request for ${getPaymentTypeLabel()} of ₱${item.amount.toFixed(
-          2
-        )} for ${
-          itemDetails?.name || "your rental"
-        }. Please complete this payment at your convenience.`
-      );
-
-      // Update the message in Firestore
-      const messageRef = doc(db, "chat", chatId, "messages", item.id);
-      await updateDoc(messageRef, {
-        status: "sent",
-        paypalInvoiceId: invoice.id,
-        sentAt: serverTimestamp(),
-      });
-
-      // Update chat last message
-      const chatRef = doc(db, "chat", chatId);
-      await updateDoc(chatRef, {
-        lastMessage: `PayPal invoice sent: ${getPaymentTypeLabel()}`,
-        lastMessageTime: serverTimestamp(),
-      });
-
-      // Add a system message about invoice sent
-      const messagesRef = collection(db, "chat", chatId, "messages");
-      await addDoc(messagesRef, {
-        type: "statusUpdate",
-        text: `PayPal invoice sent to ${item.recipientPayPalEmail}`,
-        senderId: currentUserId,
-        createdAt: serverTimestamp(),
-        read: false,
-        status: "sent",
-      });
-
-      Toast.show({
-        type: ALERT_TYPE.SUCCESS,
-        title: "Invoice Sent",
-        textBody: `PayPal invoice sent to ${item.recipientPayPalEmail}`,
-      });
+      const order = await createChatPaymentOrder(chatId, item.id);
+      if (!order.approvalUrl) {
+        throw new Error("PayPal did not return an approval URL");
+      }
+      setPendingOrderId(order.orderId);
+      setPaymentUrl(order.approvalUrl);
+      setShowWebView(true);
     } catch (error) {
-      console.error("Invoice sending error:", error);
+      if (__DEV__) console.error("Error creating PayPal order:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to send PayPal invoice. Please try again.",
+        textBody: "Failed to start PayPal checkout. Please try again.",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // Check payment status from PayPal
-  const handleCheckPaymentStatus = async () => {
-    if (!item.paypalInvoiceId) {
-      Alert.alert("Error", "No invoice ID found");
-      return;
-    }
-
+  const handleCapture = async (orderId: string) => {
     try {
-      setCheckingStatus(true);
-
-      const token = await getPayPalAccessToken(
-        PAYPAL_CLIENT_ID,
-        PAYPAL_CLIENT_SECRET
-      );
-
-      const invoiceStatus = await getPayPalInvoiceStatus(
-        token,
-        item.paypalInvoiceId
-      );
-
-      // Update message status based on PayPal response
-      let newStatus = item.status;
-      if (
-        invoiceStatus.status === "PAID" ||
-        invoiceStatus.status === "MARKED_AS_PAID"
-      ) {
-        newStatus = "paid";
-
-        // Update the message
-        const messageRef = doc(db, "chat", chatId, "messages", item.id);
-        await updateDoc(messageRef, {
-          status: "paid",
-          paidAt: serverTimestamp(),
-          transactionId: invoiceStatus.id,
-        });
-
-        // Add status message
-        const messagesRef = collection(db, "chat", chatId, "messages");
-        await addDoc(messagesRef, {
-          type: "statusUpdate",
-          text: `${getPaymentTypeLabel()} completed via PayPal`,
-          senderId: currentUserId,
-          createdAt: serverTimestamp(),
-          read: false,
-          status: "paid",
-        });
-
-        Toast.show({
-          type: ALERT_TYPE.SUCCESS,
-          title: "Payment Received",
-          textBody: "Payment has been completed!",
-        });
-      } else {
-        Toast.show({
-          type: ALERT_TYPE.WARNING,
-          title: "Payment Pending",
-          textBody: `Payment status: ${invoiceStatus.status}`,
-        });
-      }
+      setLoading(true);
+      await captureChatPaymentOrder(chatId, item.id, orderId);
+      // No client-side Firestore write here — the message re-renders once
+      // the server's Admin-SDK write lands via the chat screen's onSnapshot.
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Payment Sent",
+        textBody: "Your payment was completed successfully.",
+      });
     } catch (error) {
-      console.error("Status check error:", error);
+      if (__DEV__) console.error("Error capturing PayPal order:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
-        textBody: "Failed to check payment status",
+        textBody: "We couldn't confirm your PayPal payment. Please try again.",
       });
     } finally {
-      setCheckingStatus(false);
+      setLoading(false);
+      setPendingOrderId(null);
+    }
+  };
+
+  const handleWebViewNavigationStateChange = (navState: { url: string }) => {
+    const { url } = navState;
+    if (url.includes("paymentId=success")) {
+      setShowWebView(false);
+      if (pendingOrderId) void handleCapture(pendingOrderId);
+    } else if (url.includes("paymentId=cancel")) {
+      setShowWebView(false);
+      setPendingOrderId(null);
+      Toast.show({
+        type: ALERT_TYPE.WARNING,
+        title: "Payment Cancelled",
+        textBody: "You cancelled the PayPal checkout.",
+      });
+    }
+  };
+
+  // Manual fallback: if the automated payout to the owner ever fails or
+  // lags, the owner can self-report having received the money outside the
+  // app (e.g. checked their own PayPal account) until real reconciliation
+  // tooling exists. This is a client write on purpose — it's a self-reported
+  // safety net, not a trust-sensitive payment field (see firestore.rules).
+  const handleMarkAsReceived = async () => {
+    try {
+      setConfirmingReceipt(true);
+      const messageRef = doc(db, "chat", chatId, "messages", item.id);
+      await updateDoc(messageRef, {
+        confirmedByOwner: true,
+        confirmedAt: serverTimestamp(),
+      });
+      Toast.show({
+        type: ALERT_TYPE.SUCCESS,
+        title: "Marked as Received",
+        textBody: "Thanks for confirming.",
+      });
+    } catch (error) {
+      if (__DEV__) console.error("Error marking payment as received:", error);
+      Toast.show({
+        type: ALERT_TYPE.DANGER,
+        title: "Error",
+        textBody: "Failed to update. Please try again.",
+      });
+    } finally {
+      setConfirmingReceipt(false);
     }
   };
 
@@ -258,7 +200,7 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
       case "paid":
         return "Paid";
       case "sent":
-        return "Invoice Sent";
+        return "Processing";
       case "failed":
         return "Failed";
       default:
@@ -266,8 +208,15 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
     }
   };
 
+  const payoutNeedsAttention =
+    item.status === "paid" &&
+    item.payoutStatus === "failed" &&
+    !item.confirmedByOwner;
+
   return (
-    <View className="flex-row justify-center mb-3">
+    <View
+      className={`flex-1 mb-3 ${isCurrentUser ? "items-end" : "items-start"}`}
+    >
       <View className="bg-white rounded-2xl p-4 border border-gray-200 max-w-[85%] min-w-[280px]">
         {/* Header */}
         <View className="flex-row items-center justify-between mb-3">
@@ -303,16 +252,18 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
             of ₱{item.totalAmount.toFixed(2)} total
           </Text>
           <Text className="text-xs text-gray-400">
-            ≈ ${DatabaseHelper.convertToUsd(item.amount)} USD
+            ≈ ${estimateUsd(item.amount)} USD
           </Text>
         </View>
 
-        {/* Recipient Email */}
-        {item.recipientPayPalEmail && (
+        {/* Payout destination, shown for transparency to both parties */}
+        {item.ownerPayPalEmail && (
           <View className="mb-3 p-2 bg-blue-50 rounded-lg">
-            <Text className="text-xs text-gray-600">PayPal Recipient:</Text>
+            <Text className="text-xs text-gray-600">
+              Payment will be sent to:
+            </Text>
             <Text className="font-pmedium text-gray-900 text-sm">
-              {item.recipientPayPalEmail}
+              {item.ownerPayPalEmail}
             </Text>
           </View>
         )}
@@ -337,10 +288,10 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
           </View>
         )}
 
-        {/* Action Buttons */}
-        {item.status === "pending" && isCurrentUser && (
+        {/* Action area */}
+        {item.status === "pending" && !isOwner && (
           <TouchableOpacity
-            onPress={handleSendInvoice}
+            onPress={handlePayNow}
             disabled={loading}
             className={`rounded-xl py-3 px-4 ${
               loading ? "bg-blue-300" : "bg-blue-500"
@@ -350,52 +301,83 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
               <View className="flex-row items-center justify-center">
                 <ActivityIndicator color="white" size="small" />
                 <Text className="text-white font-pmedium ml-2">
-                  Sending Invoice...
+                  Processing...
                 </Text>
               </View>
             ) : (
               <Text className="text-white font-pmedium text-center">
-                Send PayPal Invoice
+                Pay Now
               </Text>
             )}
           </TouchableOpacity>
         )}
 
-        {item.status === "sent" && isCurrentUser && (
-          <TouchableOpacity
-            onPress={handleCheckPaymentStatus}
-            disabled={checkingStatus}
-            className={`rounded-xl py-3 px-4 ${
-              checkingStatus ? "bg-green-300" : "bg-green-500"
-            }`}
-          >
-            {checkingStatus ? (
-              <View className="flex-row items-center justify-center">
-                <ActivityIndicator color="white" size="small" />
-                <Text className="text-white font-pmedium ml-2">
-                  Checking Status...
-                </Text>
-              </View>
-            ) : (
-              <Text className="text-white font-pmedium text-center">
-                Check Payment Status
-              </Text>
-            )}
-          </TouchableOpacity>
-        )}
-
-        {item.status === "sent" && !isCurrentUser && (
-          <View className="rounded-xl py-3 px-4 bg-blue-100">
-            <Text className="text-blue-700 font-pmedium text-center">
-              Invoice sent to your PayPal email
+        {item.status === "pending" && isOwner && (
+          <View className="rounded-xl py-3 px-4 bg-orange-50">
+            <Text className="text-orange-700 font-pmedium text-center">
+              Waiting for renter to pay
             </Text>
           </View>
         )}
 
         {item.status === "paid" && (
-          <View className="rounded-xl py-3 px-4 bg-green-100">
-            <Text className="text-green-700 font-pmedium text-center">
-              Payment Completed ✓
+          <View>
+            <View className="rounded-xl py-3 px-4 bg-green-100">
+              <Text className="text-green-700 font-pmedium text-center">
+                Payment Completed ✓
+              </Text>
+            </View>
+
+            {item.payoutStatus === "success" && (
+              <Text className="text-xs text-green-600 text-center mt-2">
+                Sent to the owner's PayPal account
+              </Text>
+            )}
+
+            {payoutNeedsAttention && isOwner && (
+              <View className="mt-2">
+                <Text className="text-xs text-red-500 text-center mb-2">
+                  Automatic payout to your PayPal account failed. If you've
+                  already received the money another way, you can confirm it
+                  below.
+                </Text>
+                <TouchableOpacity
+                  onPress={handleMarkAsReceived}
+                  disabled={confirmingReceipt}
+                  className={`rounded-xl py-2 px-4 ${
+                    confirmingReceipt ? "bg-gray-300" : "bg-gray-800"
+                  }`}
+                >
+                  {confirmingReceipt ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <Text className="text-white font-pmedium text-center text-sm">
+                      Mark as Received
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {payoutNeedsAttention && !isOwner && (
+              <Text className="text-xs text-gray-500 text-center mt-2">
+                Your payment succeeded — the payout to the owner is being
+                retried.
+              </Text>
+            )}
+
+            {item.confirmedByOwner && (
+              <Text className="text-xs text-green-600 text-center mt-2">
+                Owner confirmed receipt
+              </Text>
+            )}
+          </View>
+        )}
+
+        {item.status === "failed" && (
+          <View className="rounded-xl py-3 px-4 bg-red-100">
+            <Text className="text-red-700 font-pmedium text-center">
+              Payment Failed
             </Text>
           </View>
         )}
@@ -403,29 +385,64 @@ const PaymentMessage: React.FC<PaymentMessageProps> = ({
         {/* Timestamp */}
         <View className="flex-row items-center justify-between mt-3 pt-2 border-t border-gray-100">
           <Text className="text-xs text-gray-400">
-            {item.createdAt
-              ? format(item.createdAt.toDate(), "MMM d, h:mm a")
-              : ""}
+            {formatTimestamp(item.createdAt)}
           </Text>
-          {item.sentAt && (
-            <Text className="text-xs text-blue-600">
-              Sent {format(item.sentAt.toDate(), "MMM d, h:mm a")}
-            </Text>
-          )}
           {item.paidAt && (
             <Text className="text-xs text-green-600">
-              Paid {format(item.paidAt.toDate(), "MMM d, h:mm a")}
+              Paid {formatTimestamp(item.paidAt)}
             </Text>
           )}
         </View>
 
-        {/* Transaction/Invoice ID */}
-        {(item.transactionId || item.paypalInvoiceId) && (
+        {/* Transaction ID */}
+        {item.transactionId && (
           <Text className="text-xs text-gray-400 mt-1">
-            ID: {item.transactionId || item.paypalInvoiceId}
+            ID: {item.transactionId}
           </Text>
         )}
       </View>
+
+      {/* PayPal approval WebView */}
+      <Modal
+        visible={showWebView}
+        animationType="none"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+      >
+        <View className="flex-1 bg-gray-50 mt-8">
+          <View className="bg-white border-b border-gray-200 px-6 py-4">
+            <View className="flex-row items-center justify-end">
+              <TouchableOpacity
+                className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                onPress={() => {
+                  setShowWebView(false);
+                  setPendingOrderId(null);
+                }}
+              >
+                <Text className="text-gray-600 font-bold">✕</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <WebView
+            source={{ uri: paymentUrl }}
+            onNavigationStateChange={handleWebViewNavigationStateChange}
+            startInLoadingState
+            renderLoading={() => (
+              <View className="flex-1 justify-center items-center bg-gray-50">
+                <ActivityIndicator size="large" color="#3B82F6" />
+                <Text className="text-gray-600 mt-4">Loading PayPal...</Text>
+              </View>
+            )}
+            className="flex-1"
+            onError={(syntheticEvent) => {
+              if (__DEV__)
+                console.warn("WebView error:", syntheticEvent.nativeEvent);
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        </View>
+      </Modal>
     </View>
   );
 };

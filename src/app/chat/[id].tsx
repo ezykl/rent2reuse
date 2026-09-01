@@ -229,7 +229,7 @@ const ChatScreen = () => {
           setCurrentUserPayPalEmail(currentUserData.paypalEmail || "");
         }
       } catch (error) {
-        console.error("Error fetching current user PayPal email:", error);
+        if (__DEV__) console.error("Error fetching current user PayPal email:", error);
         setCurrentUserPayPalEmail("");
       } finally {
         setIsCheckingPayPal(false);
@@ -254,7 +254,7 @@ const ChatScreen = () => {
         }
       },
       (error) => {
-        console.error("Error listening to current user PayPal updates:", error);
+        if (__DEV__) console.error("Error listening to current user PayPal updates:", error);
       }
     );
 
@@ -412,7 +412,7 @@ const ChatScreen = () => {
         } payment request sent successfully`,
       });
     } catch (error) {
-      console.error("Error sending payment message:", error);
+      if (__DEV__) console.error("Error sending payment message:", error);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -2165,15 +2165,18 @@ const ChatScreen = () => {
                       totalAmount: item.totalAmount as number,
                       downpaymentPercentage: item.downpaymentPercentage,
                       status:
-                        (item.status as "pending" | "paid" | "failed") ||
+                        (item.status as "pending" | "sent" | "paid" | "failed") ||
                         "pending",
                       createdAt: item.createdAt,
+                      ownerPayPalEmail: item.ownerPayPalEmail,
+                      paypalOrderId: item.paypalOrderId,
+                      transactionId: item.transactionId,
+                      paidAt: item.paidAt,
+                      payoutStatus: item.payoutStatus,
                       confirmedByOwner: item.confirmedByOwner,
                     }}
                     isCurrentUser={isCurrentUser}
-                    isOwner={currentUserId === chatData?.ownerId}
                     chatId={String(chatId)}
-                    currentUserId={currentUserId}
                     itemDetails={chatData?.itemDetails}
                   />
                 ) : item.type === "statusUpdate" ? (

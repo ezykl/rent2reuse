@@ -269,7 +269,7 @@ const ItemCard = ({
             <View className="flex-row items-center justify-start  mt-2">
               {/* Price */}
               {price !== undefined && (
-                <Text className="text-lg font-psemibold text-primary mt-2">
+                <Text className="text-lg font-psemibold text-primary">
                   ₱{price.toLocaleString()}/day
                 </Text>
               )}

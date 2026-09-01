@@ -43,9 +43,22 @@ export default interface Message {
   amount?: number;
   totalAmount?: number;
   downpaymentPercentage?: number;
+  // Owner's payout destination, captured when the payment request is created
+  // (see payment-options.tsx / chat/[id].tsx sendPaymentMessage).
+  ownerPayPalEmail?: string;
+  // The renter/payer's uid — who owes this payment.
+  recipientId?: string;
   paypalOrderId?: string;
   transactionId?: string;
   paidAt?: any;
+  // Server-set outcome of the platform's payout to the owner (see
+  // paypalCaptureOrder in functions/src/index.ts). "failed" surfaces the
+  // manual "Mark as Received" fallback in PaymentMessage.tsx.
+  payoutStatus?: "success" | "failed";
+  payoutBatchId?: string;
+  payoutError?: string;
+  // Manual fallback: the owner self-reports having received the money
+  // outside of the automated payout (e.g. after a payout failure).
   confirmedByOwner?: boolean;
   confirmedAt?: any;
 }

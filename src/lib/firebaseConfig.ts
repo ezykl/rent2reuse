@@ -24,6 +24,7 @@ import {
   getReactNativePersistence,
 } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 import { Payment } from "../models/payment";
 
 import { Platform } from "react-native";
@@ -66,6 +67,7 @@ const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 const storage = getStorage(app);
+const functions = getFunctions(app);
 
 const paymentsCollection = collection(db, "payments");
 
@@ -336,4 +338,4 @@ interface Item {
   }[];
 }
 
-export { db, auth, storage };
+export { db, auth, storage, functions };

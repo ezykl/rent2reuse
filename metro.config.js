@@ -7,5 +7,6 @@ config.resolver.assetExts.push("json");
 config.resolver.sourceExts.push("cjs");
 config.resolver.assetExts.push("pte");
 config.resolver.assetExts.push("bin");
+config.resolver.assetExts.push("tflite");
 
 module.exports = withNativeWind(config, { input: "./src/global.css" });

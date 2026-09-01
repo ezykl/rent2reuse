@@ -28,7 +28,6 @@ import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PlanSubscription from "@/components/PlanSubscription";
 import PayPalPayment from "@/components/PaypalPayment";
-import { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET } from "@env";
 import { User, Plan } from "@/types";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
@@ -332,23 +331,25 @@ const PlansScreen: React.FC = () => {
       // REMOVED: Success toast - No automatic toast
     } catch (error) {
       console.error("Error processing payment:", error);
-      Toast.show({
-        type: ALERT_TYPE.DANGER,
-        title: "Error",
-        textBody:
-          error instanceof Error ? error.message : "Failed to process payment",
-      });
+      // Alert.alert, not Toast.show — this fires while the full-screen
+      // payment <Modal> is open, and RN Modal presents in its own native
+      // layer that the app-root-level Toast overlay doesn't composite
+      // above, so a Toast here is real but invisible to the user.
+      Alert.alert(
+        "Error",
+        error instanceof Error ? error.message : "Failed to process payment"
+      );
     }
   };
 
   const handlePaymentError = (error: unknown) => {
     console.error("Payment error:", error);
-    Toast.show({
-      type: ALERT_TYPE.DANGER,
-      title: "Error",
-      textBody:
-        error instanceof Error ? error.message : "Unknown error occurred",
-    });
+    // See note above — Alert.alert instead of Toast.show while the
+    // payment Modal is open.
+    Alert.alert(
+      "Error",
+      error instanceof Error ? error.message : "Unknown error occurred"
+    );
   };
 
   const handlePaymentCancel = () => {
@@ -912,8 +913,6 @@ const PlansScreen: React.FC = () => {
             ) : (
               <PayPalPayment
                 plan={selectedPlan}
-                clientId={PAYPAL_CLIENT_ID}
-                clientSecret={PAYPAL_CLIENT_SECRET}
                 onPaymentSuccess={handlePaymentSuccess}
                 onPaymentError={handlePaymentError}
                 onPaymentCancel={handlePaymentCancel}

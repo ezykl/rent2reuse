@@ -1,0 +1,67 @@
+// See firestore.rules for the deployment/rollout checklist — the same
+// cautions apply here (this bucket is shared with Admin-Rent2Reuse-website).
+//
+// No storage.rules file existed anywhere before this — the only rule live
+// in the console previously was for admin-profiles/**, and it appears to
+// have been set directly in the console rather than sourced from either
+// repo. Confirm that against the console before deploying.
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /users/{userId}/avatar {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Sensitive document — do not make broadly readable.
+    match /users/{userId}/id-verification {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // items/{itemId}/image{N}.jpg, items/{itemId}/image_{timestamp}.jpg,
+    // plus listAll()+deleteObject() under items/{itemId}/** on listing
+    // delete. Storage rules can't cheaply cross-check Firestore item
+    // ownership without a firestore.get() cross-service call — deferred to
+    // a phase-2 hardening pass (see comment below) since item photos are
+    // already publicly readable; worst case here is a wrong-itemId
+    // upload/delete by an authenticated user, not data exfiltration.
+    match /items/{itemId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    // chat_images/{chatId}/{timestamp}_{random}.jpg — same cross-service
+    // caveat as items/** above.
+    match /chat_images/{chatId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write, delete: if isSignedIn();
+    }
+
+    // Admin app's profile photos — preserves current live behavior
+    // (public read, any-authenticated write); out of scope to tighten from
+    // this repo.
+    match /admin-profiles/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// Phase-2 hardening (future, not this round): once the above is stable,
+// tighten items/** and chat_images/** writes with a cross-service ownership
+// check, e.g.:
+//   allow write: if isSignedIn() &&
+//     firestore.get(/databases/(default)/documents/items/$(itemId)).data.owner.id == request.auth.uid;
+// Skipped for now to avoid adding latency/cost and an unvalidated API
+// surface on the first cutover.

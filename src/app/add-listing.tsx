@@ -24,7 +24,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ALERT_TYPE, Toast } from "react-native-alert-notification";
 import { getToolCategory, TOOL_CATEGORIES } from "@/constant/tool-categories";
 import { get } from "react-native/Libraries/TurboModule/TurboModuleRegistry";
-import { R2R_MODEL } from "@/constant/api";
+import { ACTIVE_MODEL } from "@/constant/r2rModel";
+import { classifyImageOnDevice } from "@/utils/r2rModel";
 import { useLoader } from "@/context/LoaderContext";
 import { useProhibitedChecker } from "../utils/useProhibitedChecker";
 import { OPEN_CAGE_API_KEY, MAP_TILER_API_KEY } from "@env";
@@ -80,8 +81,6 @@ const styles = StyleSheet.create({
   },
 });
 
-const API_URL = R2R_MODEL;
-
 const AddListing = () => {
   const { openCamera: openCameraParam } = useLocalSearchParams();
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -92,7 +91,6 @@ const AddListing = () => {
   const [showCamera, setShowCamera] = useState(true);
   const [cameraVisible, setCameraVisible] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
-  const [apiPrediction, setApiPrediction] = useState<any[] | null>(null);
   const inputRef = useRef<TextInput>(null);
   const cameraRef = useRef<CameraView>(null);
   const [useAI, setUseAI] = useState(false);
@@ -223,7 +221,7 @@ const AddListing = () => {
           // Automatically classify image after capture
           try {
             setIsLoading(true);
-            setApiPrediction(null);
+            setClassification([]);
             const apiResult = await predictImage(photo.uri);
 
             if (!apiResult) {
@@ -256,50 +254,22 @@ const AddListing = () => {
     setFacing((current) => (current === "back" ? "front" : "back"));
   };
 
-  // Predict image using API
+  // Classify the captured/picked photo entirely on-device (see
+  // src/utils/r2rModel.ts) — no network call, no server to keep alive.
   const predictImage = async (uri: string) => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const formData = new FormData();
-      formData.append("image", {
-        uri,
-        name: "image.jpg",
-        type: "image/jpeg",
-      } as any);
-
-      const response = await fetch(API_URL, {
-        method: "POST",
-        body: formData,
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      const result = await response.json();
-
-
-      if (Array.isArray(result)) {
-        setApiPrediction(result);
-      } else {
-        setApiPrediction([result]);
-      }
-
+      const result = await classifyImageOnDevice(uri);
+      setClassification(result as any);
       return result;
     } catch (error) {
-      if (
-        error instanceof TypeError &&
-        error.message.includes("Network request failed")
-      ) {
-        setError(
-          "API is currently unavailable. Please check your internet connection and try again."
-        );
-        return null;
-      } else {
-        setError(
-          "Image was not recognized. Please try again with a clearer image."
-        );
-        return null;
-      }
+      if (__DEV__) console.error("On-device classification error:", error);
+      setError(
+        "Image was not recognized. Please try again with a clearer image."
+      );
+      return null;
     }
   };
 
@@ -315,7 +285,7 @@ const AddListing = () => {
     }
 
     setIsLoading(true);
-    setApiPrediction(null);
+    setClassification([]);
 
     try {
       const apiResult = await predictImage(imageUri);
@@ -323,12 +293,11 @@ const AddListing = () => {
         Toast.show({
           type: ALERT_TYPE.DANGER,
           title: "Error",
-          textBody:
-            "Failed to get prediction from API. Please try again later.",
+          textBody: "Failed to analyze the image. Please try again.",
         });
       }
     } catch (err) {
-      console.error("Classification Error:", err);
+      if (__DEV__) console.error("Classification Error:", err);
       Toast.show({
         type: ALERT_TYPE.DANGER,
         title: "Error",
@@ -347,7 +316,6 @@ const AddListing = () => {
   };
 
   const handleBackToCamera = () => {
-    setApiPrediction(null);
     setShowCamera(true);
     setImageUri(null);
     setClassification([]);
@@ -2035,23 +2003,7 @@ const AddListing = () => {
                 </View>
               ) : (
                 <>
-                  {apiPrediction && apiPrediction.length > 0 ? (
-                    <View className="mb-4">
-                      <View className="flex-row items-center mb-2">
-                        <Text className="text-secondary-400 text-base font-psemibold">
-                          Based on the image, we detected:
-                        </Text>
-                        <View className="bg-green-100 rounded-full px-2 py-1 ml-2">
-                          <Text className="text-green-700 text-xs font-psemibold">
-                            AI-Enabled
-                          </Text>
-                        </View>
-                      </View>
-                      {apiPrediction.map((item, index) =>
-                        renderResultItem(item, index)
-                      )}
-                    </View>
-                  ) : classification.length > 0 ? (
+                  {classification.length > 0 ? (
                     <View className="mb-4">
                       <View className="flex-row items-center mb-2">
                         <Text className="text-secondary-400 text-lg font-psemibold">
@@ -2059,10 +2011,13 @@ const AddListing = () => {
                         </Text>
                         <View className="bg-blue-100 rounded-full px-2 py-1 ml-2">
                           <Text className="text-blue-700 text-xs font-psemibold">
-                            Local
+                            {ACTIVE_MODEL.name} (on-device)
                           </Text>
                         </View>
                       </View>
+                      <Text className="text-secondary-300 text-xs font-pregular mb-2">
+                        More models coming soon.
+                      </Text>
                       {classification.map((item, index) =>
                         renderResultItem(item, index)
                       )}
