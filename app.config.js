@@ -36,9 +36,9 @@
         {
             "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to access your location while the app is in use.",
             "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location.",
-            "isIosBackgroundLocationEnabled": false,  // Optional: Disable background location for iOS
-            "isAndroidBackgroundLocationEnabled": false,  // Optional: Disable background location for Android
-            "isAndroidForegroundServiceEnabled": true  // Enable foreground service (for Android)
+            "isIosBackgroundLocationEnabled": false, 
+            "isAndroidBackgroundLocationEnabled": false,  
+            "isAndroidForegroundServiceEnabled": true  
         },
       ],
       [

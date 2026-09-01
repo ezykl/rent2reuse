@@ -1281,8 +1281,8 @@ const AddListing = () => {
                     errors.condition
                       ? "border-red-500"
                       : formData.condition === condition.value
-                      ? "bg-primary border-primary"
-                      : "bg-gray-100 border-gray-200"
+                        ? "bg-primary border-primary"
+                        : "bg-gray-100 border-gray-200"
                   }`}
                 >
                   <Text
